@@ -1,4 +1,4 @@
-import { apiGet, API_BASE_URL, type TemplateRps } from "@/lib/api";
+import { apiGet, BACKEND_PROXY, type TemplateRps } from "@/lib/api";
 import { PageHeader, Card, CardBody, Badge, EmptyState } from "@/components/ui";
 import { UploadTemplateButton, ActivateButton, EditTemplateButton, DeleteTemplateButton } from "./forms";
 
@@ -25,7 +25,7 @@ export default async function TemplateRpsPage() {
               <span className="text-muted">({active.format?.toUpperCase()})</span>
             </div>
             <a
-              href={`${API_BASE_URL}/template-rps/${active.id}/download`}
+              href={`${BACKEND_PROXY}/template-rps/${active.id}/download`}
               className="text-sm font-medium text-brand-700 underline"
             >
               Unduh
@@ -61,7 +61,7 @@ export default async function TemplateRpsPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <a
-                    href={`${API_BASE_URL}/template-rps/${t.id}/download`}
+                    href={`${BACKEND_PROXY}/template-rps/${t.id}/download`}
                     className="text-sm font-medium text-brand-700 underline"
                   >
                     Unduh

@@ -7,6 +7,13 @@ import { cookies } from "next/headers";
 
 export const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:8100/api/v1";
 
+/**
+ * Basis URL untuk tautan yang dibuka langsung oleh BROWSER (unduh/cetak).
+ * Path relatif ini diteruskan Next ke backend lewat rewrites di next.config.ts,
+ * sehingga tetap berfungsi saat aplikasi diakses via tunnel (satu origin).
+ */
+export const BACKEND_PROXY = "/backend/api/v1";
+
 export type Paginated<T> = {
   data: T[];
   meta: {

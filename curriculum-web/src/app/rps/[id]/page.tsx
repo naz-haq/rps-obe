@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiGet, API_BASE_URL, type Single, type RpsDetail, type RpsTraceability, type RpsApprovalLog } from "@/lib/api";
+import { apiGet, BACKEND_PROXY, type Single, type RpsDetail, type RpsTraceability, type RpsApprovalLog } from "@/lib/api";
 import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
 import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { ApprovalActions } from "./approval";
@@ -44,7 +44,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
           <div className="flex items-center gap-3">
             <ApprovalActions id={rps.id} status={rps.status} />
             <a
-              href={`${API_BASE_URL}/rps-versions/${id}/cetak`}
+              href={`${BACKEND_PROXY}/rps-versions/${id}/cetak`}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
@@ -52,7 +52,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
               Cetak / Unduh PDF
             </a>
             <a
-              href={`${API_BASE_URL}/rps-versions/${id}/docx`}
+              href={`${BACKEND_PROXY}/rps-versions/${id}/docx`}
               className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-gray-50"
             >
               Unduh DOCX
