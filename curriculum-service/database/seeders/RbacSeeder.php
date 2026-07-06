@@ -49,15 +49,19 @@ class RbacSeeder extends Seeder
             $role->syncPermissions($izin);
         }
 
-        // 3) Akun Super Admin default.
+        // 3) Akun Super Admin default. NIDN dipakai sebagai identitas login utama.
         $admin = User::firstOrCreate(
             ['email' => 'superadmin@rps.local'],
             [
                 'name' => 'Super Administrator',
+                'nidn' => '0000000001',
                 'password' => Hash::make('Admin#1234'),
                 'is_active' => true,
             ],
         );
+        if (empty($admin->nidn)) {
+            $admin->forceFill(['nidn' => '0000000001'])->save();
+        }
         if (! $admin->hasRole('super-admin')) {
             $admin->assignRole('super-admin');
         }
