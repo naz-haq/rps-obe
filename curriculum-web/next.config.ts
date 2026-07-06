@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: [
+        "rps.pharm.web.id",
+        "*.pharm.web.id",
         "**.devtunnels.ms",
         "**.trycloudflare.com",
         "**.ngrok-free.app",

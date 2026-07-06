@@ -28,6 +28,8 @@ services:
 
   api:
     image: ghcr.io/naz-haq/rps-api:latest
+    build:
+      context: ./curriculum-service
     restart: unless-stopped
     depends_on:
       db:
@@ -59,6 +61,8 @@ services:
 
   web:
     image: ghcr.io/naz-haq/rps-web:latest
+    build:
+      context: ./curriculum-web
     restart: unless-stopped
     depends_on: [api]
     environment:
