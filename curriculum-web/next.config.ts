@@ -4,9 +4,9 @@ import type { NextConfig } from "next";
 const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8100";
 
 const nextConfig: NextConfig = {
-  // Izinkan akses dev-server dari domain tunnel (VS Code / Cloudflare / ngrok)
-  // supaya aset _next tidak diblokir saat diuji orang lain.
-  allowedDevOrigins: ["*.devtunnels.ms", "*.trycloudflare.com", "*.ngrok-free.app"],
+  // Izinkan akses dev-server dari domain tunnel (VS Code / Cloudflare / ngrok /
+  // GitHub Codespaces) supaya aset _next tidak diblokir saat diuji orang lain.
+  allowedDevOrigins: ["*.devtunnels.ms", "*.trycloudflare.com", "*.ngrok-free.app", "*.app.github.dev"],
 
   // Loloskan Server Actions dari cek CSRF saat diakses via tunnel/reverse proxy.
   // `**` cocok untuk subdomain berlapis (mis. xxxx-3010.asse.devtunnels.ms).
@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
         "**.devtunnels.ms",
         "**.trycloudflare.com",
         "**.ngrok-free.app",
+        "**.app.github.dev",
         "localhost:3010",
         "127.0.0.1:3010",
       ],
