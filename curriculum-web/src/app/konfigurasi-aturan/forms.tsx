@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Card, CardBody, Badge, buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { KonfigurasiAturan, BobotKomponen } from "@/lib/api";
 import { saveAturan } from "./actions";
 
@@ -50,12 +51,19 @@ function SaveBar({
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const toast = useToast();
 
   const save = () => {
     setMsg(null);
     startTransition(async () => {
       const res = await saveAturan({ jenis_aturan: jenis, nilai });
-      setMsg(res.ok ? { ok: true, text: "Tersimpan." } : { ok: false, text: res.message ?? "Gagal menyimpan." });
+      if (res.ok) {
+        toast({ type: "success", message: "Aturan tersimpan." });
+        setMsg({ ok: true, text: "Tersimpan." });
+      } else {
+        toast({ type: "error", message: res.message ?? "Gagal menyimpan." });
+        setMsg({ ok: false, text: res.message ?? "Gagal menyimpan." });
+      }
     });
   };
 

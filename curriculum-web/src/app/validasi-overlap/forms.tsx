@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, TextAreaField, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { ApiResult, ValidasiOverlap } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { pindaiOverlap, analisisOverlap, reviewOverlap } from "./actions";
 
 type State = ApiResult | null;
@@ -18,6 +20,7 @@ const STATUS_OPTS = [
 /** Tombol pemindaian: mendeteksi ulang seluruh overlap. */
 export function PindaiButton() {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [pesan, setPesan] = useState<string | null>(null);
 
@@ -36,9 +39,11 @@ export function PindaiButton() {
           if (r.ok) {
             const d = (r.data as { data?: { overlap?: number; baru?: number } } | undefined)?.data;
             setPesan(`Ditemukan ${d?.overlap ?? 0} overlap (${d?.baru ?? 0} baru).`);
+            toast({ type: "success", message: `Pemindaian selesai — ${d?.overlap ?? 0} overlap (${d?.baru ?? 0} baru).` });
             router.refresh();
           } else {
             setPesan(r.message ?? "Pemindaian gagal.");
+            toast({ type: "error", message: r.message ?? "Pemindaian gagal." });
           }
         }}
       >
@@ -51,6 +56,7 @@ export function PindaiButton() {
 /** Tombol analisis AI per baris. */
 export function AnalisisButton({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -59,9 +65,14 @@ export function AnalisisButton({ id }: { id: number }) {
       className={buttonClass("secondary", "sm")}
       onClick={async () => {
         setPending(true);
-        await analisisOverlap(id);
+        const r = await analisisOverlap(id);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Analisis AI selesai." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Analisis gagal." });
+        }
       }}
     >
       {pending ? "Menganalisis…" : "✨ Analisis AI"}
@@ -79,7 +90,6 @@ export function ReviewButton({ overlap }: { overlap: ValidasiOverlap }) {
 }
 
 function ReviewForm({ overlap, close }: { overlap: ValidasiOverlap; close: () => void }) {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => {
     setPending(true);
@@ -92,12 +102,7 @@ function ReviewForm({ overlap, close }: { overlap: ValidasiOverlap; close: () =>
     return r;
   }, null);
 
-  useEffect(() => {
-    if (state?.ok) {
-      router.refresh();
-      close();
-    }
-  }, [state, close, router]);
+  useActionResult(state, { onSuccess: close, successMessage: "Tinjauan overlap tersimpan." });
 
   return (
     <form action={action} className="space-y-3">

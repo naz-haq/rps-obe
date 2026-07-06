@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { Kurikulum, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createKurikulum, updateKurikulum, deleteKurikulum } from "./actions";
 
 const STATUS_OPTS = [
@@ -39,9 +40,7 @@ export function CreateKurikulumButton() {
 
 function CreateForm({ close }: { close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createKurikulum(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Kurikulum berhasil disimpan." });
   return (
     <form action={action} className="space-y-4">
       <KurikulumFields />
@@ -66,9 +65,7 @@ export function EditKurikulumButton({ k }: { k: Kurikulum }) {
 
 function EditForm({ k, close }: { k: Kurikulum; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateKurikulum(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Kurikulum berhasil diperbarui." });
   return (
     <form action={action} className="space-y-4">
       <KurikulumFields k={k} />
@@ -100,12 +97,7 @@ export function DeleteKurikulumButton({ k }: { k: Kurikulum }) {
 
 function DeleteForm({ k, close, onDone }: { k: Kurikulum; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteKurikulum(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Kurikulum dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={k.id} />

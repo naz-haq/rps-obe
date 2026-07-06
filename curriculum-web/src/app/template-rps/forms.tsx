@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { Modal, Field, TextAreaField, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { TemplateRps, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { uploadTemplate, activateTemplate, updateTemplate, deleteTemplate } from "./actions";
 
 type State = ApiResult | null;
@@ -22,9 +23,7 @@ function UploadForm({ close }: { close: () => void }) {
     async (_prev, fd) => uploadTemplate(fd),
     null,
   );
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Template berhasil diunggah." });
 
   return (
     <form action={action} className="space-y-4">
@@ -69,7 +68,8 @@ function UploadForm({ close }: { close: () => void }) {
 
 /** Tombol: tandai template aktif. */
 export function ActivateButton({ template }: { template: TemplateRps }) {
-  const [, action] = useActionState<State, FormData>(async (_p, fd) => activateTemplate(fd), null);
+  const [state, action] = useActionState<State, FormData>(async (_p, fd) => activateTemplate(fd), null);
+  useActionResult(state, { refresh: false, successMessage: "Template diaktifkan." });
   return (
     <form action={action} className="inline">
       <input type="hidden" name="id" value={template.id} />
@@ -94,9 +94,7 @@ function EditForm({ template, close }: { template: TemplateRps; close: () => voi
     async (_prev, fd) => updateTemplate(fd),
     null,
   );
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Template diperbarui." });
 
   return (
     <form action={action} className="space-y-4">
@@ -121,7 +119,8 @@ function EditForm({ template, close }: { template: TemplateRps; close: () => voi
 
 /** Tombol: hapus template. */
 export function DeleteTemplateButton({ template }: { template: TemplateRps }) {
-  const [, action] = useActionState<State, FormData>(async (_p, fd) => deleteTemplate(fd), null);
+  const [state, action] = useActionState<State, FormData>(async (_p, fd) => deleteTemplate(fd), null);
+  useActionResult(state, { refresh: false, successMessage: "Template dihapus." });
   return (
     <form
       action={action}

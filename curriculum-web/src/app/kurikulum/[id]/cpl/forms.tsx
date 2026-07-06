@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { Cpl, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createCpl, updateCpl, deleteCpl } from "./actions";
 
 const ASPEK_OPTS = [
@@ -45,9 +46,7 @@ export function CreateCplButton({ kurikulumId }: { kurikulumId: number }) {
 
 function CreateForm({ kurikulumId, close }: { kurikulumId: number; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createCpl(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "CPL berhasil disimpan." });
   return (
     <form action={action} className="space-y-4">
       <CplFields kurikulumId={kurikulumId} />
@@ -70,9 +69,7 @@ export function EditCplButton({ c, kurikulumId }: { c: Cpl; kurikulumId: number 
 
 function EditForm({ c, kurikulumId, close }: { c: Cpl; kurikulumId: number; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateCpl(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "CPL berhasil diperbarui." });
   return (
     <form action={action} className="space-y-4">
       <CplFields c={c} kurikulumId={kurikulumId} />
@@ -96,12 +93,7 @@ export function DeleteCplButton({ c, kurikulumId }: { c: Cpl; kurikulumId: numbe
 
 function DeleteForm({ c, kurikulumId, close, onDone }: { c: Cpl; kurikulumId: number; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteCpl(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "CPL dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={c.id} />

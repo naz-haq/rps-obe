@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, TextAreaField, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { PromptSlot, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createOverride, updateOverride, deleteOverride } from "./actions";
 
 type State = ApiResult | null;
@@ -29,9 +31,7 @@ function OverrideForm({ slot, close }: { slot: PromptSlot; close: () => void }) 
     async (_prev, fd) => createOverride(fd),
     null,
   );
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Override prompt tersimpan." });
 
   return (
     <form action={action} className="space-y-4">
@@ -83,9 +83,7 @@ function EditOverrideForm({ slot, close }: { slot: PromptSlot; close: () => void
     async (_prev, fd) => updateOverride(fd),
     null,
   );
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Override prompt diperbarui." });
 
   return (
     <form action={action} className="space-y-4">
@@ -129,11 +127,17 @@ function EditOverrideForm({ slot, close }: { slot: PromptSlot; close: () => void
 /** Tombol hapus override -> kembali default. */
 export function ResetOverrideButton({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   return (
     <form
       action={async (fd) => {
         const res = await deleteOverride(fd);
-        if (res.ok) router.refresh();
+        if (res.ok) {
+          toast({ type: "success", message: "Override dikembalikan ke default." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: res.message ?? "Gagal mengembalikan default." });
+        }
       }}
     >
       <input type="hidden" name="id" value={id} />

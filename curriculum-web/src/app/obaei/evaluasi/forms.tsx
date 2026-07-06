@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import { buatEvaluasi, hapusEvaluasi } from "./actions";
 
 type CplOpt = { value: string; label: string };
@@ -18,6 +19,7 @@ export function BuatEvaluasi({ cplOptions }: { cplOptions: CplOpt[] }) {
 
 function EvaluasiForm({ cplOptions, close }: { cplOptions: CplOpt[]; close: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +34,14 @@ function EvaluasiForm({ cplOptions, close }: { cplOptions: CplOpt[]; close: () =
         });
         setPending(false);
         if (r.ok) {
+          toast({ type: "success", message: "Evaluasi CPL dibuat." });
           const id = (r.data as { data?: { id?: number } } | undefined)?.data?.id;
           if (id) router.push(`/obaei/evaluasi/${id}`);
           else router.refresh();
           close();
         } else {
           setError(r.message ?? "Gagal membuat evaluasi.");
+          toast({ type: "error", message: r.message ?? "Gagal membuat evaluasi." });
         }
       }}
       className="space-y-3"
@@ -57,6 +61,7 @@ function EvaluasiForm({ cplOptions, close }: { cplOptions: CplOpt[]; close: () =
 
 export function HapusEvaluasi({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -66,9 +71,14 @@ export function HapusEvaluasi({ id }: { id: number }) {
       onClick={async () => {
         if (!confirm("Hapus evaluasi ini beserta tindak lanjutnya?")) return;
         setPending(true);
-        await hapusEvaluasi(id);
+        const r = await hapusEvaluasi(id);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Evaluasi dihapus." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal menghapus evaluasi." });
+        }
       }}
     >
       Hapus

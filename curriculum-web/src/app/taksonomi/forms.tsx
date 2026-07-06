@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, TextAreaField, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { Taksonomi, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createTaksonomi, updateTaksonomi, deleteTaksonomi } from "./actions";
 
 type State = ApiResult | null;
@@ -58,9 +59,7 @@ export function CreateTaksonomiButton({ defaults }: { defaults?: { domain: strin
 
 function CreateForm({ defaults, close }: { defaults?: { domain: string; kerangka: string }; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createTaksonomi(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Taksonomi tersimpan." });
   return (
     <form action={action} className="space-y-4">
       <TakFields defaults={defaults} />
@@ -83,9 +82,7 @@ export function EditTaksonomiButton({ t }: { t: Taksonomi }) {
 
 function EditForm({ t, close }: { t: Taksonomi; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateTaksonomi(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Taksonomi diperbarui." });
   return (
     <form action={action} className="space-y-4">
       <TakFields t={t} />
@@ -109,12 +106,7 @@ export function DeleteTaksonomiButton({ t }: { t: Taksonomi }) {
 
 function DeleteForm({ t, close, onDone }: { t: Taksonomi; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteTaksonomi(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Taksonomi dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={t.id} />

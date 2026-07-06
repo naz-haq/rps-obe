@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, TextAreaField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import { tinjau } from "./actions";
 
 /** Aksi cepat Setujui / Minta Revisi pada baris antrian tinjauan. */
@@ -54,6 +55,7 @@ function TinjauForm({
   close: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,10 +72,12 @@ function TinjauForm({
         });
         setPending(false);
         if (r.ok) {
+          toast({ type: "success", message: aksi === "revisi" ? "RPS dikembalikan untuk revisi." : "RPS disetujui." });
           router.refresh();
           close();
         } else {
           setError(r.message ?? "Gagal memproses aksi.");
+          toast({ type: "error", message: r.message ?? "Gagal memproses aksi." });
         }
       }}
       className="space-y-3"

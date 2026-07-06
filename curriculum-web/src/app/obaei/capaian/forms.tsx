@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { CapaianMahasiswa } from "@/lib/api";
 import { simpanCapaian, hapusCapaian } from "./actions";
 
@@ -25,6 +26,7 @@ export function EditCapaian({ capaian }: { capaian: CapaianMahasiswa }) {
 
 function CapaianForm({ capaian, close }: { capaian?: CapaianMahasiswa; close: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,10 +49,12 @@ function CapaianForm({ capaian, close }: { capaian?: CapaianMahasiswa; close: ()
         });
         setPending(false);
         if (r.ok) {
+          toast({ type: "success", message: "Data capaian tersimpan." });
           router.refresh();
           close();
         } else {
           setError(r.message ?? "Gagal menyimpan data capaian.");
+          toast({ type: "error", message: r.message ?? "Gagal menyimpan data capaian." });
         }
       }}
       className="space-y-3"
@@ -112,6 +116,7 @@ function CapaianForm({ capaian, close }: { capaian?: CapaianMahasiswa; close: ()
 
 export function HapusCapaian({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -121,9 +126,14 @@ export function HapusCapaian({ id }: { id: number }) {
       onClick={async () => {
         if (!confirm("Hapus data capaian ini?")) return;
         setPending(true);
-        await hapusCapaian(id);
+        const r = await hapusCapaian(id);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Data capaian dihapus." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal menghapus data capaian." });
+        }
       }}
     >
       Hapus

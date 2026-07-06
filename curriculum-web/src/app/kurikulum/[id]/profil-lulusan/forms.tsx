@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { ProfilLulusan, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createProfil, updateProfil, deleteProfil } from "./actions";
 
 type State = ApiResult | null;
@@ -30,9 +31,7 @@ export function CreateProfilButton({ kurikulumId }: { kurikulumId: number }) {
 
 function CreateForm({ kurikulumId, close }: { kurikulumId: number; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createProfil(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Profil lulusan tersimpan." });
   return (
     <form action={action} className="space-y-4">
       <ProfilFields kurikulumId={kurikulumId} />
@@ -55,9 +54,7 @@ export function EditProfilButton({ p, kurikulumId }: { p: ProfilLulusan; kurikul
 
 function EditForm({ p, kurikulumId, close }: { p: ProfilLulusan; kurikulumId: number; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateProfil(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Profil lulusan diperbarui." });
   return (
     <form action={action} className="space-y-4">
       <ProfilFields p={p} kurikulumId={kurikulumId} />
@@ -81,12 +78,7 @@ export function DeleteProfilButton({ p, kurikulumId }: { p: ProfilLulusan; kurik
 
 function DeleteForm({ p, kurikulumId, close, onDone }: { p: ProfilLulusan; kurikulumId: number; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteProfil(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Profil lulusan dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={p.id} />

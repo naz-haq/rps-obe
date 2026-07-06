@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, TextAreaField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { TindakLanjut } from "@/lib/api";
 import {
   analisisEvaluasi,
@@ -23,6 +24,7 @@ const PRIORITAS_OPTS = [
 
 export function AnalisisAiButton({ id, angkatan }: { id: number; angkatan?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -47,9 +49,11 @@ export function AnalisisAiButton({ id, angkatan }: { id: number; angkatan?: stri
             if (!adaRingkasan && jmlTindak === 0) {
               setInfo("AI belum menghasilkan analisis. Pastikan Target CPL & Capaian Mahasiswa sudah terisi.");
             }
+            toast({ type: "success", message: "Analisis AI selesai." });
             router.refresh();
           } else {
             setError(r.message ?? "Analisis gagal.");
+            toast({ type: "error", message: r.message ?? "Analisis gagal." });
           }
         }}
       >
@@ -61,6 +65,7 @@ export function AnalisisAiButton({ id, angkatan }: { id: number; angkatan?: stri
 
 export function FinalisasiButton({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -70,9 +75,14 @@ export function FinalisasiButton({ id }: { id: number }) {
       onClick={async () => {
         if (!confirm("Finalisasi evaluasi ini? Setelah final, evaluasi menjadi bukti resmi.")) return;
         setPending(true);
-        await finalisasiEvaluasi(id);
+        const r = await finalisasiEvaluasi(id);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Evaluasi difinalisasi." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal memfinalisasi evaluasi." });
+        }
       }}
     >
       Finalisasi
@@ -90,18 +100,24 @@ export function EditRingkasan({ id, periode, ringkasan }: { id: number; periode:
 
 function RingkasanForm({ id, periode, ringkasan, close }: { id: number; periode: string | null; ringkasan: string | null; close: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <form
       action={async (fd) => {
         setPending(true);
-        await ubahEvaluasi(id, {
+        const r = await ubahEvaluasi(id, {
           periode: String(fd.get("periode") ?? ""),
           ringkasan_naratif: String(fd.get("ringkasan_naratif") ?? ""),
         });
         setPending(false);
-        router.refresh();
-        close();
+        if (r.ok) {
+          toast({ type: "success", message: "Ringkasan tersimpan." });
+          router.refresh();
+          close();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal menyimpan ringkasan." });
+        }
       }}
       className="space-y-3"
     >
@@ -135,6 +151,7 @@ export function EditTindakLanjut({ evaluasiId, item }: { evaluasiId: number; ite
 
 function TindakLanjutForm({ evaluasiId, item, close }: { evaluasiId: number; item?: TindakLanjut; close: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -149,10 +166,12 @@ function TindakLanjutForm({ evaluasiId, item, close }: { evaluasiId: number; ite
           : await tambahTindakLanjut(evaluasiId, { catatan, prioritas });
         setPending(false);
         if (r.ok) {
+          toast({ type: "success", message: item ? "Tindak lanjut diperbarui." : "Tindak lanjut ditambahkan." });
           router.refresh();
           close();
         } else {
           setError(r.message ?? "Gagal menyimpan tindak lanjut.");
+          toast({ type: "error", message: r.message ?? "Gagal menyimpan tindak lanjut." });
         }
       }}
       className="space-y-3"
@@ -172,6 +191,7 @@ function TindakLanjutForm({ evaluasiId, item, close }: { evaluasiId: number; ite
 
 export function HapusTindakLanjut({ id, evaluasiId }: { id: number; evaluasiId: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -181,9 +201,14 @@ export function HapusTindakLanjut({ id, evaluasiId }: { id: number; evaluasiId: 
       onClick={async () => {
         if (!confirm("Hapus tindak lanjut ini?")) return;
         setPending(true);
-        await hapusTindakLanjut(id, evaluasiId);
+        const r = await hapusTindakLanjut(id, evaluasiId);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Tindak lanjut dihapus." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal menghapus tindak lanjut." });
+        }
       }}
     >
       Hapus

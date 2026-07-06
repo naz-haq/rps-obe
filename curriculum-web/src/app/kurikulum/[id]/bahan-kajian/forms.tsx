@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { BahanKajian, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createBahanKajian, updateBahanKajian, deleteBahanKajian } from "./actions";
 
 type State = ApiResult | null;
@@ -30,9 +31,7 @@ export function CreateBahanKajianButton({ kurikulumId }: { kurikulumId: number }
 
 function CreateForm({ kurikulumId, close }: { kurikulumId: number; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createBahanKajian(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Bahan kajian tersimpan." });
   return (
     <form action={action} className="space-y-4">
       <BkFields kurikulumId={kurikulumId} />
@@ -55,9 +54,7 @@ export function EditBahanKajianButton({ bk, kurikulumId }: { bk: BahanKajian; ku
 
 function EditForm({ bk, kurikulumId, close }: { bk: BahanKajian; kurikulumId: number; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateBahanKajian(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Bahan kajian diperbarui." });
   return (
     <form action={action} className="space-y-4">
       <BkFields bk={bk} kurikulumId={kurikulumId} />
@@ -81,12 +78,7 @@ export function DeleteBahanKajianButton({ bk, kurikulumId }: { bk: BahanKajian; 
 
 function DeleteForm({ bk, kurikulumId, close, onDone }: { bk: BahanKajian; kurikulumId: number; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteBahanKajian(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Bahan kajian dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={bk.id} />

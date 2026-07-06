@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { ApiResult, InstitusiRingkas, RoleData, UserAccount } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createUser, updateUser, deleteUser } from "./actions";
 
 type State = ApiResult | null;
@@ -100,14 +101,8 @@ function CreateForm({
   institusi: InstitusiRingkas[];
   close: () => void;
 }) {
-  const router = useRouter();
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createUser(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      router.refresh();
-      close();
-    }
-  }, [state, close, router]);
+  useActionResult(state, { onSuccess: close, successMessage: "Pengguna tersimpan." });
   return (
     <form action={action} className="space-y-3">
       <UserFields roles={roles} institusi={institusi} />
@@ -147,14 +142,8 @@ function EditForm({
   institusi: InstitusiRingkas[];
   close: () => void;
 }) {
-  const router = useRouter();
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateUser(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      router.refresh();
-      close();
-    }
-  }, [state, close, router]);
+  useActionResult(state, { onSuccess: close, successMessage: "Pengguna diperbarui." });
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={user.id} />
@@ -179,12 +168,7 @@ export function DeleteUserButton({ user }: { user: UserAccount }) {
 
 function DeleteForm({ user, close, onDone }: { user: UserAccount; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteUser(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Pengguna dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={user.id} />

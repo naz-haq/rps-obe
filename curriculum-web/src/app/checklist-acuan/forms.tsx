@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, TextAreaField, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { KerangkaAcuan, ButirAcuan, BadanRujukan, PemenuhanStatus, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import {
   createKerangka,
   updateKerangka,
@@ -59,7 +61,7 @@ export function CreateKerangkaButton({ badanList }: { badanList: BadanRujukan[] 
   }
   return (
     <Modal trigger="+ Kerangka Acuan" title="Tambah Kerangka Acuan">
-      {(close) => <SimpleForm action={createKerangka} close={close} submitLabel="Simpan"><KerangkaFields badanList={badanList} /></SimpleForm>}
+      {(close) => <SimpleForm action={createKerangka} close={close} submitLabel="Simpan" successMessage="Kerangka acuan tersimpan."><KerangkaFields badanList={badanList} /></SimpleForm>}
     </Modal>
   );
 }
@@ -67,7 +69,7 @@ export function CreateKerangkaButton({ badanList }: { badanList: BadanRujukan[] 
 export function EditKerangkaButton({ k, badanList }: { k: KerangkaAcuan; badanList: BadanRujukan[] }) {
   return (
     <Modal trigger="Edit" title="Ubah Kerangka Acuan" triggerVariant="ghost" triggerSize="sm">
-      {(close) => <SimpleForm action={updateKerangka} close={close} submitLabel="Perbarui"><KerangkaFields k={k} badanList={badanList} /></SimpleForm>}
+      {(close) => <SimpleForm action={updateKerangka} close={close} submitLabel="Perbarui" successMessage="Kerangka acuan diperbarui."><KerangkaFields k={k} badanList={badanList} /></SimpleForm>}
     </Modal>
   );
 }
@@ -83,6 +85,7 @@ export function DeleteKerangkaButton({ k }: { k: KerangkaAcuan }) {
           message={<>Hapus kerangka <span className="font-medium text-ink">{k.nama}</span> beserta seluruh butir & status pemenuhannya?</>}
           close={close}
           onDone={() => router.refresh()}
+          successMessage="Kerangka acuan dihapus."
         />
       )}
     </Modal>
@@ -111,7 +114,7 @@ function ButirFields({ b, kerangkaId }: { b?: ButirAcuan; kerangkaId: number }) 
 export function CreateButirButton({ kerangkaId }: { kerangkaId: number }) {
   return (
     <Modal trigger="+ Butir" title="Tambah Butir Acuan">
-      {(close) => <SimpleForm action={createButir} close={close} submitLabel="Simpan" refresh><ButirFields kerangkaId={kerangkaId} /></SimpleForm>}
+      {(close) => <SimpleForm action={createButir} close={close} submitLabel="Simpan" refresh successMessage="Butir acuan tersimpan."><ButirFields kerangkaId={kerangkaId} /></SimpleForm>}
     </Modal>
   );
 }
@@ -119,7 +122,7 @@ export function CreateButirButton({ kerangkaId }: { kerangkaId: number }) {
 export function EditButirButton({ b, kerangkaId }: { b: ButirAcuan; kerangkaId: number }) {
   return (
     <Modal trigger="Edit" title="Ubah Butir Acuan" triggerVariant="ghost" triggerSize="sm">
-      {(close) => <SimpleForm action={updateButir} close={close} submitLabel="Perbarui" refresh><ButirFields b={b} kerangkaId={kerangkaId} /></SimpleForm>}
+      {(close) => <SimpleForm action={updateButir} close={close} submitLabel="Perbarui" refresh successMessage="Butir acuan diperbarui."><ButirFields b={b} kerangkaId={kerangkaId} /></SimpleForm>}
     </Modal>
   );
 }
@@ -135,6 +138,7 @@ export function DeleteButirButton({ b, kerangkaId }: { b: ButirAcuan; kerangkaId
           message={<>Hapus butir <span className="font-medium text-ink">{b.kode ?? b.deskripsi.slice(0, 40)}</span>?</>}
           close={close}
           onDone={() => router.refresh()}
+          successMessage="Butir acuan dihapus."
         />
       )}
     </Modal>
@@ -144,6 +148,7 @@ export function DeleteButirButton({ b, kerangkaId }: { b: ButirAcuan; kerangkaId
 // ================= Status pemenuhan (inline) =================
 export function StatusControl({ b, kerangkaId }: { b: ButirAcuan; kerangkaId: number }) {
   const router = useRouter();
+  const toast = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
 
@@ -153,9 +158,14 @@ export function StatusControl({ b, kerangkaId }: { b: ButirAcuan; kerangkaId: nu
         ref={formRef}
         action={async (fd) => {
           setPending(true);
-          await setPemenuhan(fd);
+          const r = await setPemenuhan(fd);
           setPending(false);
-          router.refresh();
+          if (r.ok) {
+            toast({ type: "success", message: "Status pemenuhan diperbarui." });
+            router.refresh();
+          } else {
+            toast({ type: "error", message: r.message ?? "Gagal memperbarui status." });
+          }
         }}
       >
         <input type="hidden" name="kerangka_id" value={kerangkaId} />
@@ -191,12 +201,7 @@ function CatatanButton({ b, kerangkaId }: { b: ButirAcuan; kerangkaId: number })
 
 function CatatanForm({ b, kerangkaId, close, onDone }: { b: ButirAcuan; kerangkaId: number; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => setPemenuhan(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Catatan pemenuhan tersimpan." });
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="kerangka_id" value={kerangkaId} />
@@ -219,22 +224,18 @@ function SimpleForm({
   close,
   submitLabel,
   refresh,
+  successMessage,
   children,
 }: {
   action: (fd: FormData) => Promise<ApiResult>;
   close: () => void;
   submitLabel: string;
   refresh?: boolean;
+  successMessage?: string;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const [state, formAction] = useActionState<State, FormData>(async (_prev, fd) => action(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      if (refresh) router.refresh();
-      close();
-    }
-  }, [state, close, refresh, router]);
+  useActionResult(state, { refresh: !!refresh, onSuccess: close, successMessage: successMessage ?? "Data berhasil disimpan." });
   return (
     <form action={formAction} className="space-y-4">
       {children}
@@ -253,20 +254,17 @@ function ConfirmDelete({
   message,
   close,
   onDone,
+  successMessage,
 }: {
   action: (fd: FormData) => Promise<ApiResult>;
   hidden: Record<string, string>;
   message: React.ReactNode;
   close: () => void;
   onDone: () => void;
+  successMessage?: string;
 }) {
   const [state, formAction] = useActionState<State, FormData>(async (_prev, fd) => action(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: successMessage ?? "Data berhasil dihapus." });
   return (
     <form action={formAction} className="space-y-4">
       {Object.entries(hidden).map(([k, v]) => (

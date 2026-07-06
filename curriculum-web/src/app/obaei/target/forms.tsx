@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { TargetCpl } from "@/lib/api";
 import { simpanTarget, hapusTarget } from "./actions";
 
@@ -35,6 +36,7 @@ function TargetForm({
   close: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,10 +54,12 @@ function TargetForm({
         });
         setPending(false);
         if (r.ok) {
+          toast({ type: "success", message: "Target CPL tersimpan." });
           router.refresh();
           close();
         } else {
           setError(r.message ?? "Gagal menyimpan target.");
+          toast({ type: "error", message: r.message ?? "Gagal menyimpan target." });
         }
       }}
       className="space-y-3"
@@ -99,6 +103,7 @@ function TargetForm({
 
 export function HapusTarget({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -108,9 +113,14 @@ export function HapusTarget({ id }: { id: number }) {
       onClick={async () => {
         if (!confirm("Hapus target CPL ini?")) return;
         setPending(true);
-        await hapusTarget(id);
+        const r = await hapusTarget(id);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Target CPL dihapus." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal menghapus target." });
+        }
       }}
     >
       Hapus

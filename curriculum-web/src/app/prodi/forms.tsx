@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { ApiResult, InstitusiData } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createInstitusi, updateInstitusi, deleteInstitusi } from "./actions";
 
 type State = ApiResult | null;
@@ -66,14 +67,8 @@ export function CreateInstitusiButton({ fakultas }: { fakultas: FakultasOpt[] })
 }
 
 function CreateForm({ close, fakultas }: { close: () => void; fakultas: FakultasOpt[] }) {
-  const router = useRouter();
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createInstitusi(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      router.refresh();
-      close();
-    }
-  }, [state, close, router]);
+  useActionResult(state, { onSuccess: close, successMessage: "Prodi / unit tersimpan." });
   return (
     <form action={action} className="space-y-3">
       <InstitusiFields fakultas={fakultas} />
@@ -95,14 +90,8 @@ export function EditInstitusiButton({ item, fakultas }: { item: InstitusiData; f
 }
 
 function EditForm({ item, close, fakultas }: { item: InstitusiData; close: () => void; fakultas: FakultasOpt[] }) {
-  const router = useRouter();
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateInstitusi(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      router.refresh();
-      close();
-    }
-  }, [state, close, router]);
+  useActionResult(state, { onSuccess: close, successMessage: "Prodi / unit diperbarui." });
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={item.id} />
@@ -127,12 +116,7 @@ export function DeleteInstitusiButton({ item }: { item: InstitusiData }) {
 
 function DeleteForm({ item, close, onDone }: { item: InstitusiData; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteInstitusi(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Prodi / unit dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={item.id} />

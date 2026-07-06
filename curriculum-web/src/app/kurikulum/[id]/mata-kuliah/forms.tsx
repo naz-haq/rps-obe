@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { MataKuliah, ApiResult } from "@/lib/api";
+import { useActionResult } from "@/lib/use-action-result";
 import { createMataKuliah, updateMataKuliah, deleteMataKuliah } from "./actions";
 
 const JENIS_OPTS = [
@@ -73,9 +74,7 @@ export function CreateMkButton({ kurikulumId, prodiOptions }: { kurikulumId: num
 
 function CreateForm({ kurikulumId, prodiOptions, close }: { kurikulumId: number; prodiOptions: ProdiOpt[]; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createMataKuliah(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Mata kuliah tersimpan." });
   return (
     <form action={action} className="space-y-4">
       <MkFields kurikulumId={kurikulumId} prodiOptions={prodiOptions} />
@@ -98,9 +97,7 @@ export function EditMkButton({ m, kurikulumId, prodiOptions }: { m: MataKuliah; 
 
 function EditForm({ m, kurikulumId, prodiOptions, close }: { m: MataKuliah; kurikulumId: number; prodiOptions: ProdiOpt[]; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateMataKuliah(fd), null);
-  useEffect(() => {
-    if (state?.ok) close();
-  }, [state, close]);
+  useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Mata kuliah diperbarui." });
   return (
     <form action={action} className="space-y-4">
       <MkFields m={m} kurikulumId={kurikulumId} prodiOptions={prodiOptions} />
@@ -124,12 +121,7 @@ export function DeleteMkButton({ m, kurikulumId }: { m: MataKuliah; kurikulumId:
 
 function DeleteForm({ m, kurikulumId, close, onDone }: { m: MataKuliah; kurikulumId: number; close: () => void; onDone: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => deleteMataKuliah(fd), null);
-  useEffect(() => {
-    if (state?.ok) {
-      onDone();
-      close();
-    }
-  }, [state, close, onDone]);
+  useActionResult(state, { refresh: false, onSuccess: () => { onDone(); close(); }, successMessage: "Mata kuliah dihapus." });
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="id" value={m.id} />
