@@ -3,15 +3,17 @@ FROM composer:2 AS vendor
 WORKDIR /app
 COPY . .
 RUN composer install --no-dev --no-scripts --prefer-dist \
-      --optimize-autoloader --no-interaction --no-progress
+    --optimize-autoloader --no-interaction --no-progress \
+    --ignore-platform-req=ext-gd --ignore-platform-req=ext-zip \
+    --ignore-platform-req=ext-intl --ignore-platform-req=ext-bcmath
 
 # ---- runtime: PHP-FPM + Nginx + worker ----
 FROM php:8.3-fpm-bookworm AS runtime
 
 # Ekstensi yang dibutuhkan Laravel + phpword (zip/gd) + smalot/pdfparser (mbstring).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nginx supervisor \
-        libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libonig-dev \
+    nginx supervisor \
+    libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libonig-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql mbstring bcmath zip intl gd opcache pcntl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
