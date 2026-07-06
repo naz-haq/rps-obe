@@ -13,6 +13,8 @@ type TurnstileApi = {
       callback: (token: string) => void;
       "expired-callback"?: () => void;
       "error-callback"?: () => void;
+      theme?: "light" | "dark" | "auto";
+      size?: "normal" | "flexible" | "compact";
     },
   ) => string;
 };
@@ -38,6 +40,8 @@ export function LoginForm({ turnstileSiteKey }: { turnstileSiteKey?: string }) {
       renderedRef.current = true;
       window.turnstile.render(widgetRef.current, {
         sitekey: turnstileSiteKey,
+        theme: "light",
+        size: "flexible",
         callback: (token) => setTurnstileToken(token),
         "expired-callback": () => setTurnstileToken(""),
         "error-callback": () => setTurnstileToken(""),
@@ -107,8 +111,8 @@ export function LoginForm({ turnstileSiteKey }: { turnstileSiteKey?: string }) {
         </label>
 
         {turnstileSiteKey && (
-          <div>
-            <div ref={widgetRef} />
+          <div className="flex justify-center">
+            <div ref={widgetRef} className="w-full" />
             <input type="hidden" name="cf-turnstile-response" value={turnstileToken} />
           </div>
         )}
