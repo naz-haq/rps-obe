@@ -1,4 +1,4 @@
-import { apiGet, type Paginated, type UserAccount, type RoleData, type InstitusiRingkas } from "@/lib/api";
+import { apiGet, type Paginated, type UserAccount, type RoleData, type InstitusiData } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { CreateUserButton, EditUserButton, DeleteUserButton } from "./forms";
 
@@ -40,7 +40,7 @@ export default async function PenggunaPage({ searchParams }: { searchParams: Sea
       per_page: 15,
     }).catch(() => null),
     apiGet<{ data: RoleData[] }>("/roles").catch(() => ({ data: [] as RoleData[] })),
-    apiGet<{ data: InstitusiRingkas[] }>("/institusi").catch(() => ({ data: [] as InstitusiRingkas[] })),
+    apiGet<{ data: InstitusiData[] }>("/institusi").catch(() => ({ data: [] as InstitusiData[] })),
   ]);
 
   const roles = rolesRes.data;

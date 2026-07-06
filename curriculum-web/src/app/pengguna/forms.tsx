@@ -4,11 +4,44 @@ import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
-import type { ApiResult, InstitusiRingkas, RoleData, UserAccount } from "@/lib/api";
+import type { ApiResult, InstitusiData, RoleData, UserAccount } from "@/lib/api";
 import { useActionResult } from "@/lib/use-action-result";
 import { createUser, updateUser, deleteUser } from "./actions";
 
 type State = ApiResult | null;
+
+/**
+ * Susun opsi Unit/Institusi mengikuti halaman "Prodi & Unit":
+ * hanya fakultas & prodi (berjenjang), tanpa jenis "universitas",
+ * ditambah opsi "— Tanpa unit —".
+ */
+function buildUnitOptions(institusi: InstitusiData[]): { value: string; label: string }[] {
+  const fakultas = institusi.filter((i) => i.jenis === "fakultas");
+  const prodiByParent = new Map<number, InstitusiData[]>();
+  const orphanProdi: InstitusiData[] = [];
+  for (const i of institusi) {
+    if (i.jenis !== "prodi") continue;
+    if (i.parent_id && fakultas.some((f) => f.id === i.parent_id)) {
+      const list = prodiByParent.get(i.parent_id) ?? [];
+      list.push(i);
+      prodiByParent.set(i.parent_id, list);
+    } else {
+      orphanProdi.push(i);
+    }
+  }
+
+  const opts: { value: string; label: string }[] = [{ value: "", label: "— Tanpa unit —" }];
+  for (const f of fakultas) {
+    opts.push({ value: String(f.id), label: f.nama });
+    for (const p of prodiByParent.get(f.id) ?? []) {
+      opts.push({ value: String(p.id), label: `— ${p.nama}` });
+    }
+  }
+  for (const p of orphanProdi) {
+    opts.push({ value: String(p.id), label: p.nama });
+  }
+  return opts;
+}
 
 function RoleChecklist({ roles, selected }: { roles: RoleData[]; selected: string[] }) {
   return (
@@ -38,13 +71,10 @@ function UserFields({
   user,
 }: {
   roles: RoleData[];
-  institusi: InstitusiRingkas[];
+  institusi: InstitusiData[];
   user?: UserAccount;
 }) {
-  const institusiOpts = [
-    { value: "", label: "— Tanpa unit —" },
-    ...institusi.map((i) => ({ value: String(i.id), label: `${i.nama} (${i.jenis})` })),
-  ];
+  const institusiOpts = buildUnitOptions(institusi);
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -84,7 +114,7 @@ function UserFields({
   );
 }
 
-export function CreateUserButton({ roles, institusi }: { roles: RoleData[]; institusi: InstitusiRingkas[] }) {
+export function CreateUserButton({ roles, institusi }: { roles: RoleData[]; institusi: InstitusiData[] }) {
   return (
     <Modal trigger="+ Tambah Pengguna" title="Tambah Pengguna" size="lg">
       {(close) => <CreateForm roles={roles} institusi={institusi} close={close} />}
@@ -98,7 +128,7 @@ function CreateForm({
   close,
 }: {
   roles: RoleData[];
-  institusi: InstitusiRingkas[];
+  institusi: InstitusiData[];
   close: () => void;
 }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createUser(fd), null);
@@ -122,7 +152,7 @@ export function EditUserButton({
 }: {
   user: UserAccount;
   roles: RoleData[];
-  institusi: InstitusiRingkas[];
+  institusi: InstitusiData[];
 }) {
   return (
     <Modal trigger="Ubah" title="Ubah Pengguna" triggerVariant="ghost" triggerSize="sm" size="lg">
@@ -139,7 +169,7 @@ function EditForm({
 }: {
   user: UserAccount;
   roles: RoleData[];
-  institusi: InstitusiRingkas[];
+  institusi: InstitusiData[];
   close: () => void;
 }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateUser(fd), null);
