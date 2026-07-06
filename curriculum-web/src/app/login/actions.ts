@@ -5,14 +5,14 @@ import { redirect } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
 import { TOKEN_COOKIE } from "@/lib/auth";
 
-export type LoginState = { error?: string };
+export type LoginState = { error?: string; login?: string };
 
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const login = String(formData.get("login") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   if (!login || !password) {
-    return { error: "NIDN dan kata sandi wajib diisi." };
+    return { error: "NIDN dan kata sandi wajib diisi.", login };
   }
 
   let res: Response;
@@ -24,7 +24,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
       body: JSON.stringify({ login, password }),
     });
   } catch {
-    return { error: "Tidak dapat terhubung ke server. Coba lagi." };
+    return { error: "Tidak dapat terhubung ke server. Coba lagi.", login };
   }
 
   const json = (await res.json().catch(() => null)) as
@@ -34,7 +34,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   if (!res.ok || !json?.token) {
     const pesan =
       json?.errors?.login?.[0] ?? json?.message ?? "NIDN atau kata sandi salah.";
-    return { error: pesan };
+    return { error: pesan, login };
   }
 
   const jar = await cookies();
