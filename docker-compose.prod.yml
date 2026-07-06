@@ -70,6 +70,10 @@ services:
       # Panggilan server-to-server (server components/actions) & proxy /backend.
       API_BASE_URL: http://api:8100/api/v1
       BACKEND_ORIGIN: http://api:8100
+      # Cloudflare Turnstile (CAPTCHA) di halaman login. Biarkan kosong untuk
+      # menonaktifkan; isi keduanya untuk mengaktifkan verifikasi.
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     networks: [internal]
 
   # Cloudflare Tunnel: akses publik https://SITE_ADDRESS tanpa buka port / TLS sendiri.

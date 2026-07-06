@@ -1,11 +1,37 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
 import { TOKEN_COOKIE } from "@/lib/auth";
 
 export type LoginState = { error?: string; login?: string };
+
+/**
+ * Verifikasi token Cloudflare Turnstile di sisi server.
+ * Hanya berjalan bila TURNSTILE_SECRET_KEY diisi; jika kosong, verifikasi dilewati.
+ */
+async function verifyTurnstile(token: string, remoteIp?: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // Turnstile nonaktif → lewati.
+  if (!token) return false;
+
+  const body = new URLSearchParams({ secret, response: token });
+  if (remoteIp) body.set("remoteip", remoteIp);
+
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      cache: "no-store",
+      body,
+    });
+    const data = (await res.json().catch(() => null)) as { success?: boolean } | null;
+    return Boolean(data?.success);
+  } catch {
+    return false;
+  }
+}
 
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const login = String(formData.get("login") ?? "").trim();
@@ -13,6 +39,18 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
 
   if (!login || !password) {
     return { error: "NIDN dan kata sandi wajib diisi.", login };
+  }
+
+  // Verifikasi Turnstile sebelum meneruskan kredensial ke backend.
+  if (process.env.TURNSTILE_SECRET_KEY) {
+    const turnstileToken = String(formData.get("cf-turnstile-response") ?? "");
+    const hdrs = await headers();
+    const remoteIp =
+      hdrs.get("cf-connecting-ip") ?? hdrs.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const ok = await verifyTurnstile(turnstileToken, remoteIp || undefined);
+    if (!ok) {
+      return { error: "Verifikasi keamanan gagal. Muat ulang halaman lalu coba lagi.", login };
+    }
   }
 
   let res: Response;
