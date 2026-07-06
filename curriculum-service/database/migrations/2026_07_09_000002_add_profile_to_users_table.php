@@ -15,7 +15,10 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->foreignId('institusi_id')->nullable()->after('id')
                 ->constrained('institusi')->nullOnDelete();
-            $table->string('nidn')->nullable()->after('email');
+            // nidn bisa sudah dibuat oleh migrasi unique sebelumnya (DB fresh).
+            if (! Schema::hasColumn('users', 'nidn')) {
+                $table->string('nidn')->nullable()->after('email');
+            }
             $table->string('jabatan')->nullable()->after('nidn');
             $table->boolean('is_active')->default(true)->after('jabatan');
         });
