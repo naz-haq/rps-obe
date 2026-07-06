@@ -34,6 +34,15 @@ setenv DB_DATABASE    curriculum_service .env
 setenv DB_USERNAME    root               .env
 setenv DB_PASSWORD    password123        .env
 
+# --- Kredensial AI dari Codespaces Secrets (JANGAN commit key ke git) ---
+# Secret yang di-set di GitHub (Settings > Secrets > Codespaces) muncul sebagai
+# environment variable di container ini; kita salin ke .env bila ada.
+setenv AI_PROFILE "${AI_PROFILE:-simulasi}" .env
+for k in GEMINI_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY DEEPSEEK_API_KEY; do
+  val="${!k:-}"
+  [ -n "$val" ] && setenv "$k" "$val" .env
+done
+
 composer install --no-interaction --prefer-dist --no-progress
 
 # Buat APP_KEY bila belum ada.
