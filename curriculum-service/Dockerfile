@@ -8,7 +8,8 @@ RUN composer install --no-dev --no-scripts --prefer-dist \
     --ignore-platform-req=ext-intl --ignore-platform-req=ext-bcmath
 
 # ---- runtime: PHP-FPM + Nginx + worker ----
-FROM php:8.3-fpm-bookworm AS runtime
+# Catatan: harus PHP 8.4 agar cocok dengan dependency yang di-lock (butuh php >= 8.4.1).
+FROM php:8.4-fpm-bookworm AS runtime
 
 # Ekstensi yang dibutuhkan Laravel + phpword (zip/gd) + smalot/pdfparser (mbstring).
 RUN apt-get update && apt-get install -y --no-install-recommends \
