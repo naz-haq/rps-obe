@@ -10,6 +10,7 @@ use App\Models\MataKuliah;
 use App\Models\Rubrik;
 use App\Models\RpsVersion;
 use App\Services\Rps\RpsDocxExporter;
+use App\Services\Rps\RpsPrintContext;
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\IOFactory;
 
@@ -42,43 +43,55 @@ class RpsVersionController extends Controller
         $rpsVersion->load([
             'minggu.subCpmk.cpmk',
             'minggu.subCpmk.indikator',
-            'komponenPenilaian.subCpmk',
+            'komponenPenilaian.subCpmk.cpmk',
             'komponenPenilaian.rubrik.kriteria',
         ])->loadCount(['minggu', 'komponenPenilaian']);
 
+        $ctx = app(RpsPrintContext::class);
         $minggu = $rpsVersion->minggu
             ->sortBy('minggu_ke')
             ->map(fn($m) => [
-                'minggu_ke'           => $m->minggu_ke,
-                'sub_cpmk'            => $m->subCpmk?->kode,
-                'cpmk'               => $m->subCpmk?->cpmk?->kode,
-                'indikator'           => $m->indikator,
-                'kriteria_penilaian'  => $m->teknik_kriteria_penilaian,
-                'metode_pembelajaran' => $m->metode_pembelajaran,
-                'bentuk_luring'       => $m->bentuk_luring,
-                'bentuk_daring'       => $m->bentuk_daring,
-                'pengalaman_belajar' => $m->pengalaman_belajar,
-                'materi_pustaka'     => $m->materi_pustaka,
-                'estimasi_waktu'     => $m->estimasi_waktu,
-                'bobot_penilaian'    => $m->bobot_penilaian,
+                'minggu_ke'            => $m->minggu_ke,
+                'sub_cpmk'             => $m->subCpmk?->kode,
+                'sub_cpmk_deskripsi'   => $m->subCpmk?->deskripsi,
+                'sub_cpmk_bloom'       => $ctx->bloomTag($m->subCpmk?->taksonomi_kode),
+                'cpmk'                 => $m->subCpmk?->cpmk?->kode,
+                'cpmk_deskripsi'       => $m->subCpmk?->cpmk?->deskripsi,
+                'indikator'            => $m->indikator,
+                'kriteria_penilaian'   => $ctx->formatKriteria($m->teknik_kriteria_penilaian),
+                'metode_pembelajaran'  => $m->metode_pembelajaran,
+                'bentuk_luring'        => $m->bentuk_luring,
+                'bentuk_daring'        => $m->bentuk_daring,
+                'pengalaman_belajar'   => $m->pengalaman_belajar,
+                'materi_pustaka'       => $m->materi_pustaka,
+                'estimasi_waktu'       => is_array($m->estimasi_waktu)
+                    ? array_merge($m->estimasi_waktu, ['teks' => $ctx->formatEstimasi($m->estimasi_waktu)])
+                    : $m->estimasi_waktu,
+                'bobot_penilaian'      => $m->bobot_penilaian,
             ])->values();
 
         $komponen = $rpsVersion->komponenPenilaian
             ->map(fn($k) => [
-                'nama'         => $k->nama,
-                'jenis'        => $k->jenis,
-                'instrumen'    => $k->instrumen,
-                'bobot_persen' => $k->bobot_persen,
-                'sub_cpmk'     => $k->subCpmk?->kode,
-                'minggu_ke'    => $k->minggu_ke,
-                'rubrik'       => $this->rubrikArray($k->rubrik),
+                'nama'               => $k->nama,
+                'jenis'              => $k->jenis,
+                'instrumen'          => $k->instrumen,
+                'bobot_persen'       => $k->bobot_persen,
+                'sub_cpmk'           => $k->subCpmk?->kode,
+                'sub_cpmk_deskripsi' => $k->subCpmk?->deskripsi,
+                'cpmk'               => $k->subCpmk?->cpmk?->kode,
+                'cpmk_deskripsi'     => $k->subCpmk?->cpmk?->deskripsi,
+                'minggu_ke'          => $k->minggu_ke,
+                'rubrik'             => $this->rubrikArray($k->rubrik),
             ])->values();
+
+        $konteks = app(RpsPrintContext::class)->build($rpsVersion);
 
         return response()->json([
             'data' => [
                 'rps'      => new RpsVersionResource($rpsVersion),
                 'minggu'   => $minggu,
                 'komponen' => $komponen,
+                'konteks'  => $konteks,
             ],
         ]);
     }
@@ -128,7 +141,7 @@ class RpsVersionController extends Controller
         $rpsVersion->load([
             'minggu.subCpmk.cpmk',
             'minggu.subCpmk.indikator',
-            'komponenPenilaian.subCpmk',
+            'komponenPenilaian.subCpmk.cpmk',
             'komponenPenilaian.rubrik.kriteria',
         ]);
 
@@ -147,6 +160,8 @@ class RpsVersionController extends Controller
             ->unique('id')
             ->values();
 
+        $konteks = app(RpsPrintContext::class)->build($rpsVersion);
+
         return view('rps.cetak', [
             'rps'        => $rpsVersion,
             'mk'         => $mk,
@@ -154,6 +169,7 @@ class RpsVersionController extends Controller
             'minggu'     => $minggu,
             'komponen'   => $komponen,
             'cplDiampu'  => $cplDiampu,
+            'konteks'    => $konteks,
         ]);
     }
 
@@ -180,7 +196,9 @@ class RpsVersionController extends Controller
             ->deleteFileAfterSend(true);
     }
 
-    /** Ubah relasi Rubrik (+kriteria) menjadi array untuk respons JSON. */
+    /**
+     * Ubah relasi Rubrik (+kriteria) menjadi array untuk respons JSON.
+     */
     private function rubrikArray(?Rubrik $rubrik): ?array
     {
         if (! $rubrik) {

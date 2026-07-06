@@ -58,15 +58,16 @@ return [
             'system' =>
             'Anda perancang pembelajaran OBE. Susun rencana 16 minggu pertemuan (termasuk UTS di minggu 8 dan UAS di minggu 16) '
                 . 'mengikuti FORMAT TABEL RPS Panduan KPT/SN-Dikti. Untuk tiap minggu isi: sub_cpmk_kode (kemampuan akhir), '
-                . 'indikator penilaian, kriteria_penilaian (kriteria & teknik/bentuk penilaian), metode_pembelajaran, '
+                . 'indikator penilaian, kriteria_penilaian, metode_pembelajaran, '
                 . 'bentuk_luring dan bentuk_daring (bentuk pembelajaran), pengalaman_belajar (penugasan mahasiswa), '
-                . 'materi_pustaka (materi pembelajaran/rujukan), dan bobot_penilaian (%). '
+                . 'materi_pustaka, dan bobot_penilaian (%). '
+                . 'FORMAT kriteria_penilaian WAJIB dua baris dipisah karakter newline \\n, contoh: "Kriteria: ketepatan analisis dan kelengkapan argumen.\\nTeknik: tes tertulis uraian." '
+                . 'FORMAT materi_pustaka: pilih SATU/LEBIH item dari daftar BAHAN KAJIAN MK yang paling relevan dengan Sub-CPMK minggu tsb, lalu tulis dalam bentuk "Nama Bahan Kajian — ringkasan materi minggu ini [Pustaka: nomor/urut sitasi dari daftar PUSTAKA/REFERENSI MK]". Contoh: "Farmakokinetika dasar — absorpsi, distribusi, metabolisme [Pustaka: 1,3]". '
                 . 'JANGAN mengisi estimasi/alokasi waktu — kolom itu dihitung otomatis dari SKS oleh sistem. '
-                . 'Gunakan metode Student-Centered Learning (Small Group Discussion, Case Method, Project-Based Learning, Discovery Learning) '
-                . '— jangan hanya ceramah. '
-                . 'Untuk materi/pustaka JANGAN mengarang judul referensi; gunakan HANYA referensi yang tersedia dalam konteks. '
+                . 'Gunakan metode Student-Centered Learning (Small Group Discussion, Case Method, Project-Based Learning, Discovery Learning) — jangan hanya ceramah. '
+                . 'JANGAN mengarang judul referensi atau bahan kajian; gunakan HANYA yang tersedia dalam konteks. '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
-            'schema' => '{"minggu":[{"minggu_ke":1,"sub_cpmk_kode":"Sub-CPMK1.1","indikator":"...","kriteria_penilaian":"...","metode_pembelajaran":"...","bentuk_luring":"...","bentuk_daring":"...","pengalaman_belajar":"...","materi_pustaka":"...","bobot_penilaian":5}]}',
+            'schema' => '{"minggu":[{"minggu_ke":1,"sub_cpmk_kode":"Sub-CPMK1.1","indikator":"...","kriteria_penilaian":"Kriteria: ...\nTeknik: ...","metode_pembelajaran":"...","bentuk_luring":"...","bentuk_daring":"...","pengalaman_belajar":"...","materi_pustaka":"Nama BK — ringkasan [Pustaka: 1,2]","bobot_penilaian":5}]}',
         ],
 
         'penilaian' => [

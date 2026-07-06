@@ -67,7 +67,7 @@ class MataKuliahController extends Controller
     {
         $institusiId = $mk?->institusi_id ?? $request->integer('institusi_id');
 
-        return $request->validate([
+        $data = $request->validate([
             'institusi_id'      => [$mk ? 'sometimes' : 'required', 'integer', 'exists:institusi,id'],
             'kurikulum_id'      => ['nullable', 'integer', 'exists:kurikulum,id'],
             'kode_mk'           => [
@@ -91,5 +91,13 @@ class MataKuliahController extends Controller
         ], [
             'kode_mk.unique' => 'Kode mata kuliah ini sudah dipakai pada institusi yang sama.',
         ]);
+
+        // Kolom jenis_mk tidak boleh null di basis data; default ke 'murni' (teori)
+        // saat pengguna tidak memilih jenis.
+        if (empty($data['jenis_mk'])) {
+            $data['jenis_mk'] = 'murni';
+        }
+
+        return $data;
     }
 }

@@ -31,7 +31,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
     .then((r) => r.data)
     .catch(() => [] as RpsApprovalLog[]);
 
-  const { rps, minggu, komponen } = detail;
+  const { rps, minggu, komponen, konteks } = detail;
   const totalBobot =
     Math.round(komponen.reduce((a, k) => a + Number(k.bobot_persen ?? 0), 0) * 100) / 100;
 
@@ -77,10 +77,147 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
         <Stat label="Status" value={<Badge tone={rpsStatusTone(rps.status)}>{rpsStatusLabel(rps.status)}</Badge>} />
       </div>
 
+      {/* Konteks MK: Bahan Kajian, Pustaka, Pengampu, Prasyarat, Matriks korelasi */}
+      {konteks && (
+        <Card className="mt-6">
+          <div className="border-b border-border px-5 py-3.5">
+            <h2 className="text-sm font-semibold text-ink">Konteks Mata Kuliah</h2>
+            <p className="text-xs text-muted">
+              Data pendukung sesuai template Panduan Penyusunan KPT 2024 (bahan kajian, pustaka, pengampu, prasyarat, matriks korelasi).
+            </p>
+          </div>
+          <CardBody className="grid gap-6 md:grid-cols-2">
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Bahan Kajian</h3>
+              {konteks.bahan_kajian.length === 0 ? (
+                <p className="text-sm text-muted">Belum ada bahan kajian tertaut ke MK.</p>
+              ) : (
+                <ol className="list-decimal space-y-1 pl-5 text-sm">
+                  {konteks.bahan_kajian.map((bk, i) => (
+                    <li key={i}>
+                      <span className="font-medium text-ink">{bk.nama}</span>
+                      {bk.deskripsi && <span className="text-muted"> — {bk.deskripsi}</span>}
+                      {bk.keterampilan.length > 0 && (
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-muted">
+                          {bk.keterampilan.map((k, j) => <li key={j}>{k}</li>)}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Pustaka Utama</h3>
+                {konteks.pustaka_utama.length === 0 ? (
+                  <p className="text-sm text-muted">—</p>
+                ) : (
+                  <ol className="list-decimal space-y-1 pl-5 text-sm">
+                    {konteks.pustaka_utama.map((p, i) => <li key={i}>{p}</li>)}
+                  </ol>
+                )}
+              </div>
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Pustaka Pendukung</h3>
+                {konteks.pustaka_pendukung.length === 0 ? (
+                  <p className="text-sm text-muted">—</p>
+                ) : (
+                  <ol className="list-decimal space-y-1 pl-5 text-sm">
+                    {konteks.pustaka_pendukung.map((p, i) => <li key={i}>{p}</li>)}
+                  </ol>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Dosen Pengampu</h3>
+              {konteks.pengampu.length === 0 ? (
+                <p className="text-sm text-muted">Belum ada dosen pengampu.</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {konteks.pengampu.map((d, i) => (
+                    <li key={i}>
+                      <span className="font-medium text-ink">{d.nama}</span>
+                      <span className="text-muted"> · {d.peran}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Matakuliah Syarat</h3>
+              {konteks.prasyarat ? (
+                <p className="text-sm">
+                  <span className="font-medium text-ink">{konteks.prasyarat.kode}</span>
+                  {konteks.prasyarat.nama && <span className="text-muted"> — {konteks.prasyarat.nama}</span>}
+                </p>
+              ) : (
+                <p className="text-sm text-muted">Tidak ada prasyarat.</p>
+              )}
+              <h3 className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Kode Dokumen</h3>
+              <p className="text-sm">{rps.kode_dokumen || <span className="text-muted">—</span>}</p>
+            </div>
+          </CardBody>
+
+          {konteks.matriks_korelasi.baris.length > 0 && (
+            <div className="border-t border-border">
+              <div className="px-5 py-3">
+                <h3 className="text-sm font-semibold text-ink">Matriks Korelasi Sub-CPMK × CPL</h3>
+                <p className="text-xs text-muted">
+                  Bobot % kontribusi Sub-CPMK ke tiap CPL (turunan bobot CPMK × CPL) serta kontribusi Sub-CPMK ke MK berdasarkan jumlah minggu pertemuan (total {konteks.matriks_korelasi.total_minggu} minggu aktif).
+                </p>
+              </div>
+              <Table bordered>
+                <thead>
+                  <tr>
+                    <Th>Sub-CPMK</Th>
+                    {konteks.matriks_korelasi.cpl.map((c) => (
+                      <Th key={c.id} className="text-center">{c.kode} (%)</Th>
+                    ))}
+                    <Th className="text-center">Bobot Penilaian (%)</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {konteks.matriks_korelasi.baris.map((b, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <Td className="font-medium text-ink">{b.sub_cpmk}</Td>
+                      {konteks.matriks_korelasi.cpl.map((c) => (
+                        <Td key={c.id} className="text-center tabular-nums text-muted">
+                          {b.bobot_per_cpl[c.kode] != null ? b.bobot_per_cpl[c.kode] : ""}
+                        </Td>
+                      ))}
+                      <Td className="text-center tabular-nums">{b.bobot_nilai ?? ""}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              {konteks.matriks_korelasi.cpmk_kontribusi.length > 0 && (
+                <div className="border-t border-border bg-gray-50 px-5 py-3 text-xs">
+                  <span className="font-semibold text-ink">Rekap kontribusi per CPMK</span>
+                  <span className="text-muted"> (berdasarkan jumlah minggu pertemuan):</span>
+                  <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                    {konteks.matriks_korelasi.cpmk_kontribusi.map((c) => (
+                      <li key={c.cpmk} className="tabular-nums">
+                        <span className="font-medium text-ink">{c.cpmk}</span>
+                        <span className="text-muted"> — {c.jumlah_minggu} mg ({c.kontribusi_persen}%)</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Rencana mingguan */}
       <Card className="mt-6">
         <div className="border-b border-border px-5 py-3.5">
           <h2 className="text-sm font-semibold text-ink">Rencana Pembelajaran Mingguan</h2>
+          <p className="text-xs text-muted">Format Panduan KPT 2024 (8 kolom, bentuk pembelajaran dipisah Luring/Daring, materi merujuk Bahan Kajian & Pustaka).</p>
         </div>
         {minggu.length === 0 ? (
           <EmptyState title="Belum ada data mingguan" />
@@ -91,30 +228,69 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                 <Th className="text-right">Mg</Th>
                 <Th>Sub-CPMK</Th>
                 <Th>Indikator</Th>
-                <Th>Kriteria &amp; Teknik</Th>
-                <Th>Bentuk &amp; Metode</Th>
-                <Th>Materi / Pustaka</Th>
-                <Th>Estimasi Waktu</Th>
-                <Th className="text-right">Bobot</Th>
+                <Th>Kriteria &amp; Bentuk Penilaian</Th>
+                <Th>Bentuk Pembelajaran — Luring</Th>
+                <Th>Bentuk Pembelajaran — Daring</Th>
+                <Th>Materi Pembelajaran [Pustaka]</Th>
+                <Th className="text-right">Bobot (%)</Th>
               </tr>
             </thead>
             <tbody>
-              {minggu.map((m) => (
+              {minggu.map((m) => {
+                const materiLower = (m.materi_pustaka ?? "").toLowerCase();
+                const isUts = materiLower.includes("uts") || materiLower.includes("ujian tengah");
+                const isUas = materiLower.includes("uas") || materiLower.includes("ujian akhir");
+                if (isUts || isUas) {
+                  return (
+                    <tr key={m.minggu_ke} className="bg-amber-50">
+                      <Td className="text-right font-medium tabular-nums">{m.minggu_ke}</Td>
+                      <Td colSpan={7} className="text-center font-semibold text-amber-900">
+                        {isUts ? "Evaluasi Tengah Semester (UTS)" : "Evaluasi Akhir Semester (UAS)"}
+                        {m.indikator ? ` — ${m.indikator}` : ""}
+                      </Td>
+                    </tr>
+                  );
+                }
+                return (
                 <tr key={m.minggu_ke} className="align-top hover:bg-gray-50">
                   <Td className="text-right font-medium tabular-nums">{m.minggu_ke}</Td>
-                  <Td>{m.sub_cpmk ? <Badge tone="brand">{m.sub_cpmk}</Badge> : "—"}</Td>
-                  <Td className="max-w-[16rem] text-muted">{m.indikator ?? "—"}</Td>
-                  <Td className="max-w-[16rem] text-muted">{m.kriteria_penilaian ?? "—"}</Td>
-                  <Td className="max-w-[16rem] text-muted">
-                    {[m.metode_pembelajaran, m.bentuk_luring, m.bentuk_daring].filter(Boolean).join(" · ") || "—"}
+                  <Td>
+                    {m.sub_cpmk ? (
+                      <div className="space-y-1">
+                        <Badge tone="brand">{m.sub_cpmk}</Badge>
+                        {m.sub_cpmk_bloom && <span className="ml-1 text-[10px] text-muted">{m.sub_cpmk_bloom}</span>}
+                        {m.sub_cpmk_deskripsi && <p className="text-xs text-muted">{m.sub_cpmk_deskripsi}</p>}
+                        {m.cpmk && (
+                          <p className="text-xs text-muted">
+                            CPMK {m.cpmk}
+                            {m.cpmk_deskripsi ? `: ${m.cpmk_deskripsi}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </Td>
-                  <Td className="max-w-[14rem] text-muted">{m.materi_pustaka ?? "—"}</Td>
-                  <Td className="text-muted">{m.estimasi_waktu?.teks ?? "—"}</Td>
+                  <Td className="max-w-[14rem] text-muted">{m.indikator ?? "—"}</Td>
+                  <Td className="max-w-[16rem] whitespace-pre-line text-muted">{m.kriteria_penilaian ?? "—"}</Td>
+                  <Td className="max-w-[14rem] text-muted">
+                    {m.bentuk_luring ? <div>{m.bentuk_luring}</div> : <span>—</span>}
+                    {m.metode_pembelajaran && <div className="text-[11px] text-muted">Metode: {m.metode_pembelajaran}</div>}
+                    {m.estimasi_waktu?.teks && (
+                      <div className="text-[11px] italic text-muted">{m.estimasi_waktu.teks}</div>
+                    )}
+                  </Td>
+                  <Td className="max-w-[14rem] text-muted">
+                    {m.bentuk_daring ? <div>{m.bentuk_daring}</div> : <span>—</span>}
+                    {m.pengalaman_belajar && <div className="text-[11px] text-muted">Penugasan: {m.pengalaman_belajar}</div>}
+                  </Td>
+                  <Td className="max-w-[16rem] text-muted">{m.materi_pustaka ?? "—"}</Td>
                   <Td className="text-right tabular-nums">
                     {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
                   </Td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </Table>
         )}
@@ -146,7 +322,22 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                   <Td className="font-medium text-ink">{k.nama}</Td>
                   <Td className="text-muted">{k.jenis ?? "—"}</Td>
                   <Td className="max-w-[14rem] text-muted">{k.instrumen ?? "—"}</Td>
-                  <Td>{k.sub_cpmk ? <Badge tone="neutral">{k.sub_cpmk}</Badge> : "—"}</Td>
+                  <Td>
+                    {k.sub_cpmk ? (
+                      <div className="space-y-1">
+                        <Badge tone="neutral">{k.sub_cpmk}</Badge>
+                        {k.sub_cpmk_deskripsi && <p className="text-xs text-muted">{k.sub_cpmk_deskripsi}</p>}
+                        {k.cpmk && (
+                          <p className="text-xs text-muted">
+                            CPMK {k.cpmk}
+                            {k.cpmk_deskripsi ? `: ${k.cpmk_deskripsi}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
                   <Td className="text-right tabular-nums">{k.minggu_ke ?? "—"}</Td>
                   <Td className="text-right tabular-nums font-medium">{k.bobot_persen ?? 0}%</Td>
                 </tr>

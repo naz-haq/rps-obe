@@ -259,6 +259,7 @@ export type RpsVersion = {
   versi: number;
   status: string;
   bahasa: string;
+  kode_dokumen?: string | null;
   created_by?: number | null;
   koordinator_mk?: number | null;
   approved_by?: number | null;
@@ -404,7 +405,10 @@ export type Notifikasi = {
 export type RpsMinggu = {
   minggu_ke: number;
   sub_cpmk: string | null;
+  sub_cpmk_deskripsi: string | null;
+  sub_cpmk_bloom: string | null;
   cpmk: string | null;
+  cpmk_deskripsi: string | null;
   indikator: string | null;
   kriteria_penilaian: string | null;
   metode_pembelajaran: string | null;
@@ -421,6 +425,9 @@ export type RpsKomponen = {
   instrumen?: string | null;
   bobot_persen: number | null;
   sub_cpmk: string | null;
+  sub_cpmk_deskripsi: string | null;
+  cpmk: string | null;
+  cpmk_deskripsi: string | null;
   minggu_ke: number | null;
   rubrik?: RpsRubrik | null;
 };
@@ -435,10 +442,45 @@ export type RpsRubrik = {
   label_skala: string[] | null;
   kriteria: RpsRubrikKriteria[];
 };
+export type RpsKonteksCpmk = { kode: string; deskripsi: string | null; bloom: string | null; kontribusi_persen?: number };
+export type RpsKonteksSubCpmk = { kode: string; deskripsi: string | null; cpmk: string | null; bloom: string | null; kontribusi_persen?: number };
+export type RpsKonteksBK = { nama: string; deskripsi: string | null; keterampilan: string[] };
+export type RpsKonteksMatriksBaris = {
+  sub_cpmk: string;
+  cpmk: string | null;
+  bobot_per_cpl: Record<string, number | null>;
+  bobot_nilai: number | null;
+  jumlah_minggu: number;
+  kontribusi_persen: number;
+};
+export type RpsKonteksCpmkKontribusi = {
+  cpmk: string;
+  jumlah_minggu: number;
+  kontribusi_persen: number;
+};
+export type RpsKonteks = {
+  universitas: { nama: string } | null;
+  fakultas: { nama: string } | null;
+  prodi: { nama: string; kode?: string | null } | null;
+  pengampu: { nama: string; nidn: string; peran: string }[];
+  prasyarat: { kode: string; nama: string | null } | null;
+  bahan_kajian: RpsKonteksBK[];
+  pustaka_utama: string[];
+  pustaka_pendukung: string[];
+  cpmk_list: RpsKonteksCpmk[];
+  sub_cpmk_list: RpsKonteksSubCpmk[];
+  matriks_korelasi: {
+    cpl: { id: number; kode: string }[];
+    baris: RpsKonteksMatriksBaris[];
+    total_minggu: number;
+    cpmk_kontribusi: RpsKonteksCpmkKontribusi[];
+  };
+};
 export type RpsDetail = {
   rps: RpsVersion;
   minggu: RpsMinggu[];
   komponen: RpsKomponen[];
+  konteks?: RpsKonteks;
 };
 export type RpsRantai = {
   sub_cpmk: string;

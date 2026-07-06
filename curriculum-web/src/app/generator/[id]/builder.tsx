@@ -357,6 +357,14 @@ function StageBody({
   const issues = editable ? validateStage(stage, { cpmk, sub, minggu, komponen }) : [];
   const valid = issues.length === 0;
 
+  const cpmkMap = new Map(getCpmk(draf).map((c) => [c.kode, c.deskripsi]));
+  const subCpmkOptions = getSubCpmk(draf).map((s) => ({
+    kode: s.kode,
+    deskripsi: s.deskripsi,
+    cpmk_kode: s.cpmk_kode,
+    cpmk_deskripsi: s.cpmk_kode ? cpmkMap.get(s.cpmk_kode) ?? undefined : undefined,
+  }));
+
   const editedPayload = () => {
     switch (stage) {
       case "cpmk":
@@ -391,7 +399,7 @@ function StageBody({
             <MingguEditor
               value={minggu}
               onChange={setMinggu}
-              subCpmkList={getSubCpmk(draf).map((s) => s.kode)}
+              subCpmkList={subCpmkOptions}
               estimasiWaktu={estimasiWaktu}
             />
           )}
@@ -399,7 +407,7 @@ function StageBody({
             <KomponenEditor
               value={komponen}
               onChange={setKomponen}
-              subCpmkList={getSubCpmk(draf).map((s) => s.kode)}
+              subCpmkList={subCpmkOptions}
               mingguList={getMinggu(draf).map((m) => m.minggu_ke)}
             />
           )}
@@ -497,6 +505,9 @@ function StageBody({
 }
 
 function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf; estimasiWaktu: string }) {
+  const cpmkMap = new Map(getCpmk(draf).map((c) => [c.kode, c]));
+  const subMap = new Map(getSubCpmk(draf).map((s) => [s.kode, s]));
+
   if (stage === "cpmk") {
     return (
       <ul className="space-y-2">
@@ -545,38 +556,77 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
   if (stage === "mingguan") {
     return (
       <div className="overflow-x-auto rounded-lg border border-border">
+        <p className="border-b border-border bg-gray-50 px-3 py-1.5 text-[11px] text-muted">
+          Format 8 kolom KPT 2024 — sama dengan tampilan Dokumen RPS, Cetak (PDF), dan DOCX. Baris UTS/UAS diberi band kuning.
+        </p>
         <table className="w-full border-collapse text-sm [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border">
           <thead>
             <tr className="text-left text-xs uppercase text-muted">
               <th className="px-2 py-1.5">Mg</th>
               <th className="px-2 py-1.5">Sub-CPMK</th>
               <th className="px-2 py-1.5">Indikator</th>
-              <th className="px-2 py-1.5">Kriteria &amp; Teknik</th>
-              <th className="px-2 py-1.5">Metode</th>
-              <th className="px-2 py-1.5">Luring/Daring</th>
-              <th className="px-2 py-1.5">Materi/Pustaka</th>
-              <th className="px-2 py-1.5">Waktu</th>
-              <th className="px-2 py-1.5 text-right">Bobot</th>
+              <th className="px-2 py-1.5">Kriteria &amp; Bentuk Penilaian</th>
+              <th className="px-2 py-1.5">Bentuk Pembelajaran — Luring</th>
+              <th className="px-2 py-1.5">Bentuk Pembelajaran — Daring</th>
+              <th className="px-2 py-1.5">Materi Pembelajaran [Pustaka]</th>
+              <th className="px-2 py-1.5 text-right">Bobot (%)</th>
             </tr>
           </thead>
           <tbody>
-            {getMinggu(draf).map((m, i) => (
-              <tr key={i} className="align-top">
-                <td className="px-2 py-1.5 font-medium tabular-nums">{m.minggu_ke}</td>
-                <td className="px-2 py-1.5 text-muted">{m.sub_cpmk_kode ?? "—"}</td>
-                <td className="px-2 py-1.5">{m.indikator ?? "—"}</td>
-                <td className="px-2 py-1.5">{m.kriteria_penilaian ?? "—"}</td>
-                <td className="px-2 py-1.5 text-muted">{m.metode_pembelajaran ?? "—"}</td>
-                <td className="px-2 py-1.5 text-muted">
-                  {[m.bentuk_luring, m.bentuk_daring].filter(Boolean).join(" / ") || "—"}
-                </td>
-                <td className="px-2 py-1.5">{m.materi_pustaka ?? "—"}</td>
-                <td className="px-2 py-1.5 text-muted">{estimasiWaktu || "—"}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums">
-                  {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
-                </td>
-              </tr>
-            ))}
+            {getMinggu(draf).map((m, i) => {
+              const sub = m.sub_cpmk_kode ? subMap.get(m.sub_cpmk_kode) : undefined;
+              const cpmk = sub?.cpmk_kode ? cpmkMap.get(sub.cpmk_kode) : undefined;
+              const materiLower = (m.materi_pustaka ?? "").toLowerCase();
+              const isUts = materiLower.includes("uts") || materiLower.includes("ujian tengah");
+              const isUas = materiLower.includes("uas") || materiLower.includes("ujian akhir");
+              if (isUts || isUas) {
+                return (
+                  <tr key={i} className="bg-amber-50">
+                    <td className="px-2 py-1.5 text-center font-medium tabular-nums">{m.minggu_ke}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold text-amber-900" colSpan={7}>
+                      {isUts ? "Evaluasi Tengah Semester (UTS)" : "Evaluasi Akhir Semester (UAS)"}
+                      {m.indikator ? ` — ${m.indikator}` : ""}
+                    </td>
+                  </tr>
+                );
+              }
+              return (
+                <tr key={i} className="align-top">
+                  <td className="px-2 py-1.5 font-medium tabular-nums">{m.minggu_ke}</td>
+                  <td className="px-2 py-1.5">
+                    {m.sub_cpmk_kode ? (
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-ink">{m.sub_cpmk_kode}</p>
+                        {sub?.deskripsi && <p className="text-xs text-muted">{sub.deskripsi}</p>}
+                        {sub?.cpmk_kode && (
+                          <p className="text-xs text-muted">
+                            CPMK {sub.cpmk_kode}
+                            {cpmk?.deskripsi ? `: ${cpmk.deskripsi}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-muted">{m.indikator ?? "—"}</td>
+                  <td className="px-2 py-1.5 whitespace-pre-line text-muted">{m.kriteria_penilaian ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-muted">
+                    {m.bentuk_luring ? <div>{m.bentuk_luring}</div> : <span>—</span>}
+                    {m.metode_pembelajaran && <div className="text-[11px]">Metode: {m.metode_pembelajaran}</div>}
+                    {estimasiWaktu && <div className="text-[11px] italic">{estimasiWaktu}</div>}
+                  </td>
+                  <td className="px-2 py-1.5 text-muted">
+                    {m.bentuk_daring ? <div>{m.bentuk_daring}</div> : <span>—</span>}
+                    {m.pengalaman_belajar && <div className="text-[11px]">Penugasan: {m.pengalaman_belajar}</div>}
+                  </td>
+                  <td className="px-2 py-1.5 text-muted">{m.materi_pustaka ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -600,6 +650,9 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
                   <p className="text-sm font-medium">{k.nama}</p>
                   <p className="text-xs text-muted">
                     {k.jenis ?? "—"} {k.sub_cpmk_kode ? `· ${k.sub_cpmk_kode}` : ""}
+                    {k.sub_cpmk_kode && subMap.get(k.sub_cpmk_kode)?.deskripsi
+                      ? ` (${subMap.get(k.sub_cpmk_kode)?.deskripsi})`
+                      : ""}
                     {k.instrumen ? ` · ${k.instrumen}` : ""}
                   </p>
                 </div>

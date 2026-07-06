@@ -18,6 +18,7 @@ class RpsVersionResource extends JsonResource
             'versi'              => $this->versi,
             'status'             => $this->status,
             'bahasa'             => $this->bahasa,
+            'kode_dokumen'       => $this->kode_dokumen,
             'created_by'         => $this->created_by,
             'koordinator_mk'     => $this->koordinator_mk,
             'approved_by'        => $this->approved_by,

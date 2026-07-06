@@ -10,7 +10,9 @@ use App\Models\GenerateSession;
 use App\Models\Indikator;
 use App\Models\KomponenPenilaian;
 use App\Models\MataKuliah;
+use App\Models\MkBahanKajian;
 use App\Models\ProfilLulusan;
+use App\Models\Referensi;
 use App\Models\RpsMinggu;
 use App\Models\RpsVersion;
 use App\Models\Rubrik;
@@ -386,22 +388,28 @@ class RpsGeneratorService
         $map = [];
         foreach ($items as $item) {
             $kodeList = $this->normalizeTaksonomiKode($item['taksonomi_kode'] ?? null);
-            $cpmk = Cpmk::create([
-                'institusi_id' => $session->institusi_id,
-                'kode_mk'      => $mk->kode_mk,
-                'kode'         => $item['kode'] ?? '',
-                'deskripsi'    => $item['deskripsi'] ?? '',
-                'bobot_persen' => $item['bobot_persen'] ?? null,
-                'taksonomi_id' => $this->findTaksonomiId($session->institusi_id, $kodeList[0] ?? null),
-                'taksonomi_kode' => $kodeList ?: null,
-            ]);
+            $cpmk = Cpmk::updateOrCreate(
+                [
+                    'institusi_id' => $session->institusi_id,
+                    'kode_mk'      => $mk->kode_mk,
+                    'kode'         => $item['kode'] ?? '',
+                ],
+                [
+                    'deskripsi'      => $item['deskripsi'] ?? '',
+                    'bobot_persen'   => $item['bobot_persen'] ?? null,
+                    'taksonomi_id'   => $this->findTaksonomiId($session->institusi_id, $kodeList[0] ?? null),
+                    'taksonomi_kode' => $kodeList ?: null,
+                ]
+            );
 
+            $cplSync = [];
             foreach ($item['cpl_kode'] ?? [] as $cplKode) {
                 $cpl = $this->findCpl($mk, (string) $cplKode);
                 if ($cpl) {
-                    $cpmk->cpl()->attach($cpl->id, ['institusi_id' => $session->institusi_id]);
+                    $cplSync[$cpl->id] = ['institusi_id' => $session->institusi_id];
                 }
             }
+            $cpmk->cpl()->sync($cplSync);
 
             if (($item['kode'] ?? '') !== '') {
                 $map[$item['kode']] = $cpmk;
@@ -425,16 +433,22 @@ class RpsGeneratorService
             }
 
             $subKodeList = $this->normalizeTaksonomiKode($item['taksonomi_kode'] ?? null);
-            $sub = SubCpmk::create([
-                'institusi_id' => $session->institusi_id,
-                'cpmk_id'      => $cpmk->id,
-                'kode'         => $item['kode'] ?? '',
-                'deskripsi'    => $item['deskripsi'] ?? '',
-                'bobot_persen' => $item['bobot_persen'] ?? null,
-                'taksonomi_id' => $this->findTaksonomiId($session->institusi_id, $subKodeList[0] ?? null),
-                'taksonomi_kode' => $subKodeList ?: null,
-            ]);
+            $sub = SubCpmk::updateOrCreate(
+                [
+                    'institusi_id' => $session->institusi_id,
+                    'cpmk_id'      => $cpmk->id,
+                    'kode'         => $item['kode'] ?? '',
+                ],
+                [
+                    'deskripsi'      => $item['deskripsi'] ?? '',
+                    'bobot_persen'   => $item['bobot_persen'] ?? null,
+                    'taksonomi_id'   => $this->findTaksonomiId($session->institusi_id, $subKodeList[0] ?? null),
+                    'taksonomi_kode' => $subKodeList ?: null,
+                ]
+            );
 
+            // Segarkan indikator: hapus lama lalu tulis ulang agar tidak menumpuk.
+            $sub->indikator()->delete();
             foreach ($item['indikator'] ?? [] as $teks) {
                 if (trim((string) $teks) !== '') {
                     Indikator::create([
@@ -684,8 +698,14 @@ class RpsGeneratorService
 
         $bk = $this->bahanKajianContext($mk);
         if ($bk !== []) {
-            $bagian[] = "\nBAHAN KAJIAN KURIKULUM (rujukan materi):";
+            $bagian[] = "\nBAHAN KAJIAN MK (WAJIB dijadikan basis materi_pustaka tiap minggu, dipilih sesuai Sub-CPMK):";
             $bagian[] = json_encode($bk, JSON_UNESCAPED_UNICODE);
+        }
+
+        $pustaka = $this->pustakaContext($mk);
+        if ($pustaka !== []) {
+            $bagian[] = "\nPUSTAKA/REFERENSI MK (HANYA gunakan referensi dari daftar ini, jangan mengarang judul):";
+            $bagian[] = json_encode($pustaka, JSON_UNESCAPED_UNICODE);
         }
 
         foreach ($stageCfg['context_from'] as $dep) {
@@ -737,15 +757,51 @@ class RpsGeneratorService
 
     private function bahanKajianContext(MataKuliah $mk): array
     {
+        // Prioritaskan BK yang sudah dipetakan ke MK (mk_bahan_kajian);
+        // fallback ke BK kurikulum bila belum ada mapping.
+        $mapped = MkBahanKajian::query()
+            ->where('institusi_id', $mk->institusi_id)
+            ->where('kode_mk', $mk->kode_mk)
+            ->with(['bahanKajian.keterampilan'])
+            ->get()
+            ->map(function ($mkbk) {
+                $bk = $mkbk->bahanKajian;
+                if (! $bk) {
+                    return null;
+                }
+                return [
+                    'nama'         => (string) ($bk->nama ?? ''),
+                    'deskripsi'    => $bk->deskripsi,
+                    'keterampilan' => $bk->keterampilan
+                        ->map(fn($k) => (string) ($k->deskripsi ?? ''))
+                        ->filter()->values()->all(),
+                ];
+            })
+            ->filter()->values()->all();
+
+        if (! empty($mapped)) {
+            return $mapped;
+        }
         if (! $mk->kurikulum_id) {
             return [];
         }
-
         return BahanKajian::query()
             ->where('kurikulum_id', $mk->kurikulum_id)
             ->get(['nama', 'deskripsi'])
             ->map(fn($b) => ['nama' => $b->nama, 'deskripsi' => $b->deskripsi])
             ->all();
+    }
+
+    private function pustakaContext(MataKuliah $mk): array
+    {
+        $refs = Referensi::query()
+            ->where('institusi_id', $mk->institusi_id)
+            ->where('kode_mk', $mk->kode_mk)
+            ->get(['tipe', 'sitasi']);
+        return $refs->map(fn($r) => [
+            'tipe'   => $r->tipe ?: 'utama',
+            'sitasi' => $r->sitasi,
+        ])->values()->all();
     }
 
     private function parseJson(string $text, string $stage): array

@@ -57,12 +57,11 @@ export default async function TaksonomiPage() {
             const rows = byKerangka(g.kerangka);
             return (
               <Card key={g.kerangka} className="animate-fade-up">
-                <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
                   <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
                     {g.title}
                     <span className="text-xs font-normal text-muted">{g.hint}</span>
                   </h2>
-                  <CreateTaksonomiButton defaults={{ domain: g.domain, kerangka: g.kerangka }} />
                 </div>
                 <Table>
                   <thead>

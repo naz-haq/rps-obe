@@ -473,6 +473,13 @@ export function SubCpmkEditor({
   );
 }
 
+type SubCpmkOption = {
+  kode: string;
+  deskripsi?: string;
+  cpmk_kode?: string;
+  cpmk_deskripsi?: string;
+};
+
 /** Dropdown Sub-CPMK (fallback ke input teks bila daftar kosong). */
 function SubCpmkSelect({
   value,
@@ -480,7 +487,7 @@ function SubCpmkSelect({
   onChange,
 }: {
   value: string;
-  options: string[];
+  options: SubCpmkOption[];
   onChange: (v: string) => void;
 }) {
   if (options.length === 0) {
@@ -490,11 +497,11 @@ function SubCpmkSelect({
     <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">— Pilih Sub-CPMK —</option>
       {options.map((k) => (
-        <option key={k} value={k}>
-          {k}
+        <option key={k.kode} value={k.kode}>
+          {k.kode}{k.deskripsi ? ` — ${k.deskripsi}` : ""}
         </option>
       ))}
-      {value && !options.includes(value) && <option value={value}>⚠ {value} (tak dikenal)</option>}
+      {value && !options.some((o) => o.kode === value) && <option value={value}>⚠ {value} (tak dikenal)</option>}
     </select>
   );
 }
@@ -507,132 +514,172 @@ export function MingguEditor({
 }: {
   value: MingguItem[];
   onChange: (v: MingguItem[]) => void;
-  subCpmkList?: string[];
+  subCpmkList?: SubCpmkOption[];
   estimasiWaktu?: string;
 }) {
   const set = (i: number, patch: Partial<MingguItem>) =>
     onChange(value.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const duplicateAt = (i: number) => {
+    const row = value[i] ?? { minggu_ke: 1 };
+    onChange([
+      ...value.slice(0, i + 1),
+      { ...row, sub_cpmk_kode: undefined },
+      ...value.slice(i + 1),
+    ]);
+  };
+
   return (
     <div className="space-y-3">
+      <div className="rounded-lg border border-brand-100 bg-brand-50/40 px-3 py-2 text-[11px] text-brand-900/80">
+        <p className="font-semibold">Struktur form mengikuti 8 kolom Format RPS KPT 2024:</p>
+        <p className="mt-0.5">(1) Mg · (2) Sub-CPMK · (3) Indikator · (4) Kriteria &amp; Bentuk Penilaian · (5) Bentuk Pembelajaran — Luring · (6) Bentuk Pembelajaran — Daring · (7) Materi Pembelajaran [Pustaka] · (8) Bobot (%).</p>
+        <p className="mt-0.5 text-brand-900/60">Kriteria &amp; Bentuk Penilaian: tulis dua baris — <code>Kriteria: …</code> lalu baris baru <code>Teknik: …</code>. Materi Pembelajaran: pilih dari Bahan Kajian MK &amp; kutip Pustaka. Estimasi waktu dihitung otomatis dari SKS.</p>
+      </div>
       <p className="text-[11px] text-muted">
-        Format kolom mengikuti Panduan Penyusunan RPS (KPT/SN-Dikti): kemampuan akhir (Sub-CPMK),
-        penilaian (indikator + kriteria/teknik), bentuk &amp; metode pembelajaran (luring/daring +
-        penugasan), materi/pustaka, estimasi waktu, dan bobot.
+        Untuk UTS/UAS yang menguji beberapa Sub-CPMK, duplikasi baris pada minggu yang sama lalu pilih Sub-CPMK berbeda di tiap baris.
       </p>
-      {value.map((m, i) => (
-        <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
-          <div className="grid gap-2 sm:grid-cols-4">
-            <label>
-              <span className={labelCls}>Minggu ke-</span>
-              <input
-                type="number"
-                className={inputCls}
-                value={m.minggu_ke}
-                onChange={(e) => set(i, { minggu_ke: Number(e.target.value) })}
-              />
-            </label>
-            <div className="sm:col-span-2">
-              <span className={labelCls}>Sub-CPMK (kemampuan akhir)</span>
-              <SubCpmkSelect
-                value={m.sub_cpmk_kode ?? ""}
-                options={subCpmkList}
-                onChange={(v) => set(i, { sub_cpmk_kode: v })}
-              />
-            </div>
-            <label>
-              <span className={labelCls}>Bobot Penilaian %</span>
-              <input
-                type="number"
-                className={inputCls}
-                value={m.bobot_penilaian ?? ""}
-                onChange={(e) =>
-                  set(i, { bobot_penilaian: e.target.value === "" ? undefined : Number(e.target.value) })
-                }
-              />
-            </label>
-          </div>
+      {value.map((m, i) => {
+        const selectedSub = subCpmkList.find((x) => x.kode === (m.sub_cpmk_kode ?? ""));
+        const cpmkInfo = selectedSub?.cpmk_kode
+          ? `CPMK ${selectedSub.cpmk_kode}${selectedSub.cpmk_deskripsi ? `: ${selectedSub.cpmk_deskripsi}` : ""}`
+          : "";
 
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <label>
-              <span className={labelCls}>Penilaian — Indikator</span>
-              <textarea
-                className={inputCls}
-                rows={2}
-                value={m.indikator ?? ""}
-                onChange={(e) => set(i, { indikator: e.target.value })}
-              />
-            </label>
-            <label>
-              <span className={labelCls}>Penilaian — Kriteria &amp; Teknik</span>
-              <textarea
-                className={inputCls}
-                rows={2}
-                value={m.kriteria_penilaian ?? ""}
-                onChange={(e) => set(i, { kriteria_penilaian: e.target.value })}
-              />
-            </label>
-          </div>
-
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <label>
-              <span className={labelCls}>Metode Pembelajaran</span>
-              <input
-                className={inputCls}
-                value={m.metode_pembelajaran ?? ""}
-                placeholder="ceramah/diskusi/PBL/praktik"
-                onChange={(e) => set(i, { metode_pembelajaran: e.target.value })}
-              />
-            </label>
-            <label>
-              <span className={labelCls}>Bentuk — Luring</span>
-              <input
-                className={inputCls}
-                value={m.bentuk_luring ?? ""}
-                placeholder="tatap muka di kelas/lab"
-                onChange={(e) => set(i, { bentuk_luring: e.target.value })}
-              />
-            </label>
-            <label>
-              <span className={labelCls}>Bentuk — Daring</span>
-              <input
-                className={inputCls}
-                value={m.bentuk_daring ?? ""}
-                placeholder="LMS/sinkronus/asinkronus"
-                onChange={(e) => set(i, { bentuk_daring: e.target.value })}
-              />
-            </label>
-          </div>
-
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <div className="sm:col-span-1">
-              <span className={labelCls}>Estimasi Waktu</span>
-              <div className={`${inputCls} flex items-center bg-gray-50 text-muted`} title="Dihitung otomatis dari SKS (KPT/SN-Dikti) — tidak dapat diubah manual">
-                {estimasiWaktu || "— (tentukan SKS mata kuliah)"}
+        return (
+          <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
+            {/* Kolom (1) Mg + (2) Sub-CPMK + (8) Bobot */}
+            <div className="grid gap-2 sm:grid-cols-4">
+              <label>
+                <span className={labelCls}>(1) Minggu ke-</span>
+                <input
+                  type="number"
+                  className={inputCls}
+                  value={m.minggu_ke}
+                  onChange={(e) => set(i, { minggu_ke: Number(e.target.value) })}
+                />
+              </label>
+              <div className="sm:col-span-2">
+                <span className={labelCls}>(2) Sub-CPMK (kemampuan akhir)</span>
+                <SubCpmkSelect
+                  value={m.sub_cpmk_kode ?? ""}
+                  options={subCpmkList}
+                  onChange={(v) => set(i, { sub_cpmk_kode: v })}
+                />
+                {selectedSub && (
+                  <p className="mt-1 text-[10px] text-muted">
+                    {selectedSub.deskripsi ?? "Deskripsi Sub-CPMK belum diisi"}
+                    {cpmkInfo ? ` · ${cpmkInfo}` : ""}
+                  </p>
+                )}
               </div>
-              <span className="mt-0.5 block text-[10px] text-muted">Otomatis dari SKS (deterministik)</span>
+              <label>
+                <span className={labelCls}>(8) Bobot Penilaian (%)</span>
+                <input
+                  type="number"
+                  className={inputCls}
+                  value={m.bobot_penilaian ?? ""}
+                  onChange={(e) =>
+                    set(i, { bobot_penilaian: e.target.value === "" ? undefined : Number(e.target.value) })
+                  }
+                />
+              </label>
             </div>
-            <label className="sm:col-span-2">
-              <span className={labelCls}>Penugasan / Pengalaman Belajar</span>
+            <div className="mt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={() => duplicateAt(i)}
+                className="text-[11px] font-medium text-brand-700 hover:underline"
+                title="Tambahkan Sub-CPMK lain di minggu yang sama"
+              >
+                + Sub-CPMK lain (minggu sama)
+              </button>
+            </div>
+
+            {/* Kolom (3) Indikator + (4) Kriteria & Bentuk Penilaian */}
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>(3) Penilaian — Indikator</span>
+                <textarea
+                  className={inputCls}
+                  rows={2}
+                  value={m.indikator ?? ""}
+                  onChange={(e) => set(i, { indikator: e.target.value })}
+                />
+              </label>
+              <label>
+                <span className={labelCls}>(4) Kriteria &amp; Bentuk Penilaian</span>
+                <textarea
+                  className={inputCls}
+                  rows={2}
+                  value={m.kriteria_penilaian ?? ""}
+                  placeholder={"Kriteria: ketepatan analisis …\nTeknik: tes tertulis uraian."}
+                  onChange={(e) => set(i, { kriteria_penilaian: e.target.value })}
+                />
+                <span className="mt-0.5 block text-[10px] text-muted">Dua baris: Kriteria dulu, lalu Teknik.</span>
+              </label>
+            </div>
+
+            {/* Kolom (5) Luring + (6) Daring — masing-masing berisi bentuk + pendukung */}
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md border border-border/70 bg-gray-50/40 p-2">
+                <span className={labelCls}>(5) Bentuk Pembelajaran — Luring</span>
+                <input
+                  className={inputCls}
+                  value={m.bentuk_luring ?? ""}
+                  placeholder="mis. tatap muka di kelas/lab, praktikum"
+                  onChange={(e) => set(i, { bentuk_luring: e.target.value })}
+                />
+                <label className="mt-2 block">
+                  <span className={labelCls}>Metode Pembelajaran</span>
+                  <input
+                    className={inputCls}
+                    value={m.metode_pembelajaran ?? ""}
+                    placeholder="Discovery Learning / Case Method / PBL / dll"
+                    onChange={(e) => set(i, { metode_pembelajaran: e.target.value })}
+                  />
+                </label>
+                <div className="mt-2">
+                  <span className={labelCls}>Estimasi Waktu</span>
+                  <div className={`${inputCls} bg-gray-100 text-muted`} title="Dihitung otomatis dari SKS (KPT/SN-Dikti) — tidak dapat diubah manual">
+                    {estimasiWaktu || "— (tentukan SKS mata kuliah)"}
+                  </div>
+                  <span className="mt-0.5 block text-[10px] text-muted">Otomatis dari SKS (deterministik).</span>
+                </div>
+              </div>
+              <div className="rounded-md border border-border/70 bg-gray-50/40 p-2">
+                <span className={labelCls}>(6) Bentuk Pembelajaran — Daring</span>
+                <input
+                  className={inputCls}
+                  value={m.bentuk_daring ?? ""}
+                  placeholder="LMS/sinkronus/asinkronus"
+                  onChange={(e) => set(i, { bentuk_daring: e.target.value })}
+                />
+                <label className="mt-2 block">
+                  <span className={labelCls}>Penugasan / Pengalaman Belajar</span>
+                  <textarea
+                    className={inputCls}
+                    rows={4}
+                    value={m.pengalaman_belajar ?? ""}
+                    onChange={(e) => set(i, { pengalaman_belajar: e.target.value })}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Kolom (7) Materi Pembelajaran */}
+            <label className="mt-2 block">
+              <span className={labelCls}>(7) Materi Pembelajaran [Pustaka]</span>
               <textarea
                 className={inputCls}
                 rows={2}
-                value={m.pengalaman_belajar ?? ""}
-                onChange={(e) => set(i, { pengalaman_belajar: e.target.value })}
+                value={m.materi_pustaka ?? ""}
+                placeholder={"Nama Bahan Kajian — ringkasan materi minggu ini [Pustaka: 1,3]"}
+                onChange={(e) => set(i, { materi_pustaka: e.target.value })}
               />
+              <span className="mt-0.5 block text-[10px] text-muted">Pilih dari Bahan Kajian MK &amp; sitir Pustaka Utama/Pendukung.</span>
             </label>
-          </div>
-
-          <label className="mt-2 block">
-            <span className={labelCls}>Materi Pembelajaran / Pustaka</span>
-            <textarea
-              className={inputCls}
-              rows={2}
-              value={m.materi_pustaka ?? ""}
-              onChange={(e) => set(i, { materi_pustaka: e.target.value })}
-            />
-          </label>
-        </RowShell>
-      ))}
+          </RowShell>
+        );
+      })}
       <button
         type="button"
         onClick={() => onChange([...value, { minggu_ke: value.length + 1 }])}
@@ -652,7 +699,7 @@ export function KomponenEditor({
 }: {
   value: KomponenItem[];
   onChange: (v: KomponenItem[]) => void;
-  subCpmkList?: string[];
+  subCpmkList?: SubCpmkOption[];
   mingguList?: number[];
 }) {
   const set = (i: number, patch: Partial<KomponenItem>) =>
@@ -660,7 +707,9 @@ export function KomponenEditor({
   const total = value.reduce((a, c) => a + (Number(c.bobot_persen) || 0), 0);
   return (
     <div className="space-y-3">
-      {value.map((k, i) => (
+      {value.map((k, i) => {
+        const selectedSub = subCpmkList.find((x) => x.kode === (k.sub_cpmk_kode ?? ""));
+        return (
         <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
           <div className="grid gap-2 sm:grid-cols-6">
             <label className="sm:col-span-2">
@@ -683,6 +732,9 @@ export function KomponenEditor({
                 options={subCpmkList}
                 onChange={(v) => set(i, { sub_cpmk_kode: v })}
               />
+              {selectedSub?.deskripsi && (
+                <p className="mt-1 text-[10px] text-muted">{selectedSub.deskripsi}</p>
+              )}
             </div>
             <label>
               <span className={labelCls}>Minggu</span>
@@ -737,7 +789,8 @@ export function KomponenEditor({
             </p>
           )}
         </RowShell>
-      ))}
+        );
+      })}
       <div className="flex items-center justify-between">
         <button
           type="button"

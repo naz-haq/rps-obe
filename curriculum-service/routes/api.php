@@ -76,10 +76,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('users/{user}', [UserController::class, 'destroy']);
     });
 
-    // Prodi/Unit (institusi). Daftar dapat diakses siapa pun yang boleh
-    // mengelola pengguna (untuk dropdown unit) atau melihat prodi.
-    Route::get('institusi', [InstitusiController::class, 'index'])
-        ->middleware('permission:prodi.view|user.view|user.manage');
+    // Prodi/Unit (institusi). Daftar bersifat lookup (dipakai dropdown di form
+    // kurikulum/mata kuliah/pengguna), jadi cukup terautentikasi. Perubahan data
+    // tetap dijaga izin prodi.manage.
+    Route::get('institusi', [InstitusiController::class, 'index']);
     Route::middleware('permission:prodi.manage')->group(function () {
         Route::post('institusi', [InstitusiController::class, 'store']);
         Route::put('institusi/{institusi}', [InstitusiController::class, 'update']);
