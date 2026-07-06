@@ -155,16 +155,22 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-surface/80 px-6 backdrop-blur md:px-8">
           <MobileBrand />
           <div className="ml-auto flex items-center gap-3">
-            <div className="hidden text-right leading-tight sm:block">
-              <p className="text-sm font-medium text-ink">{user.name}</p>
-              <p className="text-xs text-muted">
-                {roleLabel(user.roles[0])}
-                {user.institusi ? ` · ${user.institusi.nama}` : ""}
-              </p>
-            </div>
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
-              {initials(user.name)}
-            </div>
+            <Link
+              href="/profil-saya"
+              title="Edit profil"
+              className="flex items-center gap-3 rounded-lg px-1.5 py-1 transition hover:bg-gray-50"
+            >
+              <div className="hidden text-right leading-tight sm:block">
+                <p className="text-sm font-medium text-ink">{user.name}</p>
+                <p className="text-xs text-muted">
+                  {roleLabel(user.roles[0])}
+                  {user.institusi ? ` · ${user.institusi.nama}` : ""}
+                </p>
+              </div>
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
+                {initials(user.name)}
+              </div>
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"

@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -60,6 +61,61 @@ class AuthController extends Controller
         return response()->json([
             'data' => new UserResource($user),
         ]);
+    }
+
+    /**
+     * Update profil diri sendiri (nama & email). NIDN & peran tidak diubah di sini.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name'  => ['required', 'string', 'max:150'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+        ]);
+
+        $user->update([
+            'name'  => $data['name'],
+            'email' => $data['email'] ?? null,
+        ]);
+
+        $user->load('institusi');
+
+        return response()->json([
+            'data'    => new UserResource($user),
+            'message' => 'Profil berhasil diperbarui.',
+        ]);
+    }
+
+    /**
+     * Ubah kata sandi diri sendiri; wajib verifikasi kata sandi saat ini.
+     * Token sesi lain dicabut demi keamanan, token aktif dipertahankan.
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password'         => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if (! Hash::check($data['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Kata sandi saat ini salah.'],
+            ]);
+        }
+
+        $user->update(['password' => $data['password']]);
+
+        // Cabut token sesi lain; sesi saat ini tetap berlaku.
+        $currentId = $request->user()->currentAccessToken()?->id;
+        if ($currentId) {
+            $user->tokens()->where('id', '!=', $currentId)->delete();
+        }
+
+        return response()->json(['message' => 'Kata sandi berhasil diperbarui.']);
     }
 
     public function logout(Request $request): JsonResponse
