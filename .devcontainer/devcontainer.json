@@ -1,0 +1,31 @@
+{
+  "name": "RPS OBE (Curriculum Service + Web)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "forwardPorts": [3010, 8100],
+  "portsAttributes": {
+    "3010": {
+      "label": "Frontend (Next.js)",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    },
+    "8100": {
+      "label": "Backend (Laravel)",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/start.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bmewburn.vscode-intelephense-client",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
