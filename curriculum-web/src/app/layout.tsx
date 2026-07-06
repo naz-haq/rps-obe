@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import "./globals.css";
 import { Shell } from "@/components/shell";
+import { ToastProvider } from "@/components/toast";
 import { getCurrentUser } from "@/lib/auth";
 
 const inter = Inter({
@@ -34,7 +35,9 @@ export default async function RootLayout({
   return (
     <html lang="id" className={`${inter.variable} h-full`}>
       <body className="min-h-full">
-        {user ? <Shell user={user}>{children}</Shell> : children}
+        <ToastProvider>
+          {user ? <Shell user={user}>{children}</Shell> : children}
+        </ToastProvider>
       </body>
     </html>
   );

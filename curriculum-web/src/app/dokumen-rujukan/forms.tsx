@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { BadanRujukan, ApiResult } from "@/lib/api";
 import { uploadDokumen, reindexDokumen, deleteDokumen, createBadan, deleteBadan } from "./actions";
 
@@ -34,6 +35,7 @@ export function UploadDokumenButton({ badanList }: { badanList: BadanRujukan[] }
 
 function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => {
     setPending(true);
@@ -42,11 +44,15 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
     return r;
   }, null);
   useEffect(() => {
-    if (state?.ok) {
+    if (!state) return;
+    if (state.ok) {
+      toast({ type: "success", message: "Dokumen berhasil diunggah & diindeks." });
       router.refresh();
       close();
+    } else {
+      toast({ type: "error", message: state.message ?? "Gagal mengunggah dokumen." });
     }
-  }, [state, close, router]);
+  }, [state, close, router, toast]);
 
   const badanOpts = [{ value: "", label: "— Tanpa badan —" }, ...badanList.map((b) => ({ value: String(b.id), label: b.nama }))];
 
@@ -81,14 +87,20 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
 
 export function ReindexButton({ id }: { id: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   return (
     <form
       action={async (fd) => {
         setPending(true);
-        await reindexDokumen(fd);
+        const r = await reindexDokumen(fd);
         setPending(false);
-        router.refresh();
+        if (r.ok) {
+          toast({ type: "success", message: "Dokumen berhasil diindeks ulang." });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal mengindeks ulang." });
+        }
       }}
       className="inline"
     >
@@ -131,12 +143,17 @@ function DeleteInner({
   onDone: () => void;
 }) {
   const [state, formAction] = useActionState<State, FormData>(async (_prev, fd) => action(fd), null);
+  const toast = useToast();
   useEffect(() => {
-    if (state?.ok) {
+    if (!state) return;
+    if (state.ok) {
+      toast({ type: "success", message: "Data berhasil dihapus." });
       onDone();
       close();
+    } else {
+      toast({ type: "error", message: state.message ?? "Gagal menghapus data." });
     }
-  }, [state, close, onDone]);
+  }, [state, close, onDone, toast]);
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="id" value={id} />
@@ -163,13 +180,18 @@ export function CreateBadanButton() {
 
 function CreateBadanForm({ close }: { close: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createBadan(fd), null);
   useEffect(() => {
-    if (state?.ok) {
+    if (!state) return;
+    if (state.ok) {
+      toast({ type: "success", message: "Badan rujukan berhasil disimpan." });
       router.refresh();
       close();
+    } else {
+      toast({ type: "error", message: state.message ?? "Gagal menyimpan badan rujukan." });
     }
-  }, [state, close, router]);
+  }, [state, close, router, toast]);
   return (
     <form action={action} className="space-y-3">
       <Field label="Nama" name="nama" required placeholder="APTFI / LAM-PTKes / Kemdikbud" />
