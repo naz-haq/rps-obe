@@ -17,10 +17,12 @@ const nextConfig: NextConfig = {
   // header `x-forwarded-host` = domain tunnel walau halaman dibuka dari localhost,
   // sehingga `Origin` (localhost) tidak cocok dengan host yang diteruskan.
   experimental: {
+    // Middleware (proxy) Next mem-buffer body request; default 10MB memotong
+    // unggahan besar -> "Unexpected end of form". Naikkan agar PDF besar utuh.
+    proxyClientMaxBodySize: "50mb",
     serverActions: {
-      // Naikkan batas ukuran body server action (default 1MB) agar unggah
-      // dokumen rujukan (PDF/DOCX) hingga ~20MB tidak ditolak 413.
-      bodySizeLimit: "25mb",
+      // Batas body server action (default 1MB) dinaikkan untuk unggah dokumen.
+      bodySizeLimit: "50mb",
       allowedOrigins: [
         "rps.pharm.web.id",
         "*.pharm.web.id",

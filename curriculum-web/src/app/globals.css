@@ -81,3 +81,9 @@ select:not(:disabled) {
 button:disabled {
   cursor: not-allowed;
 }
+
+/* Tombol bawaan input file ("Choose File") juga perlu kursor tangan. */
+input[type="file"],
+input[type="file"]::file-selector-button {
+  cursor: pointer;
+}

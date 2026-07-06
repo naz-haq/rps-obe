@@ -53,7 +53,7 @@ class DokumenRujukanController extends Controller
             'badan_rujukan_id' => ['nullable', 'exists:badan_rujukan,id'],
             'jenis'            => ['required', 'in:kpt,asosiasi,akreditasi,template_rps'],
             'judul'            => ['nullable', 'string', 'max:255'],
-            'file'             => ['required', 'file', 'mimes:pdf,docx,txt,md,csv', 'max:20480'],
+            'file'             => ['required', 'file', 'mimes:pdf,docx,txt,md,csv', 'max:51200'],
         ]);
 
         $file = $request->file('file');

@@ -38,6 +38,10 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
   const toast = useToast();
   const [pending, setPending] = useState(false);
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => {
+    const f = fd.get("file");
+    if (f instanceof File && f.size > 50 * 1024 * 1024) {
+      return { ok: false, status: 413, message: "Ukuran berkas melebihi 50MB. Perkecil ukuran PDF terlebih dahulu." };
+    }
     setPending(true);
     const r = await uploadDokumen(fd);
     setPending(false);
@@ -72,7 +76,7 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
           accept=".pdf,.docx,.txt,.md,.csv"
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-ring file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1 file:text-sm"
         />
-        <span className="mt-1 block text-xs text-muted">PDF, DOCX, TXT, MD, atau CSV (maks 20MB). Dokumen akan diindeks otomatis untuk grounding AI.</span>
+        <span className="mt-1 block text-xs text-muted">PDF, DOCX, TXT, MD, atau CSV (maks 50MB). Dokumen akan diindeks otomatis untuk grounding AI.</span>
       </label>
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
