@@ -1,0 +1,36 @@
+# ===== Rahasia / environment =====
+**/.env
+**/.env.*
+!**/.env.example
+
+# ===== Dependencies =====
+**/vendor/
+**/node_modules/
+
+# ===== Build output =====
+**/.next/
+**/out/
+**/dist/
+**/build/
+
+# ===== Laravel runtime =====
+**/storage/*.key
+**/storage/framework/cache/*
+**/storage/framework/sessions/*
+**/storage/framework/testing/*
+**/storage/framework/views/*
+**/storage/logs/*
+**/bootstrap/cache/*.php
+**/public/storage
+
+# ===== Proyek terpisah (tidak termasuk aplikasi ini) =====
+/benchmark-harness/
+/rps-obe-builder/
+
+# ===== Misc =====
+.DS_Store
+**/*.log
+**/npm-debug.log*
+.idea/
+.vscode/*
+!.vscode/extensions.json

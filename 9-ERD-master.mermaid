@@ -1,0 +1,499 @@
+erDiagram
+    INSTITUSI ||--o{ USER : menaungi
+    INSTITUSI ||--o{ KURIKULUM : memiliki
+    KURIKULUM ||--o{ PROFIL_LULUSAN : mencakup
+    KURIKULUM ||--o{ CPL : mencakup
+    KURIKULUM ||--o{ BAHAN_KAJIAN : mencakup
+    KURIKULUM ||--o{ MATA_KULIAH : mencakup
+    KURIKULUM ||--o| KURIKULUM : menggantikan
+    INSTITUSI ||--o{ CPL : memiliki
+    INSTITUSI ||--o{ BAHAN_KAJIAN : memiliki
+    INSTITUSI ||--o{ MATA_KULIAH : memiliki
+    MATA_KULIAH ||--o{ MK_PENGAMPU : diampu
+    CPL ||--o{ TARGET_CPL : ditargetkan
+    INSTITUSI ||--o{ DOKUMEN_RUJUKAN : mengunggah
+    INSTITUSI ||--o{ TEMPLATE_RPS : memiliki
+    INSTITUSI ||--o{ KONFIGURASI_ATURAN : mengisi
+    INSTITUSI ||--o{ COLUMN_MAPPING : memiliki
+    INSTITUSI ||--o{ EVALUASI_CPL : melakukan
+    INSTITUSI ||--o{ PROFIL_LULUSAN : memiliki
+
+    PROFIL_LULUSAN ||--o{ PL_CPL : dijabarkan
+    CPL ||--o{ PL_CPL : menjabarkan
+
+    BAHAN_KAJIAN ||--o{ KETERAMPILAN : mencakup
+    KETERAMPILAN ||--o{ MK_KETERAMPILAN : diklaim
+    KETERAMPILAN ||--o{ VALIDASI_OVERLAP : dianalisis
+
+    CPL ||--o{ MK_CPL : dibebankan
+    MATA_KULIAH ||--o{ MK_CPL : membebankan
+    MATA_KULIAH ||--o{ MK_KETERAMPILAN : mengklaim
+    MATA_KULIAH ||--o{ CPMK : memiliki
+    CPMK ||--o{ SUB_CPMK : dijabarkan
+    CPMK ||--o{ CPMK_CPL : mendukung
+    CPL ||--o{ CPMK_CPL : didukung
+    MATA_KULIAH ||--o{ RPS_VERSION : memiliki
+    MATA_KULIAH ||--o{ REFERENSI : menggunakan
+    MATA_KULIAH ||--o{ CAPAIAN_MAHASISWA : dicatat
+
+    RPS_VERSION ||--o{ RPS_MINGGU : berisi
+    SUB_CPMK ||--o{ RPS_MINGGU : dipetakan
+    SUB_CPMK ||--o{ INDIKATOR : diukur_oleh
+    SUB_CPMK ||--o{ CAPAIAN_MAHASISWA : diukur
+    CPMK ||--o{ CAPAIAN_MAHASISWA : diagregasi
+    SUB_CPMK ||--o{ TINDAK_LANJUT : menjadi_target
+
+    DOKUMEN_RUJUKAN ||--o{ VERSI_PEDOMAN : memiliki
+    VERSI_PEDOMAN ||--o{ RPS_VERSION : "acuan saat dibuat"
+    DOKUMEN_RUJUKAN ||--o{ TEMPLATE_RPS : sumber_struktur
+    DOKUMEN_RUJUKAN ||--o{ KONFIGURASI_ATURAN : referensi_manual
+    DOKUMEN_RUJUKAN ||--o{ SOURCE_CITATION : disitasi
+
+    INSTITUSI ||--o{ BADAN_RUJUKAN : mendaftarkan
+    BADAN_RUJUKAN ||--o{ KERANGKA_ACUAN : menerbitkan
+    BADAN_RUJUKAN ||--o{ DOKUMEN_RUJUKAN : menerbitkan
+    BADAN_RUJUKAN ||--o{ KONFIGURASI_ATURAN : menetapkan
+    DOKUMEN_RUJUKAN ||--o{ KERANGKA_ACUAN : sumber
+    KERANGKA_ACUAN ||--o{ BUTIR_ACUAN : berisi
+    BUTIR_ACUAN ||--o{ BUTIR_ACUAN : subbutir
+    BUTIR_ACUAN ||--o{ PEMENUHAN_ACUAN : diceklist
+    INSTITUSI ||--o{ PEMENUHAN_ACUAN : memenuhi
+    USER ||--o{ PEMENUHAN_ACUAN : mereview
+
+    USER ||--o{ RPS_VERSION : membuat
+    USER ||--o{ RPS_VERSION : menyetujui
+    USER ||--o{ TEMPLATE_RPS : mengkonfirmasi
+    USER ||--o{ KONFIGURASI_ATURAN : mengisi_manual
+    USER ||--o{ NOTIFIKASI : menerima
+    USER ||--o{ AUDIT_LOG : melakukan
+    USER ||--o{ EVALUASI_CPL : menyusun
+
+    CPL ||--o{ EVALUASI_CPL : dievaluasi
+    EVALUASI_CPL ||--o{ TINDAK_LANJUT : menghasilkan
+
+    TAKSONOMI ||--o{ SUB_CPMK : "level C/A/P"
+    TAKSONOMI ||--o{ KETERAMPILAN : "level target"
+    TAKSONOMI ||--o{ MK_KETERAMPILAN : "level klaim"
+    RPS_VERSION ||--o{ KOMPONEN_PENILAIAN : merencanakan
+    SUB_CPMK ||--o{ KOMPONEN_PENILAIAN : diukur_oleh
+    KOMPONEN_PENILAIAN ||--o| RUBRIK : dirinci
+    RUBRIK ||--o{ RUBRIK_KRITERIA : berisi
+    MATA_KULIAH ||--o{ GENERATE_SESSION : digenerate
+    USER ||--o{ GENERATE_SESSION : menjalankan
+    GENERATE_SESSION ||--o| RPS_VERSION : "di-commit ke"
+    INSTITUSI ||--o{ PROMPT_TEMPLATE : menyesuaikan
+    DOKUMEN_RUJUKAN ||--o{ DOKUMEN_CHUNK : dipecah
+    INSTITUSI ||--o{ AI_KREDENSIAL : menyimpan
+    USER ||--o{ AI_INTERAKSI : memicu
+    AI_INTERAKSI ||--o{ AI_VALIDASI : divalidasi
+
+    INSTITUSI {
+        uuid id PK
+        string nama
+        string jenis "fakultas/prodi"
+        string asosiasi_profesi
+    }
+    KURIKULUM {
+        uuid id PK
+        string ulid "kunci tukar lintas-service"
+        uuid institusi_id FK
+        string kode
+        string nama
+        string tahun
+        string status "draft/berlaku/arsip"
+        date tanggal_berlaku
+        date tanggal_pensiun
+        uuid mengganti_id FK "self, nullable (garis revisi)"
+    }
+    USER {
+        uuid id PK
+        uuid institusi_id FK
+        string nama
+        string role "dosen/kaprodi/gpm/admin_pusat"
+    }
+    CPL {
+        uuid id PK
+        uuid institusi_id FK
+        uuid kurikulum_id FK
+        string kode
+        text deskripsi
+        string aspek "sikap/pengetahuan/keterampilan_umum/keterampilan_khusus"
+        string level_kkni
+        string sumber "SN-Dikti/asosiasi/prodi"
+    }
+    TARGET_CPL {
+        uuid id PK
+        uuid institusi_id FK
+        uuid cpl_id FK
+        string angkatan "atau periode"
+        decimal ambang_nilai "nilai minimal lulus CPL"
+        decimal persentase_target "%% mhs yang harus mencapai ambang"
+    }
+    PROFIL_LULUSAN {
+        uuid id PK
+        uuid institusi_id FK
+        uuid kurikulum_id FK
+        string kode
+        text deskripsi
+    }
+    PL_CPL {
+        uuid profil_lulusan_id FK
+        uuid cpl_id FK
+    }
+    BAHAN_KAJIAN {
+        uuid id PK
+        uuid institusi_id FK
+        uuid kurikulum_id FK
+        string nama
+        text deskripsi
+    }
+    KETERAMPILAN {
+        uuid id PK
+        uuid bahan_kajian_id FK
+        text deskripsi
+        string domain "kognitif/psikomotorik/afektif"
+        uuid taksonomi_id FK "level target, nullable"
+        int tingkat_kemampuan
+        string sumber
+    }
+    TAKSONOMI {
+        uuid id PK
+        uuid institusi_id FK "null=global (seed bawaan)"
+        string domain "kognitif/afektif/psikomotorik"
+        string kerangka "bloom_anderson/krathwohl/dave/simpson"
+        string kode "C1..C6 / A1..A5 / P1..P7"
+        string nama "Mengingat/Menerima/Imitasi/.."
+        int level
+        text deskripsi
+        json kata_kerja "daftar kata kerja operasional terukur"
+    }
+    MATA_KULIAH {
+        uuid id PK
+        string ulid "kunci tukar lintas-service"
+        uuid institusi_id FK
+        uuid kurikulum_id FK
+        string kode
+        string nama
+        string jenis_mk "murni(teori)/praktikum — pembeda kaku"
+        string sifat "wajib/pilihan"
+        string rumpun "kelompok bidang ilmu"
+        text deskripsi_singkat
+        int sks_teori
+        int sks_praktik
+        int semester
+        string prasyarat_kode
+    }
+    MK_PENGAMPU {
+        uuid id PK
+        uuid institusi_id FK
+        string kode_mk
+        string dosen_nidn
+        string peran "koordinator/anggota"
+    }
+    MK_CPL {
+        uuid mk_id FK
+        uuid cpl_id FK
+        decimal bobot
+    }
+    MK_KETERAMPILAN {
+        uuid mk_id FK
+        uuid keterampilan_id FK
+        text fokus_spesifik
+        uuid taksonomi_id FK "level klaim MK ini"
+    }
+    CPMK {
+        uuid id PK
+        uuid mk_id FK
+        string kode
+        text deskripsi
+        decimal bobot_persen "kontribusi ke nilai MK"
+    }
+    CPMK_CPL {
+        uuid cpmk_id FK
+        uuid cpl_id FK
+        decimal bobot "kontribusi CPMK ke CPL"
+    }
+    SUB_CPMK {
+        uuid id PK
+        uuid cpmk_id FK
+        string kode
+        text deskripsi
+        int minggu_mulai
+        int minggu_selesai
+        decimal bobot_persen
+        uuid taksonomi_id FK "level C/A/P sesuai jenis_mk"
+    }
+    INDIKATOR {
+        uuid id PK
+        uuid sub_cpmk_id FK
+        text deskripsi
+    }
+    RPS_VERSION {
+        uuid id PK
+        string ulid "kunci tukar lintas-service"
+        uuid mk_id FK
+        int versi
+        string status "draft/review/revisi/approved"
+        string bahasa "id (default) / en"
+        uuid versi_pedoman_id FK
+        uuid created_by FK "dosen pengembang"
+        uuid koordinator_mk FK
+        uuid approved_by FK "ketua prodi"
+        date tanggal_penyusunan
+        timestamp created_at
+    }
+    RPS_MINGGU {
+        uuid id PK
+        uuid rps_version_id FK
+        int minggu_ke
+        uuid sub_cpmk_id FK
+        text indikator
+        text teknik_kriteria_penilaian
+        text metode_pembelajaran "kuliah/diskusi/PBL/demonstrasi/praktik"
+        text bentuk_luring
+        text bentuk_daring
+        text materi_pustaka
+        text pengalaman_belajar "penugasan mahasiswa"
+        json estimasi_waktu "teori: TM/PT/KM menit; praktikum: praktik menit — auto dari SKS"
+        decimal bobot_penilaian
+    }
+    KOMPONEN_PENILAIAN {
+        uuid id PK
+        uuid rps_version_id FK
+        uuid sub_cpmk_id FK
+        string nama "Tugas-1/Kuis/UTS/UAS/Laporan Praktikum/OSCE"
+        string jenis "tugas/kuis/uts/uas/laporan_praktikum/osce/skill_assessment/responsi"
+        text instrumen "rubrik/checklist skill/lembar observasi"
+        decimal bobot_persen
+        int minggu_ke
+    }
+    RUBRIK {
+        uuid id PK
+        uuid komponen_penilaian_id FK
+        string jenis "analitik/holistik/checklist_skill/lembar_observasi"
+        int jumlah_level_skala
+        json label_skala "mis. [Kurang, Cukup, Baik, Sangat Baik]"
+    }
+    RUBRIK_KRITERIA {
+        uuid id PK
+        uuid rubrik_id FK
+        string kriteria
+        decimal bobot
+        json deskriptor "deskripsi per level skala"
+        int urutan
+    }
+    GENERATE_SESSION {
+        uuid id PK
+        uuid institusi_id FK
+        uuid mk_id FK
+        uuid rps_version_id FK "nullable, terisi setelah commit"
+        string sumber "baru/impor_rps_lama/copy_tahun_lalu"
+        string tahap "cpmk/sub_cpmk/mingguan/penilaian/selesai"
+        json draf "output terstruktur per tahap"
+        json status_bagian "per bagian: diterima/disunting/ditolak/pinned"
+        string status "berjalan/committed/dibatalkan"
+        uuid user_id FK
+        timestamp created_at
+    }
+    PROMPT_TEMPLATE {
+        uuid id PK
+        uuid institusi_id FK "null=default global"
+        string jenis_output "cpmk/sub_cpmk/mingguan/rubrik/audit"
+        string jenis_mk "murni/praktikum/campuran"
+        text sistem_prompt
+        json skema_output "JSON schema utk structured output"
+        json few_shot "contoh draf yang diterima utuh"
+        int versi
+        boolean aktif
+    }
+    REFERENSI {
+        uuid id PK
+        uuid mk_id FK
+        string tipe
+        text sitasi
+    }
+    VALIDASI_OVERLAP {
+        uuid id PK
+        uuid keterampilan_id FK
+        json mk_terlibat
+        string status
+        text analisis
+        text rekomendasi
+        uuid reviewed_by FK
+    }
+    DOKUMEN_RUJUKAN {
+        uuid id PK
+        uuid institusi_id FK
+        uuid badan_rujukan_id FK
+        string jenis "kpt/asosiasi/akreditasi/template_rps"
+        string file_asal
+        string status_indexing
+        string vector_namespace
+    }
+    DOKUMEN_CHUNK {
+        uuid id PK
+        uuid dokumen_id FK
+        int urutan
+        text teks
+        int halaman
+        json embedding "vektor embedding (JSON, cosine di app)"
+        int token_count
+    }
+    VERSI_PEDOMAN {
+        uuid id PK
+        uuid dokumen_id FK
+        string versi
+        date tanggal_berlaku
+        date tanggal_nonaktif
+        json mk_terdampak
+    }
+    TEMPLATE_RPS {
+        uuid id PK
+        uuid institusi_id FK
+        uuid dokumen_asal_id FK
+        json struktur_kolom
+        uuid dikonfirmasi_oleh FK
+    }
+    KONFIGURASI_ATURAN {
+        uuid id PK
+        uuid institusi_id FK
+        uuid badan_rujukan_id FK
+        string jenis_aturan "jumlah_minggu/bobot_total/dst"
+        json nilai
+        uuid diisi_oleh FK
+        uuid referensi_dokumen_id FK
+        int referensi_halaman
+    }
+    COLUMN_MAPPING {
+        uuid id PK
+        uuid institusi_id FK
+        string jenis_file "cpl/bahan_kajian/mata_kuliah"
+        json mapping
+    }
+    SOURCE_CITATION {
+        uuid id PK
+        string entity_type
+        uuid entity_id
+        uuid dokumen_id FK
+        int halaman
+        text cuplikan_teks
+    }
+    BADAN_RUJUKAN {
+        uuid id PK
+        uuid institusi_id FK "null=global"
+        string nama "APTFI/LAM-PTKes/Kemdiktisaintek/BAN-PT/.."
+        string jenis "asosiasi/akreditasi/pemerintah/institusi"
+        string disiplin "opsional: Farmasi/Teknik/.."
+    }
+    KERANGKA_ACUAN {
+        uuid id PK
+        uuid badan_rujukan_id FK
+        uuid dokumen_id FK
+        string nama "SKAI 2023 / KPT 2020 / Instrumen LAM-PTKes"
+        string versi
+        date tanggal_berlaku
+    }
+    BUTIR_ACUAN {
+        uuid id PK
+        uuid kerangka_acuan_id FK
+        uuid parent_id FK "hierarki, nullable"
+        string kategori "profil_lulusan/cpl/bahan_kajian/kriteria_akreditasi/struktur/aturan"
+        string kode
+        text deskripsi
+        boolean wajib
+    }
+    PEMENUHAN_ACUAN {
+        uuid id PK
+        uuid institusi_id FK
+        uuid butir_acuan_id FK
+        string entity_type "profil_lulusan/cpl/bahan_kajian/mata_kuliah/.."
+        uuid entity_id "nullable jika belum terpenuhi"
+        string status "terpenuhi/sebagian/belum/tidak_relevan"
+        text catatan
+        boolean rekomendasi_ai
+        uuid reviewed_by FK
+    }
+    CAPAIAN_MAHASISWA {
+        uuid id PK
+        uuid mk_id FK
+        uuid sub_cpmk_id FK
+        uuid cpmk_id FK
+        string angkatan
+        int jumlah_mahasiswa
+        decimal nilai_rata_rata
+        decimal persentase_capaian_minimal
+    }
+    EVALUASI_CPL {
+        uuid id PK
+        uuid institusi_id FK
+        uuid cpl_id FK
+        string periode
+        text ringkasan_naratif
+        string status "draft/final"
+        uuid dibuat_oleh FK
+        uuid difinalisasi_oleh FK
+    }
+    TINDAK_LANJUT {
+        uuid id PK
+        uuid evaluasi_cpl_id FK
+        uuid sub_cpmk_id FK
+        text catatan
+        string prioritas
+        string status
+    }
+    NOTIFIKASI {
+        uuid id PK
+        uuid user_id FK
+        string jenis
+        text konten
+        string status
+        timestamp created_at
+    }
+    AUDIT_LOG {
+        uuid id PK
+        uuid user_id FK
+        string action
+        string entity
+        timestamp created_at
+    }
+    AI_KREDENSIAL {
+        uuid id PK
+        uuid institusi_id FK
+        uuid user_id FK "null=kunci tenant"
+        string provider "anthropic/openai/google/ollama"
+        text api_key_encrypted
+        string model_default
+        string mata_uang "def USD"
+        decimal anggaran "kuota lokal, nullable"
+        decimal saldo_provider "nullable"
+        timestamp saldo_diperbarui_at "nullable"
+        boolean aktif
+    }
+    AI_INTERAKSI {
+        uuid id PK
+        uuid institusi_id FK
+        uuid user_id FK
+        string entity_type "rps_version/cpmk/evaluasi_cpl/.."
+        uuid entity_id
+        string mode "generatif/evaluatif/penyelaras/validator_halusinasi/chat/mapping"
+        string provider
+        string model
+        text prompt
+        text response
+        int tokens_in
+        int tokens_out
+        decimal biaya
+        string status "diterima/disunting/ditolak/divalidasi"
+        timestamp created_at
+    }
+    AI_VALIDASI {
+        uuid id PK
+        uuid ai_interaksi_id FK "interaksi generate yang divalidasi"
+        text klaim "pernyataan hasil ekstraksi dari output"
+        string status "didukung/tidak_didukung/perlu_review"
+        json bukti_chunk_ids "chunk RAG pendukung"
+        decimal skor_grounding "0-1"
+        text konteks_pengganti "konteks benar yang dikembalikan validator"
+        string tindakan "otomatis_regenerasi/tandai_manual/diterima"
+        timestamp created_at
+    }
