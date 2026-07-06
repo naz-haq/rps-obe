@@ -1,0 +1,93 @@
+# Deploy produksi 1 VM: db + api (Laravel) + web (Next.js) + proxy (Caddy).
+# Image ditarik dari GHCR (dibangun oleh GitHub Actions). VM hanya pull & run.
+#
+#   docker login ghcr.io          # sekali, pakai PAT read:packages
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Semua nilai rahasia diisi lewat file .env di samping compose ini (lihat
+# .env.prod.example). JANGAN commit .env.
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+
+  api:
+    image: ghcr.io/naz-haq/rps-api:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: "RPS OBE"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL}
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      AI_PROFILE: ${AI_PROFILE:-simulasi}
+      AI_FALLBACK_MOCK: ${AI_FALLBACK_MOCK:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - api-storage:/var/www/html/storage
+    networks: [internal]
+
+  web:
+    image: ghcr.io/naz-haq/rps-web:latest
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+      # Panggilan server-to-server (server components/actions) & proxy /backend.
+      API_BASE_URL: http://api:8100/api/v1
+      BACKEND_ORIGIN: http://api:8100
+    networks: [internal]
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [web]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+
+volumes:
+  db-data:
+  api-storage:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:

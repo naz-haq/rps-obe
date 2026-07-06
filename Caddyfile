@@ -1,0 +1,9 @@
+# Alamat situs. Untuk HTTPS otomatis (Let's Encrypt), isi SITE_ADDRESS di .env
+# dengan domain (mis. https://rps.contoh.ac.id). Untuk uji tanpa domain: ":80".
+{$SITE_ADDRESS} {
+	encode gzip zstd
+
+	# Semua trafik browser masuk ke Next.js. Frontend yang meneruskan
+	# /backend/* ke Laravel (api) secara internal via rewrites.
+	reverse_proxy web:3010
+}

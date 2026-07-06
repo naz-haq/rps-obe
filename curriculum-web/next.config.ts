@@ -4,6 +4,9 @@ import type { NextConfig } from "next";
 const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8100";
 
 const nextConfig: NextConfig = {
+  // Bundel mandiri (.next/standalone -> server.js) agar image Docker ramping.
+  output: "standalone",
+
   // Izinkan akses dev-server dari domain tunnel (VS Code / Cloudflare / ngrok /
   // GitHub Codespaces) supaya aset _next tidak diblokir saat diuji orang lain.
   allowedDevOrigins: ["*.devtunnels.ms", "*.trycloudflare.com", "*.ngrok-free.app", "*.app.github.dev"],
