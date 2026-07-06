@@ -48,16 +48,12 @@ export function UploadDokumenButton({ badanList }: { badanList: BadanRujukan[] }
 function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: () => void }) {
   const router = useRouter();
   const toast = useToast();
-  const [pending, setPending] = useState(false);
-  const [state, action] = useActionState<State, FormData>(async (_prev, fd) => {
+  const [state, action, pending] = useActionState<State, FormData>(async (_prev, fd) => {
     const f = fd.get("file");
     if (f instanceof File && f.size > 50 * 1024 * 1024) {
       return { ok: false, status: 413, message: "Ukuran berkas melebihi 50MB. Perkecil ukuran PDF terlebih dahulu." };
     }
-    setPending(true);
-    const r = await uploadDokumen(fd);
-    setPending(false);
-    return r;
+    return await uploadDokumen(fd);
   }, null);
   useEffect(() => {
     if (!state) return;
