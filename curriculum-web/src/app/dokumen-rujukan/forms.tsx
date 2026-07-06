@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
-import { buttonClass } from "@/components/ui";
+import { buttonClass, Spinner } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import type { BadanRujukan, ApiResult } from "@/lib/api";
 import { uploadDokumen, reindexDokumen, deleteDokumen, createBadan, deleteBadan } from "./actions";
@@ -92,9 +92,10 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
       </label>
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
-        <button type="button" onClick={close} className={buttonClass("secondary")}>Batal</button>
+        <button type="button" onClick={close} disabled={pending} className={buttonClass("secondary")}>Batal</button>
         <button type="submit" disabled={pending} className={buttonClass("primary")}>
-          {pending ? "Mengindeks…" : "Unggah & Indeks"}
+          {pending && <Spinner />}
+          {pending ? "Mengunggah\u2026" : "Unggah & Indeks"}
         </button>
       </div>
     </form>
@@ -122,7 +123,8 @@ export function ReindexButton({ id }: { id: number }) {
     >
       <input type="hidden" name="id" value={id} />
       <button type="submit" disabled={pending} className={buttonClass("ghost", "sm")}>
-        {pending ? "…" : "Indeks ulang"}
+        {pending && <Spinner />}
+        {pending ? "Memproses\u2026" : "Indeks ulang"}
       </button>
     </form>
   );
