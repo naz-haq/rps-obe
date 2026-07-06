@@ -72,7 +72,7 @@ export function Badge({
 
 // ---- Button & Link-button ----
 const btnBase =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition focus-ring disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition focus-ring disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none";
 const btnSizes = { sm: "h-8 px-3", md: "h-9 px-4" };
 const btnVariants = {
   primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",

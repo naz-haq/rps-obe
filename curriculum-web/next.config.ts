@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
   // sehingga `Origin` (localhost) tidak cocok dengan host yang diteruskan.
   experimental: {
     serverActions: {
+      // Naikkan batas ukuran body server action (default 1MB) agar unggah
+      // dokumen rujukan (PDF/DOCX) hingga ~20MB tidak ditolak 413.
+      bodySizeLimit: "25mb",
       allowedOrigins: [
         "rps.pharm.web.id",
         "*.pharm.web.id",
