@@ -72,8 +72,22 @@ services:
       BACKEND_ORIGIN: http://api:8100
     networks: [internal]
 
+  # Cloudflare Tunnel: akses publik https://SITE_ADDRESS tanpa buka port / TLS sendiri.
+  # Cloudflare terminasi TLS di edge, cloudflared menyambung keluar (outbound) ke
+  # Cloudflare lalu meneruskan ke web:3010. Routing public hostname diatur di
+  # dashboard Zero Trust (Public hostname -> Service: http://web:3010).
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on: [web]
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    networks: [internal]
+
+  # Reverse proxy + TLS sendiri (Let's Encrypt). Hanya dipakai bila TIDAK memakai
+  # Cloudflare Tunnel. Aktifkan dengan: docker compose --profile caddy up -d
   proxy:
     image: caddy:2-alpine
+    profiles: ["caddy"]
     restart: unless-stopped
     depends_on: [web]
     ports:
