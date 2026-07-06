@@ -5,18 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Concerns\AppliesSorting;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DokumenRujukanResource;
+use App\Jobs\IngestDokumenJob;
 use App\Models\DokumenRujukan;
 use App\Services\Ai\EmbeddingService;
-use App\Services\Doc\DocumentIngestService;
 use Illuminate\Http\Request;
-use Throwable;
 
 class DokumenRujukanController extends Controller
 {
     use AppliesSorting;
 
     public function __construct(
-        private DocumentIngestService $ingest,
         private EmbeddingService $embeddings,
     ) {}
 
@@ -69,16 +67,13 @@ class DokumenRujukanController extends Controller
             'status_indexing'  => 'pending',
         ]);
 
-        try {
-            $this->ingest->ingest($dokumen);
-        } catch (Throwable $e) {
-            return (new DokumenRujukanResource($dokumen->fresh()->loadCount('chunks')))
-                ->additional(['message' => 'Dokumen tersimpan namun gagal diindeks: ' . $e->getMessage()])
-                ->response()
-                ->setStatusCode(201);
-        }
+        // Indexing (ekstraksi + embedding) dijalankan di latar belakang agar
+        // request upload balas cepat dan tidak kena timeout proxy/Cloudflare
+        // untuk dokumen besar. Status berubah 'pending' -> 'indexed'/'error'.
+        IngestDokumenJob::dispatch($dokumen->id);
 
         return (new DokumenRujukanResource($dokumen->fresh()->load('badanRujukan')->loadCount('chunks')))
+            ->additional(['message' => 'Dokumen diunggah. Indexing berjalan di latar belakang.'])
             ->response()
             ->setStatusCode(201);
     }
@@ -90,14 +85,11 @@ class DokumenRujukanController extends Controller
 
     public function reindex(DokumenRujukan $dokumenRujukan)
     {
-        try {
-            $result = $this->ingest->ingest($dokumenRujukan);
-        } catch (Throwable $e) {
-            return response()->json(['message' => 'Gagal mengindeks: ' . $e->getMessage()], 422);
-        }
+        $dokumenRujukan->update(['status_indexing' => 'pending']);
+        IngestDokumenJob::dispatch($dokumenRujukan->id);
 
         return (new DokumenRujukanResource($dokumenRujukan->fresh()->loadCount('chunks')))
-            ->additional(['meta' => $result]);
+            ->additional(['message' => 'Indexing ulang dijadwalkan di latar belakang.']);
     }
 
     public function search(Request $request)

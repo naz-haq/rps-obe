@@ -24,6 +24,18 @@ const JENIS_BADAN_OPTS = [
 
 type State = ApiResult | null;
 
+// Auto-refresh halaman selama masih ada dokumen berstatus "Menunggu" agar
+// status indexing latar belakang terlihat berubah menjadi "Terindeks" tanpa
+// perlu reload manual.
+export function AutoRefreshWhilePending({ intervalMs = 4000 }: { intervalMs?: number }) {
+  const router = useRouter();
+  useEffect(() => {
+    const t = setInterval(() => router.refresh(), intervalMs);
+    return () => clearInterval(t);
+  }, [router, intervalMs]);
+  return null;
+}
+
 // ---- Upload dokumen ----
 export function UploadDokumenButton({ badanList }: { badanList: BadanRujukan[] }) {
   return (
@@ -50,7 +62,7 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
   useEffect(() => {
     if (!state) return;
     if (state.ok) {
-      toast({ type: "success", message: "Dokumen berhasil diunggah & diindeks." });
+      toast({ type: "success", message: "Dokumen diunggah. Indexing berjalan di latar belakang \u2014 status berubah menjadi Terindeks otomatis bila selesai." });
       router.refresh();
       close();
     } else {
@@ -100,7 +112,7 @@ export function ReindexButton({ id }: { id: number }) {
         const r = await reindexDokumen(fd);
         setPending(false);
         if (r.ok) {
-          toast({ type: "success", message: "Dokumen berhasil diindeks ulang." });
+          toast({ type: "success", message: "Indexing ulang dijadwalkan. Status diperbarui otomatis bila selesai." });
           router.refresh();
         } else {
           toast({ type: "error", message: r.message ?? "Gagal mengindeks ulang." });

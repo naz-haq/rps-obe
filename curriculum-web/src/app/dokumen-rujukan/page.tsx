@@ -6,6 +6,7 @@ import {
   DeleteDokumenButton,
   CreateBadanButton,
   DeleteBadanButton,
+  AutoRefreshWhilePending,
 } from "./forms";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; jenis?: string }>;
@@ -53,9 +54,11 @@ export default async function DokumenRujukanPage({ searchParams }: { searchParam
   const badanList = badanRes?.data ?? [];
   const params = { sort, dir, status: sp.status, jenis: sp.jenis };
   const basePath = "/dokumen-rujukan";
+  const adaMenunggu = (docs?.data ?? []).some((d) => d.status_indexing === "pending");
 
   return (
     <div>
+      {adaMenunggu && <AutoRefreshWhilePending />}
       <PageHeader
         title="Dokumen Rujukan"
         subtitle="Unggah pedoman KPT, rujukan asosiasi, kriteria akreditasi, atau template RPS. Dokumen diindeks (RAG) untuk grounding & anti-halusinasi AI."
