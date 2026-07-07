@@ -11,8 +11,9 @@
  *   Ubah teks/hak cipta/tautan pada objek `footer` di bawah.
  */
 export const branding = {
-  appName: "Curriculum",
-  appTagline: "OBE · RPS Generator",
+  appName: "Curricula",
+  appVersion: "0.1",
+  appTagline: "OBE - RPS Generator",
   institution: "Fakultas Farmasi",
 
   // Path logo di dalam folder public/. Kosongkan untuk ikon bawaan.
@@ -27,7 +28,7 @@ export const branding = {
   ] as string[],
 
   footer: {
-    copyright: "© 2026 Fakultas Farmasi",
+    copyright: "© 2026 QTech. All rights reserved.",
     text: "Sistem Penyusunan RPS OBE",
     links: [] as { label: string; href: string }[],
   },

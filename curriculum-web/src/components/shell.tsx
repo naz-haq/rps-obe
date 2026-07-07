@@ -156,7 +156,7 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
               Keluar
             </button>
           </form>
-          <p className="text-[11px] text-gray-400">{branding.institution} · v0.1</p>
+          <p className="text-[11px] text-gray-400">{branding.institution} · v{branding.appVersion}</p>
         </div>
       </aside>
 
