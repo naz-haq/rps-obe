@@ -12,14 +12,14 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <Logo size={72} className="mb-3" />
-          <h1 className="text-lg font-semibold text-ink">{branding.appName}</h1>
+          <h1 className="text-xl font-semibold text-ink">{branding.appName}</h1>
           <p className="text-sm text-muted">Masuk untuk melanjutkan ke {branding.appName}.</p>
         </div>
 
         <LoginForm turnstileSiteKey={turnstileSiteKey} />
 
         <p className="mt-4 text-center text-xs text-muted">
-          {branding.institution} · {branding.footer.text}
+          {branding.institution ? `${branding.institution} · ` : ""}{branding.footer.text}
         </p>
       </div>
     </div>

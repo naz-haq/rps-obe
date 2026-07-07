@@ -14,7 +14,7 @@ export const branding = {
   appName: "Curricula",
   appVersion: "0.1",
   appTagline: "OBE - RPS Generator",
-  institution: "Fakultas Farmasi",
+  institution: "",
 
   // Path logo di dalam folder public/. Kosongkan untuk ikon bawaan.
   logoUrl: "/logo.png",

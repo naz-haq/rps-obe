@@ -95,7 +95,7 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
         <div className="flex h-16 items-center gap-2.5 px-5">
           <Logo size={36} />
           <div className="leading-tight">
-            <p className="text-sm font-semibold text-ink">{branding.appName}</p>
+            <p className="text-base font-semibold text-ink">{branding.appName}</p>
             <p className="text-xs text-muted">{branding.appTagline}</p>
           </div>
         </div>
@@ -156,7 +156,9 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
               Keluar
             </button>
           </form>
-          <p className="text-[11px] text-gray-400">{branding.institution} · v{branding.appVersion}</p>
+          <p className="text-[11px] text-gray-400">
+            {branding.institution ? `${branding.institution} · ` : ""}v{branding.appVersion}
+          </p>
         </div>
       </aside>
 
