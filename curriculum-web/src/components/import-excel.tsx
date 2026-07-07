@@ -49,6 +49,25 @@ function parseDelimited(text: string): string[][] {
 }
 
 /**
+ * read-excel-file v9 mengembalikan `Sheet[]` = `[{ sheet, data }]`, bukan
+ * langsung array baris. Buka bungkus: ambil sheet PERTAMA yang punya baris data
+ * (fallback ke sheet pertama). Jika input sudah berupa array-of-arrays (versi
+ * lain), kembalikan apa adanya.
+ */
+function unwrapSheets(result: unknown): unknown[][] {
+  if (!Array.isArray(result) || result.length === 0) return [];
+  const first = result[0] as Record<string, unknown> | unknown[];
+  const isSheetShape =
+    first != null && typeof first === "object" && !Array.isArray(first) && "data" in first;
+  if (isSheetShape) {
+    const sheets = result as { sheet?: string; data?: unknown[][] }[];
+    const withData = sheets.find((s) => Array.isArray(s.data) && s.data.length > 1);
+    return (withData?.data ?? sheets[0]?.data ?? []) as unknown[][];
+  }
+  return result as unknown[][];
+}
+
+/**
  * Normalisasi hasil read-excel-file menjadi matriks string murni.
  * read-excel-file mengembalikan sel bertipe (number/Date/boolean/null); server
  * mengharapkan string, dan serialisasi tipe campuran bisa membuat isi baris
@@ -143,8 +162,8 @@ function ImportForm({
         }
       } else {
         const readXlsxFile = (await import("read-excel-file/browser")).default;
-        const parsed = (await readXlsxFile(file)) as unknown as unknown[][];
-        const norm = normalizeXlsx(parsed);
+        const result = (await readXlsxFile(file)) as unknown;
+        const norm = normalizeXlsx(unwrapSheets(result));
         setRows(norm);
         if (norm.length <= 1) {
           setParseError(
