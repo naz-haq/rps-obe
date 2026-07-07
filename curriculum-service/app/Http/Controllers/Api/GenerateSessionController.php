@@ -48,6 +48,17 @@ class GenerateSessionController extends Controller
         return new GenerateSessionResource($generateSession->load('mataKuliah'));
     }
 
+    /**
+     * Hapus sesi penyusunan (draf staging). RPS yang SUDAH dikomit berada di
+     * tabel terpisah (rps_version) dan TIDAK ikut terhapus.
+     */
+    public function destroy(GenerateSession $generateSession)
+    {
+        $generateSession->delete();
+
+        return response()->json(['message' => 'Sesi penyusunan dihapus.']);
+    }
+
     /** Mulai sesi penyusunan untuk satu MK. */
     public function store(Request $request)
     {

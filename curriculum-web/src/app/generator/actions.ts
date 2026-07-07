@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiPost, type ApiResult } from "@/lib/api";
+import { apiPost, apiDelete, type ApiResult } from "@/lib/api";
 
 const DEFAULT_INSTITUSI = 1;
 
@@ -9,6 +9,13 @@ export async function startSession(formData: FormData): Promise<ApiResult> {
   const mk_id = Number(formData.get("mk_id"));
   const sumber = (formData.get("sumber") as string) || "baru";
   const res = await apiPost("/generate-sessions", { institusi_id: DEFAULT_INSTITUSI, mk_id, sumber });
+  revalidatePath("/generator");
+  return res;
+}
+
+export async function deleteSession(formData: FormData): Promise<ApiResult> {
+  const id = formData.get("id") as string;
+  const res = await apiDelete(`/generate-sessions/${id}`);
   revalidatePath("/generator");
   return res;
 }

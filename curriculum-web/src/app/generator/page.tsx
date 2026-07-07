@@ -2,6 +2,7 @@ import Link from "next/link";
 import { apiGet, type Paginated, type GenerateSession, type MataKuliah } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { StartSessionButton } from "./start-button";
+import { DeleteSessionButton } from "./delete-button";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
 
@@ -77,9 +78,12 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
                     {s.updated_at ? new Date(s.updated_at).toLocaleDateString("id-ID") : "—"}
                   </Td>
                   <Td className="text-right">
-                    <Link href={`/generator/${s.id}`} className="text-sm font-medium text-brand-700 hover:underline">
-                      Buka →
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <Link href={`/generator/${s.id}`} className="text-sm font-medium text-brand-700 hover:underline">
+                        Buka →
+                      </Link>
+                      <DeleteSessionButton sesi={s} />
+                    </div>
                   </Td>
                 </tr>
               ))}

@@ -149,7 +149,7 @@ Route::get('kurikulum/{kurikulum}/traceability', [PetaKurikulumController::class
 
 // Modul 2 — RPS Generator (bertahap + grounding)
 Route::apiResource('generate-sessions', GenerateSessionController::class)
-    ->only(['index', 'store', 'show']);
+    ->only(['index', 'store', 'show', 'destroy']);
 Route::post('generate-sessions/{generateSession}/generate', [GenerateSessionController::class, 'generate']);
 Route::post('generate-sessions/{generateSession}/accept', [GenerateSessionController::class, 'accept']);
 Route::post('generate-sessions/{generateSession}/reject', [GenerateSessionController::class, 'reject']);
