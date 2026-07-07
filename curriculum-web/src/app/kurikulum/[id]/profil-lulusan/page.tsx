@@ -55,6 +55,7 @@ export default async function ProfilLulusanPage({
             <ImportExcelButton
               jenis="profil_lulusan"
               kurikulumId={kurikulum.id}
+              institusiId={kurikulum.institusi_id}
               label="Profil Lulusan"
               fields={[
                 { name: "kode", wajib: true },

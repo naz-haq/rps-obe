@@ -43,6 +43,7 @@ export default async function BahanKajianPage({
             <ImportExcelButton
               jenis="bahan_kajian"
               kurikulumId={kurikulum.id}
+              institusiId={kurikulum.institusi_id}
               label="Bahan Kajian"
               fields={[
                 { name: "nama", wajib: true },

@@ -70,6 +70,7 @@ export default async function MataKuliahPage({
             <ImportExcelButton
               jenis="mata_kuliah"
               kurikulumId={kurikulum.id}
+              institusiId={kurikulum.institusi_id}
               label="Mata Kuliah"
               fields={[
                 { name: "kode_mk", wajib: true },

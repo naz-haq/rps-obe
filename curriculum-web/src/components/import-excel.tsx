@@ -9,6 +9,46 @@ import { importExcelRows, type ImportJenis, type ImportRingkasan } from "@/lib/i
 type FieldHint = { name: string; wajib?: boolean };
 
 /**
+ * Uraikan teks CSV menjadi matriks string. Mendeteksi delimiter otomatis
+ * (koma / titik-koma / tab — Excel lokal Indonesia sering pakai titik-koma)
+ * dan menghormati tanda kutip ganda (mis. deskripsi yang memuat koma).
+ */
+function parseDelimited(text: string): string[][] {
+  const lines = text.split(/\r\n|\r|\n/).filter((l) => l.trim() !== "");
+  if (lines.length === 0) return [];
+  const first = lines[0];
+  const count = (ch: string) => first.split(ch).length - 1;
+  const delim = count(";") > count(",") ? ";" : count("\t") > count(",") ? "\t" : ",";
+
+  const parseLine = (line: string): string[] => {
+    const out: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
+        } else {
+          cur += c;
+        }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === delim) {
+        out.push(cur.trim());
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    out.push(cur.trim());
+    return out;
+  };
+
+  return lines.map(parseLine);
+}
+
+/**
  * Tombol + modal impor Excel/CSV yang dapat dipakai ulang di halaman entitas.
  * Parsing .xlsx dilakukan di klien (read-excel-file, aman) → dikirim sebagai
  * rows 2D; CSV di-split langsung. Pemetaan kolom otomatis di server.
@@ -16,12 +56,14 @@ type FieldHint = { name: string; wajib?: boolean };
 export function ImportExcelButton({
   jenis,
   kurikulumId,
+  institusiId,
   label = "Import Excel",
   fields,
   contoh,
 }: {
   jenis: ImportJenis;
   kurikulumId: number;
+  institusiId: number;
   label?: string;
   fields: FieldHint[];
   contoh?: string;
@@ -29,7 +71,7 @@ export function ImportExcelButton({
   return (
     <Modal trigger={`⬆ ${label}`} title={`Impor ${label}`} triggerVariant="secondary" triggerSize="sm" size="lg">
       {(close) => (
-        <ImportForm jenis={jenis} kurikulumId={kurikulumId} fields={fields} contoh={contoh} close={close} />
+        <ImportForm jenis={jenis} kurikulumId={kurikulumId} institusiId={institusiId} fields={fields} contoh={contoh} close={close} />
       )}
     </Modal>
   );
@@ -38,12 +80,14 @@ export function ImportExcelButton({
 function ImportForm({
   jenis,
   kurikulumId,
+  institusiId,
   fields,
   contoh,
   close,
 }: {
   jenis: ImportJenis;
   kurikulumId: number;
+  institusiId: number;
   fields: FieldHint[];
   contoh?: string;
   close: () => void;
@@ -68,11 +112,7 @@ function ImportForm({
     try {
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
-        const parsed = text
-          .split(/\r\n|\r|\n/)
-          .filter((l) => l.trim() !== "")
-          .map((l) => l.split(",").map((c) => c.trim()));
-        setRows(parsed);
+        setRows(parseDelimited(text));
       } else {
         const readXlsxFile = (await import("read-excel-file/browser")).default;
         const parsed = await readXlsxFile(file);
@@ -87,16 +127,13 @@ function ImportForm({
     setParseError(null);
     setHasil(null);
     setFileName("");
-    const parsed = text
-      .split(/\r\n|\r|\n/)
-      .filter((l) => l.trim() !== "")
-      .map((l) => l.split(",").map((c) => c.trim()));
+    const parsed = parseDelimited(text);
     setRows(parsed.length > 1 ? parsed : []);
   }
 
   function doImport() {
     startTransition(async () => {
-      const res = await importExcelRows(jenis, kurikulumId, rows, pathname);
+      const res = await importExcelRows(jenis, kurikulumId, institusiId, rows, pathname);
       setHasil(res);
       if (res.ok) router.refresh();
     });

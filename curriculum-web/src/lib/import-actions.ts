@@ -3,8 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { apiPost } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
-
 export type ImportJenis = "cpl" | "mata_kuliah" | "bahan_kajian" | "profil_lulusan";
 
 export type ImportRingkasan = {
@@ -19,15 +17,18 @@ export type ImportRingkasan = {
 /**
  * Impor massal baris Excel/CSV ke entitas kurikulum via endpoint onboarding.
  * `rows` = array 2D (baris pertama = header). Pemetaan kolom otomatis di server.
+ * `institusiId` = institusi pemilik kurikulum (dipakai server untuk verifikasi
+ * kepemilikan tenant); harus sama dengan institusi_id kurikulum terkait.
  */
 export async function importExcelRows(
   jenis: ImportJenis,
   kurikulumId: number,
+  institusiId: number,
   rows: unknown[][],
   revalidate?: string,
 ): Promise<ImportRingkasan> {
   const res = await apiPost<ImportRingkasan>("/onboarding/import", {
-    institusi_id: DEFAULT_INSTITUSI,
+    institusi_id: institusiId,
     kurikulum_id: kurikulumId,
     jenis,
     rows,

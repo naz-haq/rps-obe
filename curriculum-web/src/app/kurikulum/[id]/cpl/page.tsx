@@ -63,6 +63,7 @@ export default async function CplPage({
             <ImportExcelButton
               jenis="cpl"
               kurikulumId={kurikulum.id}
+              institusiId={kurikulum.institusi_id}
               label="CPL"
               fields={[
                 { name: "kode", wajib: true },
