@@ -9,6 +9,11 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Next mem-bake hasil rewrites() ke routes-manifest saat build, jadi tujuan
+# proxy /backend ditentukan di sini (bukan runtime). Default = service `api`
+# pada jaringan Docker compose. Override via build arg bila host berbeda.
+ARG BACKEND_ORIGIN=http://api:8100
+ENV BACKEND_ORIGIN=$BACKEND_ORIGIN
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

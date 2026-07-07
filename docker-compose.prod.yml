@@ -63,6 +63,9 @@ services:
     image: ghcr.io/naz-haq/rps-web:latest
     build:
       context: ./curriculum-web
+      args:
+        # Dibakukan ke rewrites() /backend saat build (lihat Dockerfile).
+        BACKEND_ORIGIN: http://api:8100
     restart: unless-stopped
     depends_on: [api]
     environment:
