@@ -9,11 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * CRUD institusi (prodi/fakultas) untuk penetapan unit pengguna & data akademik.
+ * CRUD institusi (universitas/fakultas/prodi) untuk penetapan unit pengguna & data akademik.
  */
 class InstitusiController extends Controller
 {
-    private const JENIS = ['fakultas', 'prodi'];
+    private const JENIS = ['universitas', 'fakultas', 'prodi'];
 
     public function index(): JsonResponse
     {
@@ -23,7 +23,7 @@ class InstitusiController extends Controller
                 'mataKuliah',
                 'users as dosen_count' => fn($q) => $q->whereHas('roles', fn($r) => $r->where('name', 'dosen')),
             ])
-            ->orderByRaw("FIELD(jenis, 'fakultas', 'prodi')")
+            ->orderByRaw("FIELD(jenis, 'universitas', 'fakultas', 'prodi')")
             ->orderBy('nama')
             ->get(['id', 'kode', 'nama', 'jenis', 'parent_id', 'asosiasi_profesi'])
             ->map(fn(Institusi $i) => [
@@ -59,6 +59,12 @@ class InstitusiController extends Controller
 
     public function destroy(Institusi $institusi): JsonResponse
     {
+        if ($institusi->children()->exists()) {
+            return response()->json([
+                'message' => 'Unit ini masih memiliki unit turunan (fakultas/prodi) dan tidak dapat dihapus.',
+            ], 422);
+        }
+
         if ($institusi->users()->exists() || $institusi->mataKuliah()->exists()) {
             return response()->json([
                 'message' => 'Prodi/unit ini masih memiliki pengguna terafiliasi atau mata kuliah dan tidak dapat dihapus.',
@@ -72,16 +78,26 @@ class InstitusiController extends Controller
 
     private function validasi(Request $request, ?int $ignoreId = null): array
     {
+        $jenis = $request->input('jenis');
+        // Induk berjenjang: prodi -> fakultas, fakultas -> universitas.
+        $indukJenis = match ($jenis) {
+            'prodi'    => 'fakultas',
+            'fakultas' => 'universitas',
+            default    => null,
+        };
+
+        $parentRule = array_values(array_filter([
+            Rule::requiredIf(fn() => $request->input('jenis') === 'prodi'),
+            'nullable',
+            'integer',
+            $indukJenis ? Rule::exists('institusi', 'id')->where('jenis', $indukJenis) : null,
+            Rule::notIn($ignoreId ? [$ignoreId] : []),
+        ]));
+
         $data = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
             'jenis' => ['required', Rule::in(self::JENIS)],
-            'parent_id' => [
-                Rule::requiredIf(fn() => $request->input('jenis') === 'prodi'),
-                'nullable',
-                'integer',
-                Rule::exists('institusi', 'id')->where('jenis', 'fakultas'),
-                Rule::notIn($ignoreId ? [$ignoreId] : []),
-            ],
+            'parent_id' => $parentRule,
             'kode' => [
                 'nullable',
                 'string',
@@ -91,15 +107,15 @@ class InstitusiController extends Controller
             'asosiasi_profesi' => ['nullable', 'string', 'max:255'],
         ], [
             'nama.required' => 'Nama prodi/unit wajib diisi.',
-            'jenis.in' => 'Jenis harus fakultas atau prodi.',
+            'jenis.in' => 'Jenis harus universitas, fakultas, atau prodi.',
             'parent_id.required' => 'Prodi wajib terikat pada satu fakultas.',
-            'parent_id.exists' => 'Fakultas induk tidak valid.',
+            'parent_id.exists' => 'Induk yang dipilih tidak valid.',
             'parent_id.not_in' => 'Unit tidak boleh menjadi induk dirinya sendiri.',
             'kode.unique' => 'Kode ini sudah dipakai unit lain.',
         ]);
 
-        // Fakultas adalah unit puncak: tidak punya induk.
-        if (($data['jenis'] ?? null) === 'fakultas') {
+        // Universitas adalah unit puncak: tidak punya induk.
+        if (($data['jenis'] ?? null) === 'universitas') {
             $data['parent_id'] = null;
         }
 

@@ -81,6 +81,7 @@ export default async function MataKuliahPage({
                 { name: "sks_praktik" },
                 { name: "semester" },
                 { name: "rumpun" },
+                { name: "deskripsi_singkat" },
                 { name: "prodi_kode" },
                 { name: "prasyarat_kode" },
               ]}
@@ -117,6 +118,7 @@ export default async function MataKuliahPage({
                   <Td className="max-w-sm">
                     <p className="text-ink">{m.nama}</p>
                     {m.sifat && <p className="text-xs text-muted capitalize">{m.sifat}</p>}
+                    {m.deskripsi_singkat && <p className="mt-0.5 text-xs text-muted line-clamp-2">{m.deskripsi_singkat}</p>}
                   </Td>
                   <Td>{m.institusi_nama ? <span className="text-ink">{m.institusi_nama}</span> : <span className="text-amber-600">Belum ditautkan</span>}</Td>
                   <Td>{m.jenis_mk ? <Badge tone="neutral">{JENIS_LABEL[m.jenis_mk] ?? m.jenis_mk}</Badge> : <span className="text-muted">—</span>}</Td>

@@ -10,23 +10,35 @@ import { createInstitusi, updateInstitusi, deleteInstitusi } from "./actions";
 
 type State = ApiResult | null;
 
-type FakultasOpt = { id: number; nama: string };
+type UnitOpt = { id: number; nama: string };
 
 const JENIS_OPTS = [
-  { value: "prodi", label: "Program Studi" },
+  { value: "universitas", label: "Universitas / Institusi" },
   { value: "fakultas", label: "Fakultas" },
+  { value: "prodi", label: "Program Studi" },
 ];
 
-function InstitusiFields({ item, fakultas }: { item?: InstitusiData; fakultas: FakultasOpt[] }) {
+function InstitusiFields({
+  item,
+  fakultas,
+  universitas,
+}: {
+  item?: InstitusiData;
+  fakultas: UnitOpt[];
+  universitas: UnitOpt[];
+}) {
   const [jenis, setJenis] = useState<string>(item?.jenis ?? "prodi");
   const fakultasOpts = fakultas
     .filter((f) => f.id !== item?.id)
     .map((f) => ({ value: String(f.id), label: f.nama }));
+  const universitasOpts = universitas
+    .filter((u) => u.id !== item?.id)
+    .map((u) => ({ value: String(u.id), label: u.nama }));
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Nama" name="nama" required defaultValue={item?.nama ?? ""} placeholder="mis. S1 Farmasi" />
+        <Field label="Nama" name="nama" required defaultValue={item?.nama ?? ""} placeholder="mis. Universitas / Fakultas / S1 Farmasi" />
         <SelectField
           label="Jenis"
           name="jenis"
@@ -45,6 +57,14 @@ function InstitusiFields({ item, fakultas }: { item?: InstitusiData; fakultas: F
           required
         />
       )}
+      {jenis === "fakultas" && (
+        <SelectField
+          label="Universitas / Institusi Induk"
+          name="parent_id"
+          options={universitasOpts}
+          defaultValue={item?.parent_id ? String(item.parent_id) : ""}
+        />
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Kode" name="kode" defaultValue={item?.kode ?? ""} placeholder="Opsional, mis. FAR" />
         <Field
@@ -58,20 +78,20 @@ function InstitusiFields({ item, fakultas }: { item?: InstitusiData; fakultas: F
   );
 }
 
-export function CreateInstitusiButton({ fakultas }: { fakultas: FakultasOpt[] }) {
+export function CreateInstitusiButton({ fakultas, universitas }: { fakultas: UnitOpt[]; universitas: UnitOpt[] }) {
   return (
     <Modal trigger="+ Tambah Prodi / Unit" title="Tambah Prodi / Unit">
-      {(close) => <CreateForm close={close} fakultas={fakultas} />}
+      {(close) => <CreateForm close={close} fakultas={fakultas} universitas={universitas} />}
     </Modal>
   );
 }
 
-function CreateForm({ close, fakultas }: { close: () => void; fakultas: FakultasOpt[] }) {
+function CreateForm({ close, fakultas, universitas }: { close: () => void; fakultas: UnitOpt[]; universitas: UnitOpt[] }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createInstitusi(fd), null);
   useActionResult(state, { onSuccess: close, successMessage: "Prodi / unit tersimpan." });
   return (
     <form action={action} className="space-y-3">
-      <InstitusiFields fakultas={fakultas} />
+      <InstitusiFields fakultas={fakultas} universitas={universitas} />
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={close} className={buttonClass("secondary")}>Batal</button>
@@ -81,21 +101,21 @@ function CreateForm({ close, fakultas }: { close: () => void; fakultas: Fakultas
   );
 }
 
-export function EditInstitusiButton({ item, fakultas }: { item: InstitusiData; fakultas: FakultasOpt[] }) {
+export function EditInstitusiButton({ item, fakultas, universitas }: { item: InstitusiData; fakultas: UnitOpt[]; universitas: UnitOpt[] }) {
   return (
     <Modal trigger="Ubah" title="Ubah Prodi / Unit" triggerVariant="ghost" triggerSize="sm">
-      {(close) => <EditForm item={item} close={close} fakultas={fakultas} />}
+      {(close) => <EditForm item={item} close={close} fakultas={fakultas} universitas={universitas} />}
     </Modal>
   );
 }
 
-function EditForm({ item, close, fakultas }: { item: InstitusiData; close: () => void; fakultas: FakultasOpt[] }) {
+function EditForm({ item, close, fakultas, universitas }: { item: InstitusiData; close: () => void; fakultas: UnitOpt[]; universitas: UnitOpt[] }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateInstitusi(fd), null);
   useActionResult(state, { onSuccess: close, successMessage: "Prodi / unit diperbarui." });
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={item.id} />
-      <InstitusiFields item={item} fakultas={fakultas} />
+      <InstitusiFields item={item} fakultas={fakultas} universitas={universitas} />
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={close} className={buttonClass("secondary")}>Batal</button>

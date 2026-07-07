@@ -8,7 +8,7 @@
  *   3. Biarkan kosong ("") untuk memakai ikon bawaan.
  *
  * FOOTER:
- *   Ubah teks/hak cipta/tautan pada objek `footer` di bawah.
+ *   Hanya dua teks: `copyright` (bar footer aplikasi) & `text` (footer login).
  */
 export const branding = {
   appName: "Curricula",
@@ -28,8 +28,9 @@ export const branding = {
   ] as string[],
 
   footer: {
+    // Hak cipta — tampil di bar footer aplikasi (kiri bawah).
     copyright: "© 2026 QTech. All rights reserved.",
+    // Label sistem — tampil di footer halaman login.
     text: "Sistem Penyusunan RPS OBE",
-    links: [] as { label: string; href: string }[],
   },
 };
