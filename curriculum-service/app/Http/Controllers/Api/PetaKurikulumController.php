@@ -467,7 +467,14 @@ class PetaKurikulumController extends Controller
     /** Jalankan AI generate + parse JSON; 503 bila gagal. */
     private function runSuggest(AiService $ai, Kurikulum $kurikulum, string $system, string $prompt): array
     {
-        $outcome = $ai->run('generate', $system, $prompt, ['institusi_id' => $kurikulum->institusi_id]);
+        // Matriks besar (mis. 100+ mata kuliah) menghasilkan JSON tautan yang
+        // panjang. Default 'generate' (4000) tidak cukup dan bikin keluaran
+        // terpotong (finish_reason 'length') sehingga JSON gagal di-parse dan
+        // saran kosong. Beri anggaran token lebih besar khusus penyaranan.
+        $outcome = $ai->run('generate', $system, $prompt, [
+            'institusi_id' => $kurikulum->institusi_id,
+            'max_tokens' => 8000,
+        ]);
         if ($outcome->failed()) {
             abort(503, 'Layanan AI sedang sibuk. Coba lagi.');
         }

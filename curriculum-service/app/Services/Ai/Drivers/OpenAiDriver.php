@@ -43,6 +43,15 @@ class OpenAiDriver implements Driver
             $payload['reasoning_effort'] = 'none';
         }
 
+        // Model gpt-oss (dipakai via NVIDIA NIM) melakukan reasoning ekstensif
+        // secara default (effort 'medium/high') sehingga token reasoning
+        // MENGHABISKAN max_tokens dan JSON keluaran ikut terpotong (finish_reason
+        // 'length') pada prompt besar (mis. matriks 100+ mata kuliah). Tekan ke
+        // 'low' agar mayoritas anggaran token dipakai untuk JSON nyata.
+        if (str_contains((string) ($model['model'] ?? ''), 'gpt-oss')) {
+            $payload['reasoning_effort'] = 'low';
+        }
+
         $url = rtrim($model['base_url'], '/') . '/chat/completions';
         $lastError = 'permintaan gagal';
 
