@@ -58,6 +58,10 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      AI_EMBED_PROVIDER: ${AI_EMBED_PROVIDER:-nvidia}
+      AI_EMBED_MODEL: ${AI_EMBED_MODEL:-nvidia/nv-embedqa-e5-v5}
+      AI_EMBED_DIMENSIONS: ${AI_EMBED_DIMENSIONS:-1024}
+      PRICE_EMBED_IN: ${PRICE_EMBED_IN:-0}
     volumes:
       - api-storage:/var/www/html/storage
     networks: [internal]

@@ -41,17 +41,28 @@ class EmbeddingService
         }
 
         [$apiKey, $baseUrl, $model] = $cred;
+        $provider = $cfg['provider'];
+
+        // Payload embedding BEDA per provider:
+        // - OpenAI text-embedding-3-* mendukung 'dimensions' (potong dimensi).
+        // - NVIDIA NIM (nv-embedqa dll) WAJIB 'input_type' (query|passage) +
+        //   'truncate', TIDAK menerima 'dimensions', dan minta input berupa array.
+        $payload = ['model' => $model, 'input' => $text];
+        if ($provider === 'nvidia') {
+            $payload['input'] = [$text];
+            $payload['input_type'] = $context['input_type'] ?? 'query';
+            $payload['truncate'] = 'END';
+            $payload['encoding_format'] = 'float';
+        } else {
+            $payload['dimensions'] = (int) $cfg['dimensions'];
+        }
 
         try {
             $resp = Http::withToken($apiKey)
                 ->timeout(60)
-                ->post(rtrim($baseUrl, '/') . '/embeddings', [
-                    'model'      => $model,
-                    'input'      => $text,
-                    'dimensions' => (int) $cfg['dimensions'],
-                ]);
+                ->post(rtrim($baseUrl, '/') . '/embeddings', $payload);
         } catch (\Throwable $e) {
-            $this->log($context, 'openai', $model, 0, 0.0, true);
+            $this->log($context, $provider, $model, 0, 0.0, true);
             if (config('ai.fallback_to_mock')) {
                 $vec = $this->mockVector($text, (int) $cfg['dimensions']);
 
@@ -64,7 +75,7 @@ class EmbeddingService
         $vec = $data['data'][0]['embedding'] ?? null;
 
         if (! is_array($vec)) {
-            $this->log($context, 'openai', $model, 0, 0.0, true);
+            $this->log($context, $provider, $model, 0, 0.0, true);
             if (config('ai.fallback_to_mock')) {
                 $vec = $this->mockVector($text, (int) $cfg['dimensions']);
 
@@ -76,9 +87,9 @@ class EmbeddingService
 
         $tokens = (int) ($data['usage']['prompt_tokens'] ?? $this->estimateTokens($text));
         $biaya = round($tokens / 1_000_000 * (float) $cfg['pricing']['input'], 6);
-        $this->log($context, 'openai', $model, $tokens, $biaya, false);
+        $this->log($context, $provider, $model, $tokens, $biaya, false);
 
-        return ['embedding' => $vec, 'tokens' => $tokens, 'biaya' => $biaya, 'provider' => 'openai', 'model' => $model, 'mock' => false];
+        return ['embedding' => $vec, 'tokens' => $tokens, 'biaya' => $biaya, 'provider' => $provider, 'model' => $model, 'mock' => false];
     }
 
     /**
@@ -90,6 +101,8 @@ class EmbeddingService
         $context['entity_type'] = $context['entity_type'] ?? 'DokumenChunk';
         $context['entity_id'] = $context['entity_id'] ?? $chunk->id;
         $context['mode'] = $context['mode'] ?? 'embedding';
+        // Dokumen yang di-INDEKS = 'passage' (wajib utk model retrieval NVIDIA).
+        $context['input_type'] = $context['input_type'] ?? 'passage';
 
         $r = $this->embed($chunk->teks, $context);
 
@@ -110,7 +123,8 @@ class EmbeddingService
      */
     public function search(int $institusiId, string $query, int $topK = 5, array $opts = []): array
     {
-        $r = $this->embed($query, ['institusi_id' => $institusiId, 'mode' => 'embedding:query']);
+        // Query pencarian = 'query' (asimetris terhadap 'passage' pd model NVIDIA).
+        $r = $this->embed($query, ['institusi_id' => $institusiId, 'mode' => 'embedding:query', 'input_type' => 'query']);
         $qvec = $r['embedding'];
 
         $chunks = DokumenChunk::query()
