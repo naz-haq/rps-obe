@@ -147,7 +147,7 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
         </nav>
 
         <div className="border-t border-border p-4">
-          <form action={logoutAction} className="mb-3">
+          <form action={logoutAction}>
             <button
               type="submit"
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-ink"
@@ -156,9 +156,6 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
               Keluar
             </button>
           </form>
-          <p className="text-[11px] text-gray-400">
-            {branding.institution ? `${branding.institution} · ` : ""}v{branding.appVersion}
-          </p>
         </div>
       </aside>
 

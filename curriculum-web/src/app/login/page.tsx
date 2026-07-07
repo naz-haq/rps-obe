@@ -19,7 +19,7 @@ export default function LoginPage() {
         <LoginForm turnstileSiteKey={turnstileSiteKey} />
 
         <p className="mt-4 text-center text-xs text-muted">
-          {branding.institution ? `${branding.institution} · ` : ""}{branding.footer.text}
+          {branding.institution ? `${branding.institution} · ` : ""}{branding.footer.text} · v{branding.appVersion}
         </p>
       </div>
     </div>
