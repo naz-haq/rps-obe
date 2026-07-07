@@ -45,6 +45,14 @@ return [
             'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com'),
             'api_key'  => env('DEEPSEEK_API_KEY'),
         ],
+        // NVIDIA NIM (build.nvidia.com) — endpoint kompatibel-OpenAI, jadi memakai
+        // driver 'openai' (cukup base_url berbeda). Trial gratis (ada rate-limit)
+        // untuk JALUR SIMULASI. Satu base_url melayani semua model NVIDIA.
+        'nvidia' => [
+            'driver'   => 'openai',
+            'base_url' => env('NVIDIA_BASE_URL', 'https://integrate.api.nvidia.com/v1'),
+            'api_key'  => env('NVIDIA_API_KEY'),
+        ],
         'mock' => [
             'driver'   => 'mock',
             'base_url' => null,
@@ -139,6 +147,29 @@ return [
                 'cache_write' => (float) env('PRICE_DEEPSEEK_REASONER_CACHE_WRITE', 0.0),
             ],
         ],
+        // --- Model NVIDIA NIM (trial gratis; dipakai profil 'simulasi_nvidia') ---
+        // Nama model API asli (mengandung '/') diletakkan di nilai env; KEY katalog
+        // di bawah TIDAK boleh mengandung titik (dot-notation config).
+        'deepseek-v4-flash' => [
+            'provider' => 'nvidia',
+            'model'    => env('AI_MODEL_NVIDIA_DS_FLASH', 'deepseek-ai/deepseek-v4-flash'),
+            'pricing'  => ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+        ],
+        'deepseek-v4-pro' => [
+            'provider' => 'nvidia',
+            'model'    => env('AI_MODEL_NVIDIA_DS_PRO', 'deepseek-ai/deepseek-v4-pro'),
+            'pricing'  => ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+        ],
+        'gpt-oss-120b' => [
+            'provider' => 'nvidia',
+            'model'    => env('AI_MODEL_NVIDIA_GPTOSS_120B', 'openai/gpt-oss-120b'),
+            'pricing'  => ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+        ],
+        'gpt-oss-20b' => [
+            'provider' => 'nvidia',
+            'model'    => env('AI_MODEL_NVIDIA_GPTOSS_20B', 'openai/gpt-oss-20b'),
+            'pricing'  => ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+        ],
         'mock' => [
             'provider' => 'mock',
             'model'    => 'mock-1',
@@ -190,7 +221,7 @@ return [
     | Nilai tiap profil = task => key model (harus ada di 'models' di atas).
     | Task yang tak disebut di profil memakai default 'tasks.{task}.model'.
     */
-    'active_profile' => env('AI_PROFILE', 'simulasi'),
+    'active_profile' => env('AI_PROFILE', 'simulasi_nvidia'),
 
     'profiles' => [
         'produksi' => [
@@ -210,6 +241,19 @@ return [
             'ekstraksi'      => 'gemini-flash-lite',
             'konversasional' => 'gemini-flash-lite',
             'eskalasi'       => 'deepseek-reasoner',
+        ],
+        // Jalur simulasi berbasis NVIDIA NIM (trial gratis). Generator & tugas
+        // ringan memakai model NVIDIA (DeepSeek V4 / GPT-OSS); validator sengaja
+        // di DeepSeek (provider != nvidia) agar aturan lintas-provider lolos tanpa
+        // key tambahan selain yang sudah ada.
+        'simulasi_nvidia' => [
+            'generate'       => 'deepseek-v4-flash',
+            'judge'          => 'gpt-oss-120b',
+            'validator'      => 'deepseek-chat',
+            'asistif'        => 'gpt-oss-20b',
+            'ekstraksi'      => 'gpt-oss-20b',
+            'konversasional' => 'gpt-oss-20b',
+            'eskalasi'       => 'deepseek-v4-pro',
         ],
     ],
 

@@ -17,6 +17,14 @@ const PROVIDER_TONE: Record<string, "brand" | "ok" | "warn" | "neutral"> = {
   openai: "ok",
   gemini: "warn",
   deepseek: "neutral",
+  nvidia: "ok",
+};
+
+const PROFIL_HINT: Record<string, string> = {
+  produksi: "Produksi memakai Claude & GPT untuk mutu tinggi saat go-live.",
+  simulasi: "Simulasi memakai Gemini & DeepSeek (murah/gratis) untuk menguji alur.",
+  simulasi_nvidia:
+    "Simulasi NVIDIA memakai model gratis di NVIDIA NIM (DeepSeek V4, GPT-OSS); validator tetap DeepSeek agar lolos lintas-provider.",
 };
 
 export default async function PengaturanAiPage() {
@@ -91,9 +99,7 @@ export default async function PengaturanAiPage() {
                 })}
               </div>
               <p className="pt-1 text-xs text-muted">
-                {cfg.profil_aktif === "simulasi"
-                  ? "Simulasi memakai Gemini & DeepSeek (murah/gratis) untuk menguji alur."
-                  : "Produksi memakai Claude & GPT untuk mutu tinggi saat go-live."}
+                {PROFIL_HINT[cfg.profil_aktif] ?? "Pilih jalur model sesuai kebutuhan."}
               </p>
             </form>
           </CardBody>
