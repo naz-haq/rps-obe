@@ -24,7 +24,7 @@ const PROFIL_HINT: Record<string, string> = {
   produksi: "Produksi memakai Claude & GPT untuk mutu tinggi saat go-live.",
   simulasi: "Simulasi memakai Gemini & DeepSeek (murah/gratis) untuk menguji alur.",
   simulasi_nvidia:
-    "Simulasi NVIDIA memakai model gratis di NVIDIA NIM (DeepSeek V4, GPT-OSS); validator memakai Gemini Flash Lite agar lolos lintas-provider.",
+    "Simulasi NVIDIA memakai model gratis GPT-OSS di NVIDIA NIM; validator memakai Gemini Flash Lite agar lolos lintas-provider.",
 };
 
 export default async function PengaturanAiPage() {
