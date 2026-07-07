@@ -158,6 +158,7 @@ Route::post('generate-sessions/{generateSession}/commit', [GenerateSessionContro
 
 Route::get('rps-versions', [RpsVersionController::class, 'index']);
 Route::get('rps-versions/{rpsVersion}', [RpsVersionController::class, 'show']);
+Route::delete('rps-versions/{rpsVersion}', [RpsVersionController::class, 'destroy']);
 Route::get('rps-versions/{rpsVersion}/traceability', [RpsVersionController::class, 'traceability']);
 Route::get('rps-versions/{rpsVersion}/cetak', [RpsVersionController::class, 'cetak']);
 Route::get('rps-versions/{rpsVersion}/docx', [RpsVersionController::class, 'unduhDocx']);

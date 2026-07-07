@@ -2,6 +2,7 @@ import Link from "next/link";
 import { apiGet, type Paginated, type RpsVersion } from "@/lib/api";
 import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
+import { DeleteRpsButton } from "./delete-button";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
 
@@ -60,9 +61,12 @@ export default async function RpsPage({ searchParams }: { searchParams: SearchPa
                   <Td className="uppercase text-muted">{r.bahasa}</Td>
                   <Td><Badge tone={rpsStatusTone(r.status)}>{rpsStatusLabel(r.status)}</Badge></Td>
                   <Td className="text-right">
-                    <Link href={`/rps/${r.id}`} className="text-sm font-medium text-brand-700 hover:underline">
-                      Buka →
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <Link href={`/rps/${r.id}`} className="text-sm font-medium text-brand-700 hover:underline">
+                        Buka →
+                      </Link>
+                      <DeleteRpsButton rps={r} />
+                    </div>
                   </Td>
                 </tr>
               ))}

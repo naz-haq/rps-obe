@@ -37,6 +37,18 @@ class RpsVersionController extends Controller
         return RpsVersionResource::collection($query->paginate($request->integer('per_page', 15)));
     }
 
+    /**
+     * Hapus versi RPS beserta turunannya (rps_minggu & komponen_penilaian cascade
+     * di DB). Sesi generator yang menautkannya (generate_session.rps_version_id)
+     * di-set NULL otomatis (nullOnDelete), sesi TIDAK ikut terhapus.
+     */
+    public function destroy(RpsVersion $rpsVersion)
+    {
+        $rpsVersion->delete();
+
+        return response()->json(['message' => 'Dokumen RPS dihapus.']);
+    }
+
     /** Struktur RPS committed (minggu + rantai Sub-CPMK/CPMK, komponen penilaian). */
     public function show(RpsVersion $rpsVersion)
     {
