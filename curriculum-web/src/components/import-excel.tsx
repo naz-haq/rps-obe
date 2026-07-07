@@ -49,6 +49,30 @@ function parseDelimited(text: string): string[][] {
 }
 
 /**
+ * Normalisasi hasil read-excel-file menjadi matriks string murni.
+ * read-excel-file mengembalikan sel bertipe (number/Date/boolean/null); server
+ * mengharapkan string, dan serialisasi tipe campuran bisa membuat isi baris
+ * tak terbaca. Di sini semua sel dipaksa jadi string, tanggal -> YYYY-MM-DD,
+ * lalu baris yang seluruhnya kosong dibuang.
+ */
+function normalizeXlsx(rows: unknown[][]): string[][] {
+  const cell = (v: unknown): string => {
+    if (v == null) return "";
+    if (v instanceof Date) {
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, "0");
+      const d = String(v.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    if (typeof v === "boolean") return v ? "1" : "0";
+    return String(v).trim();
+  };
+  return rows
+    .map((row) => (Array.isArray(row) ? row.map(cell) : []))
+    .filter((row) => row.some((c) => c !== ""));
+}
+
+/**
  * Tombol + modal impor Excel/CSV yang dapat dipakai ulang di halaman entitas.
  * Parsing .xlsx dilakukan di klien (read-excel-file, aman) → dikirim sebagai
  * rows 2D; CSV di-split langsung. Pemetaan kolom otomatis di server.
@@ -112,14 +136,24 @@ function ImportForm({
     try {
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
-        setRows(parseDelimited(text));
+        const parsed = parseDelimited(text);
+        setRows(parsed);
+        if (parsed.length <= 1) {
+          setParseError("Berkas terbaca, tetapi tidak ada baris data. Pastikan header di baris pertama dan data mulai baris kedua.");
+        }
       } else {
         const readXlsxFile = (await import("read-excel-file/browser")).default;
-        const parsed = await readXlsxFile(file);
-        setRows(parsed as unknown as unknown[][]);
+        const parsed = (await readXlsxFile(file)) as unknown as unknown[][];
+        const norm = normalizeXlsx(parsed);
+        setRows(norm);
+        if (norm.length <= 1) {
+          setParseError(
+            "Berkas .xlsx terbaca, tetapi tidak ada baris data. Pastikan data berada di sheet PERTAMA, header di baris pertama, dan tidak ada baris kosong di atas header.",
+          );
+        }
       }
     } catch {
-      setParseError("Gagal membaca berkas. Pastikan format .xlsx atau .csv valid.");
+      setParseError("Gagal membaca berkas. Pastikan format .xlsx (bukan .xls lama) atau .csv yang valid.");
     }
   }
 
