@@ -147,6 +147,15 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
         </nav>
 
         <div className="border-t border-border p-4">
+          <form action={logoutAction} className="mb-3">
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-ink"
+            >
+              <IconLogout />
+              Keluar
+            </button>
+          </form>
           <p className="text-[11px] text-gray-400">{branding.institution} · v0.1</p>
         </div>
       </aside>
@@ -171,13 +180,14 @@ export function Shell({ children, user }: { children: ReactNode; user: AuthUser 
                 {initials(user.name)}
               </div>
             </Link>
-            <form action={logoutAction}>
+            <form action={logoutAction} className="md:hidden">
               <button
                 type="submit"
                 title="Keluar"
-                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-ink"
+                aria-label="Keluar"
+                className="grid h-8 w-8 place-items-center rounded-lg border border-border text-gray-600 transition hover:bg-gray-50 hover:text-ink"
               >
-                Keluar
+                <IconLogout />
               </button>
             </form>
           </div>
@@ -238,6 +248,15 @@ function IconBuilding() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
       <path d="M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1" />
+    </svg>
+  );
+}
+
+function IconLogout() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5M21 12H9" />
     </svg>
   );
 }
