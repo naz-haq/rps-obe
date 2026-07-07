@@ -244,12 +244,12 @@ return [
         ],
         // Jalur simulasi berbasis NVIDIA NIM (trial gratis). Generator & tugas
         // ringan memakai model NVIDIA (DeepSeek V4 / GPT-OSS); validator sengaja
-        // di DeepSeek (provider != nvidia) agar aturan lintas-provider lolos tanpa
-        // key tambahan selain yang sudah ada.
+        // di Gemini Flash Lite (provider != nvidia) agar aturan lintas-provider
+        // lolos memakai key Gemini yang sudah ada (DeepSeek belum dibayar).
         'simulasi_nvidia' => [
             'generate'       => 'deepseek-v4-flash',
             'judge'          => 'gpt-oss-120b',
-            'validator'      => 'deepseek-chat',
+            'validator'      => 'gemini-flash-lite',
             'asistif'        => 'gpt-oss-20b',
             'ekstraksi'      => 'gpt-oss-20b',
             'konversasional' => 'gpt-oss-20b',
