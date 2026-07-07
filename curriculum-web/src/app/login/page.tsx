@@ -1,4 +1,4 @@
-import { Logo } from "@/components/branding";
+import { Logo, footerText } from "@/components/branding";
 import { branding } from "@/lib/branding";
 import { LoginForm } from "./login-form";
 
@@ -18,9 +18,7 @@ export default function LoginPage() {
 
         <LoginForm turnstileSiteKey={turnstileSiteKey} />
 
-        <p className="mt-4 text-center text-xs text-muted">
-          {branding.institution ? `${branding.institution} · ` : ""}{branding.footer.text} · v{branding.appVersion}
-        </p>
+        <p className="mt-4 text-center text-xs text-muted">{footerText}</p>
       </div>
     </div>
   );

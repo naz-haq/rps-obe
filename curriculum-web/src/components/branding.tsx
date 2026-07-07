@@ -43,21 +43,17 @@ export function Logo({
   );
 }
 
-/** Footer aplikasi (dipakai di dalam Shell & halaman login). */
+/** Teks footer umum: nama sistem + versi. Satu sumber, dipakai di AppFooter & login. */
+export const footerText = `${branding.footer.text} · v${branding.appVersion}`;
+
+/** Footer aplikasi: copyright (kiri) + teks footer umum bertversi (kanan). */
 export function AppFooter({ className = "" }: { className?: string }) {
-  const { copyright, text, links } = branding.footer;
+  const { copyright } = branding.footer;
   return (
     <footer className={`border-t border-border px-6 py-4 md:px-8 ${className}`}>
-      <div className="flex flex-col items-center justify-between gap-2 text-xs text-muted sm:flex-row">
+      <div className="flex flex-col items-center justify-between gap-1 text-xs text-muted sm:flex-row">
         <span>{copyright}</span>
-        <div className="flex items-center gap-3">
-          {links.map((l) => (
-            <a key={l.href} href={l.href} className="transition hover:text-ink">
-              {l.label}
-            </a>
-          ))}
-          <span>{text}</span>
-        </div>
+        <span>{footerText}</span>
       </div>
     </footer>
   );
