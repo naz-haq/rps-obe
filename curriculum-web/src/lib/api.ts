@@ -90,6 +90,15 @@ export type EstimasiWaktu = {
   teks: string;
 };
 
+/** Pustaka/Referensi per Mata Kuliah (rujukan "Pustaka Utama & Pendukung" RPS). */
+export type Referensi = {
+  id: number;
+  institusi_id: number;
+  kode_mk: string;
+  tipe: "utama" | "pendukung";
+  sitasi: string;
+};
+
 export type BadanRujukan = {
   id: number;
   institusi_id: number | null;
@@ -501,7 +510,17 @@ export type AiModelInfo = {
   provider: string;
   model: string;
   pricing: { input: number; output: number } | null;
+  tersedia?: boolean;
 };
+export type AiTaskInfo = {
+  key: string;
+  label: string;
+  default_model: string | null;
+  cross_provider_of: string | null;
+};
+export type AiEfektif = { model: string; provider: string | null; sumber: string };
+/** Model live per-provider (ditarik dari API key): { nvidia: ["openai/gpt-oss-120b", ...] } */
+export type AiLiveModels = Record<string, string[]>;
 export type AiPengaturan = {
   profil_aktif: string;
   default_env: string;
@@ -510,7 +529,11 @@ export type AiPengaturan = {
   profil_tersedia: string[];
   profiles: Record<string, Record<string, string>>;
   providers: string[];
+  ketersediaan?: Record<string, boolean>;
   models: AiModelInfo[];
+  tasks?: AiTaskInfo[];
+  model_override?: Record<string, string>;
+  model_efektif?: Record<string, AiEfektif>;
 };
 
 // ---- Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional) ----
@@ -658,13 +681,34 @@ export async function apiGet<T>(path: string, query?: Query): Promise<T> {
 
 export type ApiResult<T = unknown> = { ok: boolean; status: number; data?: T; message?: string };
 
+/**
+ * Batas waktu (ms) permintaan mutasi. Sedikit di atas worst-case backend
+ * (AI_HTTP_TIMEOUT × AI_HTTP_MAX_ATTEMPTS, mis. 90s × 2 ≈ 180s) agar
+ * permintaan yang menggantung DIHENTIKAN dengan pesan jelas — bukan
+ * melempar galat mentah yang membuat halaman blank ("layar hitam").
+ */
+const SEND_TIMEOUT_MS = 240_000;
+
 async function send<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
-  const res = await fetch(buildUrl(path), {
-    method,
-    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await authHeaders()) },
-    cache: "no-store",
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path), {
+      method,
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...(await authHeaders()) },
+      cache: "no-store",
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+  } catch (e) {
+    const aborted = e instanceof DOMException && e.name === "TimeoutError";
+    return {
+      ok: false,
+      status: 0,
+      message: aborted
+        ? "Permintaan melebihi batas waktu. Provider AI mungkin lambat atau tidak merespons — coba lagi atau pilih model lain di Pengaturan AI."
+        : "Tidak dapat menghubungi server. Pastikan backend berjalan di :8100, lalu coba lagi.",
+    };
+  }
   let json: unknown = null;
   try {
     json = await res.json();

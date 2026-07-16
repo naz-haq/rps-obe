@@ -10,6 +10,10 @@ class AiPengaturan extends Model
     protected $table = 'ai_pengaturan';
     protected $guarded = [];
 
+    protected $casts = [
+        'model_override' => 'array',
+    ];
+
     public function institusi(): BelongsTo
     {
         return $this->belongsTo(Institusi::class, 'institusi_id');

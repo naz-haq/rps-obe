@@ -7,6 +7,7 @@ import { buttonClass } from "@/components/ui";
 import type { MataKuliah, ApiResult } from "@/lib/api";
 import { useActionResult } from "@/lib/use-action-result";
 import { createMataKuliah, updateMataKuliah, deleteMataKuliah } from "./actions";
+import { ReferensiEditor } from "./referensi-editor";
 
 const JENIS_OPTS = [
   { value: "", label: "— Pilih —" },
@@ -33,6 +34,7 @@ function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: M
     <div className="space-y-3">
       <input type="hidden" name="kurikulum_id" value={kurikulumId} />
       {m && <input type="hidden" name="id" value={m.id} />}
+      {m && <input type="hidden" name="kode_mk_lama" value={m.kode_mk} />}
       <SelectField
         label="Program Studi"
         name="institusi_id"
@@ -59,7 +61,23 @@ function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: M
         <Field label="Rumpun" name="rumpun" defaultValue={m?.rumpun ?? ""} placeholder="Farmasi Klinik" />
         <Field label="Prasyarat (kode)" name="prasyarat_kode" defaultValue="" placeholder="FAR100" />
       </div>
-      <AiTextArea label="Deskripsi Singkat" name="deskripsi_singkat" defaultValue={m?.deskripsi_singkat ?? ""} rows={3} placeholder="Ringkasan mata kuliah ..." konteks="Deskripsi Mata Kuliah" />
+      <AiTextArea
+        label="Deskripsi Singkat"
+        name="deskripsi_singkat"
+        defaultValue={m?.deskripsi_singkat ?? ""}
+        rows={3}
+        placeholder="Ringkasan mata kuliah ..."
+        konteks="Deskripsi Mata Kuliah"
+        konteksFields={[
+          { name: "nama", label: "Nama MK" },
+          { name: "kode_mk", label: "Kode" },
+          { name: "jenis_mk", label: "Jenis" },
+          { name: "sks_teori", label: "SKS Teori" },
+          { name: "sks_praktik", label: "SKS Praktik" },
+          { name: "rumpun", label: "Rumpun" },
+        ]}
+      />
+      <ReferensiEditor mk={m} />
     </div>
   );
 }

@@ -20,7 +20,7 @@ class AnthropicDriver implements Driver
                 'x-api-key'         => $model['api_key'],
                 'anthropic-version' => '2023-06-01',
                 'content-type'      => 'application/json',
-            ])->timeout(180)->post(rtrim($model['base_url'], '/') . '/messages', [
+            ])->timeout((int) config('ai.http.timeout', 90))->post(rtrim($model['base_url'], '/') . '/messages', [
                 'model'       => $model['model'],
                 'max_tokens'  => $params['max_tokens'],
                 'temperature' => $params['temperature'],

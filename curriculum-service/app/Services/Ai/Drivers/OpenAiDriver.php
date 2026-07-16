@@ -16,12 +16,18 @@ class OpenAiDriver implements Driver
     /** Status HTTP transien yang layak dicoba ulang (overload/rate-limit/gateway). */
     private const TRANSIENT_STATUSES = [408, 429, 500, 502, 503, 504, 529];
 
-    /** Jumlah percobaan maksimum untuk galat transien (1 asli + N ulang). */
-    private const MAX_ATTEMPTS = 3;
+    /** Batas percobaan default bila config('ai.http.max_attempts') tak tersedia. */
+    private const DEFAULT_MAX_ATTEMPTS = 2;
+
+    /** Batas timeout (detik) default bila config('ai.http.timeout') tak tersedia. */
+    private const DEFAULT_TIMEOUT = 90;
 
     public function run(array $model, string $system, string $prompt, array $params): LlmResult
     {
         $start = microtime(true);
+
+        $timeout = (int) config('ai.http.timeout', self::DEFAULT_TIMEOUT);
+        $maxAttempts = max(1, (int) config('ai.http.max_attempts', self::DEFAULT_MAX_ATTEMPTS));
 
         $payload = [
             'model'       => $model['model'],
@@ -58,10 +64,10 @@ class OpenAiDriver implements Driver
         // Coba-ulang untuk galat transien (mis. Gemini "503 model overloaded"
         // yang kerap muncul pada tahap besar 'mingguan'). Backoff eksponensial
         // ringan; galat non-transien langsung dikembalikan tanpa mengulang.
-        for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
                 $response = Http::withToken($model['api_key'])
-                    ->timeout(180)
+                    ->timeout($timeout)
                     ->post($url, $payload);
 
                 $latency = (int) round((microtime(true) - $start) * 1000);
@@ -76,7 +82,7 @@ class OpenAiDriver implements Driver
                     $msg = is_array($err) ? ($err['message'] ?? 'API error') : ((string) ($err ?? 'permintaan gagal'));
                     $lastError = 'HTTP ' . $response->status() . ': ' . $msg;
 
-                    if ($this->isTransient($response->status()) && $attempt < self::MAX_ATTEMPTS) {
+                    if ($this->isTransient($response->status()) && $attempt < $maxAttempts) {
                         $this->backoff($attempt);
                         continue;
                     }
@@ -88,7 +94,7 @@ class OpenAiDriver implements Driver
             } catch (\Throwable $e) {
                 $lastError = $e->getMessage();
                 // Galat koneksi/timeout juga transien → ulangi bila masih ada jatah.
-                if ($attempt < self::MAX_ATTEMPTS) {
+                if ($attempt < $maxAttempts) {
                     $this->backoff($attempt);
                     continue;
                 }

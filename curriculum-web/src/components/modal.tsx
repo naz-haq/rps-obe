@@ -197,6 +197,7 @@ export function SubmitButton({ children }: { children: ReactNode }) {
 
 // ---- AI-assisted textarea (asistif inline) ----
 const AI_MODES: { mode: AsistifMode; label: string }[] = [
+  { mode: "generate", label: "✨ Buat draf (generate)" },
   { mode: "perbaiki", label: "Perbaiki tata bahasa" },
   { mode: "parafrase", label: "Parafrase" },
   { mode: "ringkas", label: "Ringkas" },
@@ -205,7 +206,8 @@ const AI_MODES: { mode: AsistifMode; label: string }[] = [
 
 /**
  * Textarea dengan tombol AI (✨). Field terkontrol: nilai tetap ikut form via
- * atribut `name`. AI hanya membantu menyunting redaksi bila dibutuhkan.
+ * atribut `name`. AI membantu menyunting redaksi ATAU membuat draf baru
+ * (mode "generate") berdasarkan field lain pada form (`konteksFields`).
  */
 export function AiTextArea({
   label,
@@ -216,6 +218,7 @@ export function AiTextArea({
   hint,
   rows = 4,
   konteks,
+  konteksFields,
 }: {
   label: string;
   name: string;
@@ -225,12 +228,29 @@ export function AiTextArea({
   hint?: string;
   rows?: number;
   konteks?: string;
+  /** Nama+label input lain pada form yang dibaca sebagai fakta untuk mode generate. */
+  konteksFields?: { name: string; label: string }[];
 }) {
   const [value, setValue] = useState(defaultValue);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Kumpulkan nilai field lain pada form yang sama sebagai fakta konteks.
+  const collectData = (): string => {
+    const form = taRef.current?.form;
+    if (!form || !konteksFields?.length) return "";
+    return konteksFields
+      .map(({ name: n, label: l }) => {
+        const el = form.elements.namedItem(n) as HTMLInputElement | HTMLSelectElement | null;
+        const v = el?.value?.trim();
+        return v ? `${l}: ${v}` : null;
+      })
+      .filter(Boolean)
+      .join("; ");
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -244,13 +264,19 @@ export function AiTextArea({
   const runAi = async (mode: AsistifMode) => {
     setMenuOpen(false);
     setError(null);
-    if (!value.trim()) {
+    const data = mode === "generate" ? collectData() : undefined;
+    if (mode === "generate") {
+      if (!data && !value.trim()) {
+        setError("Lengkapi dulu sebagian field (mis. Nama) agar AI punya konteks untuk membuat draf.");
+        return;
+      }
+    } else if (!value.trim()) {
       setError("Isi teks terlebih dahulu sebelum meminta bantuan AI.");
       return;
     }
     setBusy(true);
     try {
-      const res = await assistText({ mode, teks: value, konteks });
+      const res = await assistText({ mode, teks: value, konteks, data });
       if (res.ok && res.data) setValue(res.data.teks);
       else setError(res.message ?? "Layanan AI tidak tersedia saat ini.");
     } catch {
@@ -292,6 +318,7 @@ export function AiTextArea({
         </div>
       </div>
       <textarea
+        ref={taRef}
         name={name}
         value={value}
         onChange={(e) => setValue(e.target.value)}

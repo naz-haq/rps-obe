@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\PemenuhanAcuanController;
 use App\Http\Controllers\Api\PetaKurikulumController;
 use App\Http\Controllers\Api\ProfilLulusanController;
 use App\Http\Controllers\Api\PromptTemplateController;
+use App\Http\Controllers\Api\ReferensiController;
 use App\Http\Controllers\Api\RpsAiController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RpsApprovalController;
@@ -91,7 +92,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Pengaturan AI (profil produksi/simulasi) — dapat diubah dari UI tanpa deploy
 Route::get('ai/pengaturan', [AiPengaturanController::class, 'show']);
+Route::get('ai/pengaturan/model-live', [AiPengaturanController::class, 'modelsLive']);
 Route::put('ai/pengaturan', [AiPengaturanController::class, 'update']);
+Route::put('ai/pengaturan/model', [AiPengaturanController::class, 'updateModel']);
 
 // AI Asistif inline (perbaiki/parafrase/ringkas satu field)
 Route::post('ai/asistif', [AiAsistifController::class, 'asistif']);
@@ -125,6 +128,11 @@ Route::apiResource('profil-lulusan', ProfilLulusanController::class);
 Route::apiResource('cpl', CplController::class);
 Route::apiResource('mata-kuliah', MataKuliahController::class);
 Route::apiResource('bahan-kajian', BahanKajianController::class);
+
+// Pustaka/Referensi per Mata Kuliah (rujukan "Pustaka Utama & Pendukung" RPS)
+Route::get('referensi', [ReferensiController::class, 'index']);
+Route::post('referensi/sync', [ReferensiController::class, 'sync']);
+Route::post('referensi/suggest', [ReferensiController::class, 'suggest']);
 
 // Modul 1 — Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional)
 Route::apiResource('taksonomi', TaksonomiController::class)->parameters(['taksonomi' => 'taksonomi']);

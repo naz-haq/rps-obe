@@ -6,6 +6,8 @@ use App\Models\AiInteraksi;
 use App\Models\AiKredensial;
 use App\Models\AiPengaturan;
 use App\Services\Ai\Exceptions\AiBudgetException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 
 /**
@@ -46,7 +48,7 @@ class AiService
 
         // Pemilihan model: override eksplisit > profil aktif (produksi/simulasi) > default task.
         $modelKey = $context['model'] ?? $this->resolveModelKey($task, $institusiId);
-        $modelCfg = config("ai.models.$modelKey");
+        $modelCfg = $this->modelCfgFor($modelKey);
         if (! $modelCfg) {
             throw new InvalidArgumentException("Model AI tidak dikenal: {$modelKey}");
         }
@@ -97,7 +99,7 @@ class AiService
         }
 
         $otherModel = $this->resolveModelKey($other, $institusiId);
-        $otherProvider = config("ai.models.$otherModel.provider");
+        $otherProvider = $this->providerOf($otherModel);
 
         if ($otherProvider !== null && $otherProvider === $provider) {
             throw new InvalidArgumentException(
@@ -107,14 +109,281 @@ class AiService
     }
 
     /**
-     * Key model efektif untuk sebuah task: profil aktif menimpa default task.
+     * Key model efektif untuk sebuah task: override manual per-tugas menimpa
+     * profil aktif, yang menimpa default task.
      */
     private function resolveModelKey(string $task, ?int $institusiId): string
     {
+        $override = $this->modelOverrideMap($institusiId);
+        if (! empty($override[$task]) && $this->modelCfgFor($override[$task])) {
+            return $override[$task];
+        }
+
         $profil = $this->activeProfile($institusiId);
         $map = config("ai.profiles.$profil", []);
 
         return $map[$task] ?? config("ai.tasks.$task.model");
+    }
+
+    /**
+     * Provider dari referensi model. Mendukung DUA bentuk:
+     *  - key katalog config('ai.models.<key>') → provider dari katalog,
+     *  - "provider::model-id" (model LIVE dari API) → prefix sebelum '::'.
+     */
+    private function providerOf(string $modelRef): ?string
+    {
+        if (str_contains($modelRef, '::')) {
+            return explode('::', $modelRef, 2)[0];
+        }
+
+        return config("ai.models.$modelRef.provider");
+    }
+
+    /**
+     * Konfigurasi model efektif (provider/model API/pricing) dari sebuah
+     * referensi. Model katalog memakai harga katalog; model LIVE "provider::id"
+     * dibangun on-the-fly dengan harga 0 (provider yang harus terdaftar).
+     *
+     * @return array{provider:string, model:string, pricing:array}|null
+     */
+    private function modelCfgFor(string $modelRef): ?array
+    {
+        if (str_contains($modelRef, '::')) {
+            [$provider, $apiModel] = explode('::', $modelRef, 2);
+            if ($apiModel === '' || ! config("ai.providers.$provider")) {
+                return null;
+            }
+
+            // Gemini (lapisan kompatibel-OpenAI) menolak prefix 'models/' pada
+            // endpoint chat — pakai id telanjang.
+            if ($provider === 'gemini' && str_starts_with($apiModel, 'models/')) {
+                $apiModel = substr($apiModel, strlen('models/'));
+            }
+
+            return [
+                'provider' => $provider,
+                'model'    => $apiModel,
+                'pricing'  => ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+            ];
+        }
+
+        return config("ai.models.$modelRef");
+    }
+
+    /**
+     * Peta override model per-tugas efektif: baris tenant menimpa baris global
+     * (per-key). Task tanpa override tidak muncul di peta.
+     *
+     * @return array<string,string>
+     */
+    public function modelOverrideMap(?int $institusiId): array
+    {
+        $global = (array) (AiPengaturan::whereNull('institusi_id')->value('model_override') ?? []);
+
+        $tenant = [];
+        if ($institusiId) {
+            $tenant = (array) (AiPengaturan::where('institusi_id', $institusiId)->value('model_override') ?? []);
+        }
+
+        // Buang nilai kosong (null/'') agar jatuh ke profil.
+        return array_filter(array_merge($global, $tenant), fn($v) => is_string($v) && $v !== '');
+    }
+
+    /**
+     * Peta model efektif untuk SEMUA task (task => {model, provider, sumber}).
+     * Dipakai UI pengaturan & validasi lintas-provider saat menyimpan.
+     *
+     * @return array<string,array{model:string,provider:?string,sumber:string}>
+     */
+    public function effectiveModelMap(?int $institusiId): array
+    {
+        $override = $this->modelOverrideMap($institusiId);
+        $profil = $this->activeProfile($institusiId);
+        $profilMap = config("ai.profiles.$profil", []);
+
+        $out = [];
+        foreach (array_keys((array) config('ai.tasks', [])) as $task) {
+            if (! empty($override[$task]) && $this->modelCfgFor($override[$task])) {
+                $model = $override[$task];
+                $sumber = 'override';
+            } elseif (! empty($profilMap[$task])) {
+                $model = $profilMap[$task];
+                $sumber = 'profil';
+            } else {
+                $model = config("ai.tasks.$task.model");
+                $sumber = 'default';
+            }
+
+            $out[$task] = [
+                'model'    => $model,
+                'provider' => $this->providerOf($model),
+                'sumber'   => $sumber,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Daftar model LIVE per-provider, diambil langsung dari endpoint
+     * kompatibel-OpenAI `GET {base_url}/models` memakai API key aktif
+     * (env server atau BYOK tenant). Hasil di-cache 30 menit per provider.
+     * Provider tanpa key / non-OpenAI-compatible / gagal diambil → dilewati.
+     *
+     * @return array<string,array<int,string>> provider => [model-id, ...]
+     */
+    public function liveModels(?int $institusiId = null): array
+    {
+        $out = [];
+        foreach (array_keys((array) config('ai.providers', [])) as $provider) {
+            if ($provider === 'mock') {
+                continue;
+            }
+            $conn = $this->providerConnection($provider, $institusiId);
+            // Hanya driver kompatibel-OpenAI yang punya endpoint /models seragam.
+            if (! $conn || ($conn['driver'] ?? null) !== 'openai' || empty($conn['base_url'])) {
+                continue;
+            }
+            $models = $this->fetchProviderModels($provider, $conn);
+            if (! empty($models)) {
+                $out[$provider] = $models;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Resolusi koneksi provider (base_url + api_key + driver): env server dulu,
+     * lalu BYOK tenant aktif. Mengembalikan null bila tak ada key.
+     *
+     * @return array{base_url:?string, api_key:string, driver:string}|null
+     */
+    private function providerConnection(string $provider, ?int $institusiId): ?array
+    {
+        $cfg = config("ai.providers.$provider");
+        if (! $cfg) {
+            return null;
+        }
+
+        $apiKey = $cfg['api_key'] ?? null;
+        if (empty($apiKey) && $institusiId) {
+            $kred = AiKredensial::where('institusi_id', $institusiId)
+                ->where('provider', $provider)
+                ->where('aktif', true)
+                ->first();
+            if ($kred) {
+                $apiKey = $kred->api_key_encrypted; // cast 'encrypted' -> plaintext
+            }
+        }
+
+        if (empty($apiKey)) {
+            return null;
+        }
+
+        return [
+            'base_url' => $cfg['base_url'] ?? null,
+            'api_key'  => $apiKey,
+            'driver'   => $cfg['driver'] ?? 'openai',
+        ];
+    }
+
+    /**
+     * Ambil & cache daftar id model dari `GET {base_url}/models`. Aman terhadap
+     * error jaringan/timeout (kembalikan array kosong agar UI tetap jalan).
+     *
+     * @return array<int,string>
+     */
+    private function fetchProviderModels(string $provider, array $conn): array
+    {
+        $cacheKey = "ai:models:live:$provider:" . md5(((string) $conn['base_url']) . '|' . substr((string) $conn['api_key'], -8));
+
+        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($provider, $conn): array {
+            try {
+                // GitHub Models tidak menyediakan /models ala OpenAI; daftar model
+                // ada di /catalog/models (array {id,...} tingkat atas).
+                if ($provider === 'github') {
+                    return $this->fetchGithubCatalog($conn);
+                }
+
+                $url = rtrim((string) $conn['base_url'], '/') . '/models';
+                $resp = Http::withToken($conn['api_key'])->timeout(15)->get($url);
+                if (! $resp->successful()) {
+                    return [];
+                }
+
+                $data = $resp->json('data');
+                if (! is_array($data)) {
+                    return [];
+                }
+
+                return collect($data)
+                    ->map(fn($m) => is_array($m) ? ($m['id'] ?? null) : null)
+                    ->filter(fn($id) => is_string($id) && $id !== '')
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+            } catch (\Throwable) {
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Daftar id model GitHub Models dari `GET {host}/catalog/models`
+     * (respons = array {id, ...} tingkat atas, bukan {data:[]}).
+     *
+     * @param  array{base_url:?string, api_key:string, driver:string}  $conn
+     * @return array<int,string>
+     */
+    private function fetchGithubCatalog(array $conn): array
+    {
+        // base_url = https://models.github.ai/inference → katalog di /catalog/models.
+        $host = preg_replace('#/inference/?$#', '', rtrim((string) $conn['base_url'], '/'));
+        $resp = Http::withToken($conn['api_key'])->timeout(15)->get($host . '/catalog/models');
+        if (! $resp->successful()) {
+            return [];
+        }
+
+        $data = $resp->json();
+        if (! is_array($data)) {
+            return [];
+        }
+
+        return collect($data)
+            ->map(fn($m) => is_array($m) ? ($m['id'] ?? null) : null)
+            ->filter(fn($id) => is_string($id) && $id !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ketersediaan tiap provider (punya API key: env server atau BYOK tenant).
+     *
+     * @return array<string,bool>
+     */
+    public function providerAvailability(?int $institusiId = null): array
+    {
+        $out = [];
+        foreach ((array) config('ai.providers', []) as $name => $cfg) {
+            if ($name === 'mock') {
+                $out[$name] = true;
+                continue;
+            }
+            $ada = ! empty($cfg['api_key'] ?? null);
+            if (! $ada && $institusiId) {
+                $ada = AiKredensial::where('institusi_id', $institusiId)
+                    ->where('provider', $name)
+                    ->where('aktif', true)
+                    ->exists();
+            }
+            $out[$name] = $ada;
+        }
+
+        return $out;
     }
 
     /**

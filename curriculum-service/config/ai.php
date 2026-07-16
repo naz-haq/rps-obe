@@ -53,6 +53,16 @@ return [
             'base_url' => env('NVIDIA_BASE_URL', 'https://integrate.api.nvidia.com/v1'),
             'api_key'  => env('NVIDIA_API_KEY'),
         ],
+        // GitHub Models (models.github.ai) — endpoint inference kompatibel-OpenAI,
+        // jadi memakai driver 'openai'. Auth = GitHub PAT dengan permission
+        // "Models: Read". Model id berprefiks publisher (mis. 'openai/gpt-4.1').
+        // Katalog TIDAK di /models melainkan /catalog/models (ditangani khusus di
+        // AiService::fetchProviderModels agar tetap muncul di picker live).
+        'github' => [
+            'driver'   => 'openai',
+            'base_url' => env('GITHUB_MODELS_BASE_URL', 'https://models.github.ai/inference'),
+            'api_key'  => env('GITHUB_API_KEY'),
+        ],
         'mock' => [
             'driver'   => 'mock',
             'base_url' => null,
@@ -208,6 +218,19 @@ return [
     'default_params' => [
         'temperature' => 0.3,
         'max_tokens'  => 1500,
+    ],
+
+    /*
+    | PENGATURAN HTTP untuk panggilan LLM (driver kompatibel-OpenAI/Anthropic).
+    | 'timeout'      = batas detik per satu percobaan permintaan.
+    | 'max_attempts' = jumlah percobaan untuk galat transien (1 asli + N ulang).
+    | Batas ini menjaga generate TIDAK menggantung lama saat provider lambat/timeout
+    | (worst-case = timeout × max_attempts). Nilai kecil = gagal cepat + pesan jelas;
+    | naikkan bila prompt besar (mis. 'mingguan') butuh waktu lebih.
+    */
+    'http' => [
+        'timeout'      => (int) env('AI_HTTP_TIMEOUT', 90),
+        'max_attempts' => (int) env('AI_HTTP_MAX_ATTEMPTS', 2),
     ],
 
     /*
