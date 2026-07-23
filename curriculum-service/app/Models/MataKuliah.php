@@ -16,6 +16,7 @@ class MataKuliah extends Model
         'sks_teori' => 'integer',
         'sks_praktik' => 'integer',
         'semester' => 'integer',
+        'jumlah_minggu' => 'integer',
     ];
 
     protected static function booted(): void

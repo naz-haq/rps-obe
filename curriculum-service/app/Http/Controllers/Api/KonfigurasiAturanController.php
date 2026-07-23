@@ -17,7 +17,7 @@ use Illuminate\Validation\Rule;
 class KonfigurasiAturanController extends Controller
 {
     /** Jenis aturan yang dikenal (whitelist). */
-    public const JENIS = ['jumlah_minggu', 'bobot_teori', 'bobot_praktikum', 'konversi_sks'];
+    public const JENIS = ['jumlah_minggu', 'bobot_teori', 'bobot_praktikum', 'konversi_sks', 'konversi_minggu_profesi'];
 
     /** Daftar konfigurasi untuk satu institusi. */
     public function index(Request $request): JsonResponse

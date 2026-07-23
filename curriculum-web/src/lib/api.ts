@@ -69,6 +69,8 @@ export type MataKuliah = {
   kode_mk: string;
   nama: string;
   jenis_mk: string;
+  pola?: "reguler" | "blok" | "profesi";
+  jumlah_minggu?: number | null;
   sifat: string | null;
   rumpun: string | null;
   deskripsi_singkat: string | null;

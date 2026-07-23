@@ -48,10 +48,10 @@ return [
         ],
 
         'mingguan' => [
-            'label'        => 'Rencana 16 Minggu',
+            'label'        => 'Rencana Mingguan',
             'jenis_output' => 'mingguan',
             'context_from' => ['cpmk', 'sub_cpmk'],
-            // Keluaran terbesar (16 minggu) — beri anggaran token lebih besar
+            // Keluaran terbesar (rencana pekanan) — beri anggaran token lebih besar
             // agar JSON tidak terpotong / balik kosong.
             'max_tokens'   => (int) env('GENERATOR_MAX_TOKENS_MINGGUAN', 8000),
         ],

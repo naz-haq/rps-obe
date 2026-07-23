@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
@@ -21,9 +21,52 @@ const SIFAT_OPTS = [
   { value: "pilihan", label: "Pilihan" },
 ];
 
+const POLA_OPTS = [
+  { value: "reguler", label: "Reguler (± 16 pekan)" },
+  { value: "blok", label: "Blok (durasi khusus)" },
+  { value: "profesi", label: "Praktek Profesi / Klinik" },
+];
+
 type State = ApiResult | null;
 
 type ProdiOpt = { value: string; label: string };
+
+/** Input Jumlah Pekan + tombol "Hitung dari SKS" (≈1 pekan/SKS untuk profesi). */
+function JumlahPekanField({ m }: { m?: MataKuliah }) {
+  const ref = useRef<HTMLLabelElement>(null);
+  const [minggu, setMinggu] = useState(m?.jumlah_minggu != null ? String(m.jumlah_minggu) : "");
+
+  const hitungDariSks = () => {
+    const form = ref.current?.closest("form");
+    const num = (n: string) => Number((form?.elements.namedItem(n) as HTMLInputElement | null)?.value) || 0;
+    const sks = num("sks_teori") + num("sks_praktik");
+    if (sks > 0) setMinggu(String(sks));
+  };
+
+  return (
+    <label ref={ref} className="block">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs font-medium text-ink">Jumlah Pekan</span>
+        <button type="button" onClick={hitungDariSks} className="text-[11px] font-medium text-brand-700 hover:underline">
+          Hitung dari SKS
+        </button>
+      </div>
+      <input
+        name="jumlah_minggu"
+        type="number"
+        min={1}
+        max={60}
+        value={minggu}
+        onChange={(e) => setMinggu(e.target.value)}
+        placeholder="kosong = default (16)"
+        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-ring placeholder:text-gray-400"
+      />
+      <span className="mt-1 block text-[11px] text-muted">
+        Profesi: klik Hitung (≈1 pekan/SKS) lalu sesuaikan · Blok: isi manual · Reguler: kosongkan.
+      </span>
+    </label>
+  );
+}
 
 function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: MataKuliah; prodiOptions: ProdiOpt[] }) {
   const prodiOpts =
@@ -51,6 +94,15 @@ function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: M
       <div className="grid grid-cols-2 gap-3">
         <SelectField label="Jenis" name="jenis_mk" options={JENIS_OPTS} defaultValue={m?.jenis_mk ?? ""} />
         <SelectField label="Sifat" name="sifat" options={SIFAT_OPTS} defaultValue={m?.sifat ?? ""} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <SelectField
+          label="Pola Pelaksanaan"
+          name="pola"
+          options={POLA_OPTS}
+          defaultValue={m?.pola ?? "reguler"}
+        />
+        <JumlahPekanField m={m} />
       </div>
       <div className="grid grid-cols-3 gap-3">
         <Field label="SKS Teori" name="sks_teori" type="number" defaultValue={m?.sks_teori ?? ""} placeholder="2" />

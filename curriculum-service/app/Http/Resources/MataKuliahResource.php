@@ -20,6 +20,8 @@ class MataKuliahResource extends JsonResource
             'kode_mk'           => $this->kode_mk,
             'nama'              => $this->nama,
             'jenis_mk'          => $this->jenis_mk,
+            'pola'              => $this->pola ?? 'reguler',
+            'jumlah_minggu'     => $this->jumlah_minggu,
             'sifat'             => $this->sifat,
             'rumpun'            => $this->rumpun,
             'deskripsi_singkat' => $this->deskripsi_singkat,

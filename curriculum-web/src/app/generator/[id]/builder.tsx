@@ -32,7 +32,7 @@ import { FloatingAiChat } from "./floating-ai";
 const STAGES = [
   { key: "cpmk", label: "CPMK", desc: "Capaian Pembelajaran Mata Kuliah" },
   { key: "sub_cpmk", label: "Sub-CPMK", desc: "Sub-CPMK + indikator & taksonomi" },
-  { key: "mingguan", label: "Rencana Mingguan", desc: "16 minggu pertemuan" },
+  { key: "mingguan", label: "Rencana Mingguan", desc: "Rencana pekanan (jumlah pekan mengikuti pola MK)" },
   { key: "penilaian", label: "Penilaian", desc: "Komponen penilaian + bobot" },
 ] as const;
 

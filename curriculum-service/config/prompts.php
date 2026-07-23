@@ -53,11 +53,12 @@ return [
         ],
 
         'mingguan' => [
-            'label' => 'Generator — Rencana 16 Minggu',
+            'label' => 'Generator — Rencana Mingguan',
             'group' => 'generator',
             'system' =>
-            'Anda perancang pembelajaran OBE. Susun rencana 16 minggu pertemuan (termasuk UTS di minggu 8 dan UAS di minggu 16) '
-                . 'mengikuti FORMAT TABEL RPS Panduan KPT/SN-Dikti. Untuk tiap minggu isi: sub_cpmk_kode (kemampuan akhir), '
+            'Anda perancang pembelajaran OBE. Susun rencana pekanan pertemuan mengikuti FORMAT TABEL RPS Panduan KPT/SN-Dikti. '
+                . 'PATUHI PERSIS "PARAMETER RENCANA MINGGUAN" pada konteks: jumlah pekan, pola pelaksanaan (reguler/blok/profesi), dan pola evaluasinya. '
+                . 'Untuk tiap pekan isi: sub_cpmk_kode (kemampuan akhir), '
                 . 'indikator penilaian, kriteria_penilaian, metode_pembelajaran, '
                 . 'bentuk_luring dan bentuk_daring (bentuk pembelajaran), pengalaman_belajar (penugasan mahasiswa), '
                 . 'materi_pustaka, dan bobot_penilaian (%). '

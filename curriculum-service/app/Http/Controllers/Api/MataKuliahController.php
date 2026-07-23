@@ -80,6 +80,8 @@ class MataKuliahController extends Controller
             ],
             'nama'              => [$mk ? 'sometimes' : 'required', 'string', 'max:255'],
             'jenis_mk'          => ['nullable', Rule::in(['murni', 'praktikum'])],
+            'pola'              => ['nullable', Rule::in(['reguler', 'blok', 'profesi'])],
+            'jumlah_minggu'     => ['nullable', 'integer', 'min:1', 'max:60'],
             'sifat'             => ['nullable', Rule::in(['wajib', 'pilihan'])],
             'rumpun'            => ['nullable', 'string', 'max:255'],
             'deskripsi_singkat' => ['nullable', 'string'],
@@ -96,6 +98,11 @@ class MataKuliahController extends Controller
         // saat pengguna tidak memilih jenis.
         if (empty($data['jenis_mk'])) {
             $data['jenis_mk'] = 'murni';
+        }
+
+        // Pola pelaksanaan default 'reguler' (16 pekan) bila tidak dipilih.
+        if (empty($data['pola'])) {
+            $data['pola'] = 'reguler';
         }
 
         return $data;
