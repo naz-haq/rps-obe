@@ -85,12 +85,15 @@ class RpsGeneratorService
 
         $maks = $this->autoRevisiMaks();
         $koreksi = [];   // konteks pengganti terkumpul lintas percobaan
+        // Regenerate tahap yang SUDAH punya draf → pengguna ingin hasil segar,
+        // jadi lewati cache prompt (generate pertama tetap boleh dari cache).
+        $reGenerate = isset(($session->draf ?? [])[$stage]);
         $outcome = null;
         $data = [];
         $validasi = null;
 
         for ($percobaan = 0; $percobaan <= $maks; $percobaan++) {
-            $outcome = $this->runGenerate($session, $stage, $stageCfg, $mk, $koreksi);
+            $outcome = $this->runGenerate($session, $stage, $stageCfg, $mk, $koreksi, $reGenerate);
             $data = $this->parseJson($outcome->text(), $stage);
 
             $validasi = $this->validateStage($session, $stage, $data, $outcome);
@@ -134,7 +137,7 @@ class RpsGeneratorService
      * Satu percobaan generate (buildPrompt + panggilan AI). Blok KOREKSI opsional
      * menyuntikkan konteks pengganti dari hasil grounding percobaan sebelumnya.
      */
-    private function runGenerate(GenerateSession $session, string $stage, array $stageCfg, MataKuliah $mk, array $koreksi): AiOutcome
+    private function runGenerate(GenerateSession $session, string $stage, array $stageCfg, MataKuliah $mk, array $koreksi, bool $bypassCache = false): AiOutcome
     {
         [$system, $prompt] = $this->buildPrompt($session, $stage, $stageCfg, $mk, $koreksi);
 
@@ -147,6 +150,8 @@ class RpsGeneratorService
             // Anggaran token per-tahap (mis. 'mingguan' butuh lebih besar).
             // null => pakai default task 'generate'.
             'max_tokens'   => $stageCfg['max_tokens'] ?? null,
+            // Regenerate manual / revisi grounding → jangan ambil dari cache.
+            'no_cache'     => $bypassCache || $koreksi !== [],
         ]);
 
         if ($outcome->failed()) {
