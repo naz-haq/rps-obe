@@ -234,6 +234,17 @@ return [
     ],
 
     /*
+    | Prompt-result cache untuk mengurangi generate AI berulang. TTL detik; 0 =
+    | NONAKTIF. Kunci = hash(task+provider+model+system+prompt+params) → hanya
+    | permintaan yang BENAR-BENAR identik yang mengambil dari cache; beda MK/CPL/
+    | pola/model → beda kunci → tetap generate baru. Bypass per-panggilan via
+    | context['no_cache']=true (mis. tombol "Generate ulang paksa").
+    */
+    'cache' => [
+        'ttl' => (int) env('AI_CACHE_TTL', 0),
+    ],
+
+    /*
     | PROFIL AI — memilih SET model per-tugas yang aktif tanpa mengubah kode.
     | 'produksi'  = jalur primer (Claude/GPT, mutu tinggi, untuk go-live).
     | 'simulasi'  = jalur murah/gratis (Gemini/DeepSeek) untuk menguji alur &

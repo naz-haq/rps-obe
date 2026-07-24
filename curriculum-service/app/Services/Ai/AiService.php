@@ -65,26 +65,101 @@ class AiService
         ];
 
         $driver = $this->drivers->make($cred['driver']);
-        $result = $driver->run($cred['model_array'], $system, $prompt, $params);
 
-        // Fallback RUNTIME ke mock: bila provider NYATA gagal (mis. kuota gratis
-        // Gemini Flash-Lite habis -> 503/429 setelah retry) dan fallback_to_mock
-        // aktif, ulangi lewat MockDriver agar alur (CPMK/Sub-CPMK/matriks/RPS)
-        // tetap selesai tanpa biaya saat pengembangan. Beda dengan fallback
-        // kredensial di resolveCredentials() yang hanya menangani ketiadaan key.
-        if ($result->failed() && $cred['provider'] !== 'mock' && config('ai.fallback_to_mock')) {
-            $cred = $this->mockCredentials();
-            $driver = $this->drivers->make('mock');
+        // Prompt-result cache (opsional): kunci = hash(task+provider+model+system+
+        // prompt+params). Bila aktif (ai.cache.ttl>0) & bukan mock & tidak di-bypass
+        // (context['no_cache']), hasil identik dikembalikan tanpa memanggil provider
+        // lagi → mengurangi generate AI berulang & biaya. Beda MK/CPL/pola/model →
+        // beda kunci → tetap generate baru.
+        $ttl = (int) config('ai.cache.ttl', 0);
+        $cacheKey = ($ttl > 0 && empty($context['no_cache']) && $cred['provider'] !== 'mock')
+            ? $this->promptCacheKey($task, $cred, $system, $prompt, $params)
+            : null;
+
+        $cached = $cacheKey ? Cache::get($cacheKey) : null;
+        $fromCache = is_array($cached);
+
+        if ($fromCache) {
+            $result = $this->resultFromCache($cached);
+        } else {
             $result = $driver->run($cred['model_array'], $system, $prompt, $params);
+
+            // Fallback RUNTIME ke mock: bila provider NYATA gagal (mis. kuota gratis
+            // Gemini Flash-Lite habis -> 503/429 setelah retry) dan fallback_to_mock
+            // aktif, ulangi lewat MockDriver agar alur (CPMK/Sub-CPMK/matriks/RPS)
+            // tetap selesai tanpa biaya saat pengembangan. Beda dengan fallback
+            // kredensial di resolveCredentials() yang hanya menangani ketiadaan key.
+            if ($result->failed() && $cred['provider'] !== 'mock' && config('ai.fallback_to_mock')) {
+                $cred = $this->mockCredentials();
+                $driver = $this->drivers->make('mock');
+                $result = $driver->run($cred['model_array'], $system, $prompt, $params);
+            }
+
+            // Simpan ke cache HANYA hasil sukses dari provider nyata (bukan mock/gagal).
+            // Disimpan sebagai ARRAY (objek LlmResult jadi __PHP_Incomplete_Class saat
+            // unserialize dari file/db cache) lalu direkonstruksi saat baca.
+            if ($cacheKey && ! $result->failed() && $cred['provider'] !== 'mock') {
+                Cache::put($cacheKey, $this->resultToCache($result), now()->addSeconds($ttl));
+            }
         }
 
-        // Biaya dihitung dari harga efektif yang benar-benar dijalankan
-        // (0 bila fallback ke mock, harga model bila provider nyata).
-        $biaya = $this->cost->usd($cred['model_array']['pricing'], $result);
+        // Biaya dihitung dari harga efektif yang benar-benar dijalankan (0 bila
+        // fallback ke mock ATAU disajikan dari cache — tak ada panggilan nyata).
+        $biaya = $fromCache ? 0.0 : $this->cost->usd($cred['model_array']['pricing'], $result);
+
+        if ($fromCache) {
+            $context['mode'] = ($context['mode'] ?? $task) . ' (cache)';
+        }
 
         $interaksi = $this->log($task, $cred, $result, $biaya, $context);
 
         return new AiOutcome($result, $biaya, $interaksi);
+    }
+
+    /**
+     * Kunci cache prompt-result: menyertakan task, provider+model efektif, dan
+     * seluruh isi permintaan (system+prompt+params) sehingga perubahan konteks
+     * apa pun menghasilkan kunci berbeda (tak ada tabrakan lintas MK/model).
+     */
+    private function promptCacheKey(string $task, array $cred, string $system, string $prompt, array $params): string
+    {
+        return 'ai:gen:' . hash('sha256', implode('|', [
+            $task,
+            $cred['provider'] ?? '',
+            $cred['model_array']['model'] ?? '',
+            (string) ($params['temperature'] ?? ''),
+            (string) ($params['max_tokens'] ?? ''),
+            $system,
+            $prompt,
+        ]));
+    }
+
+    /** Representasi array LlmResult untuk cache (hindari incomplete object). */
+    private function resultToCache(LlmResult $r): array
+    {
+        return [
+            'text'          => $r->text,
+            'inputTokens'   => $r->inputTokens,
+            'outputTokens'  => $r->outputTokens,
+            'cacheRead'     => $r->cacheReadTokens,
+            'cacheWrite'    => $r->cacheWriteTokens,
+            'latencyMs'     => $r->latencyMs,
+            'modelVersion'  => $r->modelVersion,
+        ];
+    }
+
+    /** Rekonstruksi LlmResult dari array cache. */
+    private function resultFromCache(array $a): LlmResult
+    {
+        return new LlmResult(
+            text: (string) ($a['text'] ?? ''),
+            inputTokens: (int) ($a['inputTokens'] ?? 0),
+            outputTokens: (int) ($a['outputTokens'] ?? 0),
+            cacheReadTokens: (int) ($a['cacheRead'] ?? 0),
+            cacheWriteTokens: (int) ($a['cacheWrite'] ?? 0),
+            latencyMs: (int) ($a['latencyMs'] ?? 0),
+            modelVersion: $a['modelVersion'] ?? null,
+        );
     }
 
     /**
