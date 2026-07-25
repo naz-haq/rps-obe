@@ -36,7 +36,8 @@ return [
                 . '(4) tiap CPMK cantumkan taksonomi_kode (BOLEH lebih dari satu bila CPMK menggabung ranah, mis. ["C4","A3"]; kognitif C1-C6, psikomotorik P1-P7, afektif A1-A5); '
                 . '(5) PATUHI blok "JENJANG PROGRAM" pada konteks — level taksonomi CPMK TIDAK BOLEH di bawah lantai jenjang (Sarjana/Profesi menuntut level tinggi); '
                 . '(6) PATUHI blok "BATASAN SKOP" — jangan menyusun capaian di luar lingkup mata kuliah & bahan kajian yang diberikan; '
-                . '(7) cpl_kode WAJIB disalin PERSIS SAMA dengan kode pada daftar "CPL TERKAIT" di konteks (jangan mengubah format, tanda hubung, atau penomoran — contoh pada skema hanya ilustrasi). '
+                . '(7) cpl_kode WAJIB disalin PERSIS SAMA dengan kode pada daftar "CPL TERKAIT" di konteks (jangan mengubah format, tanda hubung, atau penomoran — contoh pada skema hanya ilustrasi); '
+                . '(8) SETIAP CPL pada daftar "CPL TERKAIT" WAJIB diturunkan menjadi minimal satu CPMK — jangan ada CPL tanpa CPMK (boleh 1 CPMK memetakan >1 CPL, dan jumlah CPMK boleh lebih dari 5 bila perlu agar semua CPL tercakup). '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
             'schema' => '{"cpmk":[{"kode":"CPMK1","deskripsi":"...","cpl_kode":["<kode persis dari CPL TERKAIT>"],"taksonomi_kode":["C4"]}]}',
         ],
@@ -50,6 +51,7 @@ return [
                 . 'secara logis, tanpa lonjakan kognitif yang tidak logis. Tulis sebagai kalimat kemampuan ber-KKO terukur '
                 . '(mis. "mahasiswa mampu membedakan..."), BUKAN judul topik. HINDARI kata abstrak (memahami/mengetahui/mengerti). '
                 . 'Sertakan indikator ketercapaian yang OBSERVABLE (dapat diamati/diukur) dan taksonomi_kode (boleh lebih dari satu bila menggabung ranah). '
+                . 'SETIAP CPMK pada konteks WAJIB diuraikan menjadi minimal satu Sub-CPMK (cpmk_kode merujuk kode CPMK) — jangan ada CPMK tanpa Sub-CPMK. '
                 . 'Level kognitif Sub-CPMK minimal menjangkau dan tidak melampaui target CPMK induk; scaffolding TIDAK boleh membuat mayoritas Sub-CPMK berhenti di C1-C2 — patuhi lantai level pada blok "JENJANG PROGRAM" konteks. '
                 . 'PATUHI blok "BATASAN SKOP": semua Sub-CPMK & indikator harus dalam lingkup mata kuliah dan bahan kajian yang diberikan. '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
@@ -85,6 +87,7 @@ return [
             'Anda perancang asesmen OBE. Susun komponen penilaian yang mengukur Sub-CPMK dengan KESELARASAN KONSTRUKTIF: '
                 . 'teknik asesmen harus sepadan dengan level taksonomi Sub-CPMK — mis. level C5/C6 (mencipta/mengevaluasi) dinilai '
                 . 'lewat proyek/unjuk kerja/rubrik analitik, BUKAN kuis pilihan ganda C1/C2. Total bobot harus TEPAT 100%. '
+                . 'SETIAP Sub-CPMK pada konteks WAJIB diukur oleh minimal satu komponen penilaian (sub_cpmk_kode merujuk kodenya) — jangan ada Sub-CPMK tanpa penilaian. '
                 . 'Untuk tiap komponen isi "instrumen" (bentuk instrumen singkat, mis. lembar tugas/soal esai/lembar observasi). '
                 . 'Untuk komponen berbasis unjuk kerja/proyek/laporan/OSCE, sertakan "rubrik" ANALITIK: daftar kriteria dengan bobot '
                 . '(jumlah bobot kriteria = 100) dan "deskriptor" berisi TEPAT sejumlah "jumlah_level_skala" tingkatan mutu (selaras "label_skala"). '

@@ -11,6 +11,7 @@ use App\Models\Indikator;
 use App\Models\KomponenPenilaian;
 use App\Models\MataKuliah;
 use App\Models\MkBahanKajian;
+use App\Models\MkCpl;
 use App\Models\ProfilLulusan;
 use App\Models\Referensi;
 use App\Models\RpsMinggu;
@@ -103,16 +104,14 @@ class RpsGeneratorService
                 $data = $this->normalisasiCplKode($mk, $data);
             }
 
-            // Jaring pengaman cakupan: rencana mingguan WAJIB memuat semua
-            // Sub-CPMK. Model tertentu (mis. gpt-4o) menafsirkan "N pekan"
-            // sebagai N baris sehingga Sub-CPMK tersisa terlewat — deteksi
-            // deterministik lalu ulangi dengan instruksi koreksi eksplisit.
-            if (($stageCfg['jenis_output'] ?? '') === 'mingguan' && $percobaan < $maks) {
-                $hilang = $this->subCpmkTakTercakup($session, $data);
-                if ($hilang !== []) {
-                    $koreksi[] = 'Rencana mingguan WAJIB mencakup SEMUA Sub-CPMK; keluaran sebelumnya melewatkan: '
-                        . implode(', ', $hilang)
-                        . '. Susun ulang — bila jumlah pekan terbatas, buat BEBERAPA BARIS dengan minggu_ke yang sama (satu baris per Sub-CPMK).';
+            // Jaring pengaman cakupan "tidak bertuan": tiap tahap punya rantai
+            // keterunutan wajib (CPL→CPMK→Sub-CPMK→mingguan/penilaian). Model
+            // tertentu (mis. gpt-4o) melewatkan entitas — deteksi deterministik
+            // lalu ulangi dengan instruksi koreksi eksplisit.
+            if ($percobaan < $maks) {
+                $bertuan = $this->entitasTakBertuan($stage, $session, $data, $mk);
+                if (($bertuan['hilang'] ?? []) !== []) {
+                    $koreksi[] = $bertuan['pesan'];
                     continue;
                 }
             }
@@ -643,6 +642,83 @@ class RpsGeneratorService
     }
 
     /**
+     * Deteksi entitas "tidak bertuan" per tahap sesuai rantai keterunutan OBE:
+     * CPL→CPMK (tiap CPL terpetakan MK punya ≥1 CPMK), CPMK→Sub-CPMK,
+     * Sub-CPMK→mingguan, dan Sub-CPMK→penilaian. Perbandingan kode memakai
+     * bentuk kanonik agar tahan beda format.
+     *
+     * @return array{hilang:list<string>,pesan:string}
+     */
+    private function entitasTakBertuan(string $stage, GenerateSession $session, array $data, MataKuliah $mk): array
+    {
+        $draf = $session->draf ?? [];
+
+        $sisa = function (array $harus, array $baris, string $field): array {
+            foreach ($baris as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $nilai = $item[$field] ?? null;
+                foreach (is_array($nilai) ? $nilai : [$nilai] as $k) {
+                    unset($harus[$this->kodeKanonik((string) $k)]);
+                }
+            }
+            return array_values($harus);
+        };
+
+        $kunci = function (array $items, string $field): array {
+            $out = [];
+            foreach ($items as $item) {
+                $kode = trim((string) ($item[$field] ?? ''));
+                if ($kode !== '') {
+                    $out[$this->kodeKanonik($kode)] = $kode;
+                }
+            }
+            return $out;
+        };
+
+        switch ($stage) {
+            case 'cpmk':
+                $harus = $kunci($this->cplContext($mk), 'kode');
+                if ($harus === []) {
+                    return ['hilang' => [], 'pesan' => ''];
+                }
+                $hilang = $sisa($harus, $data['cpmk'] ?? [], 'cpl_kode');
+                return ['hilang' => $hilang, 'pesan' => $hilang === [] ? '' :
+                    'Setiap CPL pada "CPL TERKAIT" WAJIB diturunkan menjadi minimal satu CPMK (cantumkan kodenya pada cpl_kode). '
+                    . 'CPL berikut belum punya CPMK: ' . implode(', ', $hilang) . '. Tambah/sesuaikan CPMK agar SEMUA CPL tercakup.'];
+
+            case 'sub_cpmk':
+                $harus = $kunci($draf['cpmk']['cpmk'] ?? [], 'kode');
+                if ($harus === []) {
+                    return ['hilang' => [], 'pesan' => ''];
+                }
+                $hilang = $sisa($harus, $data['sub_cpmk'] ?? [], 'cpmk_kode');
+                return ['hilang' => $hilang, 'pesan' => $hilang === [] ? '' :
+                    'Setiap CPMK WAJIB diuraikan menjadi minimal satu Sub-CPMK. '
+                    . 'CPMK berikut belum punya Sub-CPMK: ' . implode(', ', $hilang) . '.'];
+
+            case 'mingguan':
+                $hilang = $this->subCpmkTakTercakup($session, $data);
+                return ['hilang' => $hilang, 'pesan' => $hilang === [] ? '' :
+                    'Rencana mingguan WAJIB mencakup SEMUA Sub-CPMK; belum muncul: ' . implode(', ', $hilang)
+                    . '. Bila jumlah pekan terbatas, buat BEBERAPA BARIS dengan minggu_ke yang sama (satu baris per Sub-CPMK).'];
+
+            case 'penilaian':
+                $harus = $kunci($draf['sub_cpmk']['sub_cpmk'] ?? [], 'kode');
+                if ($harus === []) {
+                    return ['hilang' => [], 'pesan' => ''];
+                }
+                $hilang = $sisa($harus, $data['komponen'] ?? [], 'sub_cpmk_kode');
+                return ['hilang' => $hilang, 'pesan' => $hilang === [] ? '' :
+                    'Setiap Sub-CPMK WAJIB diukur oleh minimal satu komponen penilaian. '
+                    . 'Sub-CPMK berikut belum dinilai: ' . implode(', ', $hilang) . '.'];
+        }
+
+        return ['hilang' => [], 'pesan' => ''];
+    }
+
+    /**
      * Daftar kode Sub-CPMK (dari draf tahap sub_cpmk sesi) yang TIDAK muncul
      * pada draf rencana mingguan. Kosong = semua tercakup / tak bisa dicek.
      *
@@ -940,7 +1016,7 @@ class RpsGeneratorService
 
         $cpls = $this->cplContext($mk);
         if ($cpls !== []) {
-            $bagian[] = "\nCPL TERKAIT:";
+            $bagian[] = "\nCPL TERKAIT (CPL yang diampu MK ini — SEMUA wajib diturunkan menjadi CPMK):";
             $bagian[] = json_encode($cpls, JSON_UNESCAPED_UNICODE);
         }
 
@@ -1078,9 +1154,21 @@ class RpsGeneratorService
             return [];
         }
 
-        return Cpl::query()
-            ->where('kurikulum_id', $mk->kurikulum_id)
-            ->get(['kode', 'deskripsi', 'aspek', 'level_kkni'])
+        $query = Cpl::query()->where('kurikulum_id', $mk->kurikulum_id);
+
+        // Bila MK sudah dipetakan ke CPL tertentu (matriks CPL×MK / mk_cpl),
+        // batasi ke subset itu — satu CPL disebar ke banyak MK, jadi hanya CPL
+        // yang diampu MK ini yang wajib diturunkan jadi CPMK. Fallback: seluruh
+        // CPL kurikulum bila pemetaan belum diisi.
+        $cplIds = MkCpl::query()
+            ->where('institusi_id', $mk->institusi_id)
+            ->where('kode_mk', $mk->kode_mk)
+            ->pluck('cpl_id');
+        if ($cplIds->isNotEmpty()) {
+            $query->whereIn('id', $cplIds);
+        }
+
+        return $query->get(['kode', 'deskripsi', 'aspek', 'level_kkni'])
             ->map(fn($c) => array_filter([
                 'kode'       => $c->kode,
                 'deskripsi'  => $c->deskripsi,
