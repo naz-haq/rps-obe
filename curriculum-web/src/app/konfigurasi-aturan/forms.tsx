@@ -40,6 +40,35 @@ function NumberInput({
   );
 }
 
+function SelectInput({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-ink">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-ring"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function SaveBar({
   jenis,
   nilai,
@@ -200,6 +229,12 @@ const DEFAULT_BOBOT_PRAKTIKUM: BobotKomponen[] = [
   { nama: "Ujian Akhir Praktikum", bobot: 40 },
 ];
 
+const MODE_OPTS = [
+  { value: "sebar", label: "Sebar (rata sepanjang semester)" },
+  { value: "padat", label: "Padat (dipadatkan ke jumlah pekan)" },
+  { value: "lapangan", label: "Lapangan (jam kerja wahana)" },
+];
+
 export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
   // Jumlah minggu
   const jm = pick(list, "jumlah_minggu") as NilaiMap;
@@ -213,6 +248,26 @@ export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
   const [teoriStruktur, setTeoriStruktur] = useState<number | "">(ks.teori_terstruktur ?? 60);
   const [teoriMandiri, setTeoriMandiri] = useState<number | "">(ks.teori_mandiri ?? 60);
   const [praktik, setPraktik] = useState<number | "">(ks.praktik ?? 170);
+
+  // Beban SKS per semester (invarian Permendikbudristek 53/2023)
+  const bs = pick(list, "beban_sks_semester") as NilaiMap;
+  const [jamPerSks, setJamPerSks] = useState<number | "">(bs.jam_per_sks ?? 45);
+
+  // Durasi sesi/pertemuan
+  const ds = pick(list, "durasi_sesi") as NilaiMap;
+  const [menitPerSesi, setMenitPerSesi] = useState<number | "">(ds.menit_per_sesi ?? 50);
+
+  // Mode distribusi beban per pola MK
+  const md = pick(list, "mode_distribusi_waktu") as Record<string, string>;
+  const [modeReguler, setModeReguler] = useState<string>(md.reguler ?? "sebar");
+  const [modeBlok, setModeBlok] = useState<string>(md.blok ?? "padat");
+  const [modeProfesi, setModeProfesi] = useState<string>(md.profesi ?? "lapangan");
+
+  // Konversi minggu + jadwal wahana profesi/PKPA
+  const kp = pick(list, "konversi_minggu_profesi") as NilaiMap;
+  const [mingguPerSks, setMingguPerSks] = useState<number | "">(kp.minggu_per_sks ?? 1);
+  const [jamPerHari, setJamPerHari] = useState<number | "">(kp.jam_per_hari ?? 8);
+  const [hariPerMinggu, setHariPerMinggu] = useState<number | "">(kp.hari_per_minggu ?? 5);
 
   const num = (v: number | "") => (v === "" ? 0 : v);
   const teoriTotal = num(teoriTatap) + num(teoriStruktur) + num(teoriMandiri);
@@ -283,6 +338,76 @@ export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
             />
           </CardBody>
         </Card>
+      </div>
+
+      {/* Durasi & pola pelaksanaan */}
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          Durasi & Pola Pelaksanaan
+        </p>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {/* Beban & durasi sesi */}
+          <Card className="animate-fade-up">
+            <div className="border-b border-border px-5 py-3.5">
+              <h2 className="text-sm font-semibold text-ink">Beban SKS & Durasi Sesi</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Invarian beban (Permendikbudristek 53/2023) & durasi 1 pertemuan.
+              </p>
+            </div>
+            <CardBody className="space-y-4">
+              <div className="space-y-3">
+                <NumberInput label="Beban 1 SKS per semester" value={jamPerSks} onChange={setJamPerSks} suffix="jam" />
+                <SaveBar jenis="beban_sks_semester" nilai={{ jam_per_sks: num(jamPerSks) }} />
+              </div>
+              <div className="space-y-3 border-t border-border pt-3">
+                <NumberInput label="Durasi satu sesi/pertemuan" value={menitPerSesi} onChange={setMenitPerSesi} suffix="menit" />
+                <p className="text-[11px] text-muted">
+                  Dipakai menghitung jumlah pertemuan/pekan = (tatap muka + praktik) ÷ durasi sesi.
+                </p>
+                <SaveBar jenis="durasi_sesi" nilai={{ menit_per_sesi: num(menitPerSesi) }} />
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Mode distribusi + profesi/PKPA */}
+          <Card className="animate-fade-up">
+            <div className="border-b border-border px-5 py-3.5">
+              <h2 className="text-sm font-semibold text-ink">Mode Distribusi & Profesi/PKPA</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Cara beban SKS didistribusikan per pola MK & jadwal wahana profesi.
+              </p>
+            </div>
+            <CardBody className="space-y-4">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <SelectInput label="Reguler" value={modeReguler} onChange={setModeReguler} options={MODE_OPTS} />
+                  <SelectInput label="Blok" value={modeBlok} onChange={setModeBlok} options={MODE_OPTS} />
+                  <SelectInput label="Profesi" value={modeProfesi} onChange={setModeProfesi} options={MODE_OPTS} />
+                </div>
+                <SaveBar
+                  jenis="mode_distribusi_waktu"
+                  nilai={{ reguler: modeReguler, blok: modeBlok, profesi: modeProfesi }}
+                />
+              </div>
+              <div className="space-y-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-ink">Profesi / PKPA (mode lapangan)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <NumberInput label="Pekan / SKS" value={mingguPerSks} onChange={setMingguPerSks} suffix="mg" />
+                  <NumberInput label="Jam / hari" value={jamPerHari} onChange={setJamPerHari} suffix="jam" />
+                  <NumberInput label="Hari / minggu" value={hariPerMinggu} onChange={setHariPerMinggu} suffix="hari" />
+                </div>
+                <SaveBar
+                  jenis="konversi_minggu_profesi"
+                  nilai={{
+                    minggu_per_sks: num(mingguPerSks),
+                    jam_per_hari: num(jamPerHari),
+                    hari_per_minggu: num(hariPerMinggu),
+                  }}
+                />
+              </div>
+            </CardBody>
+          </Card>
+        </div>
       </div>
 
       {/* Bobot penilaian terpisah: MK Kuliah vs MK Praktikum */}

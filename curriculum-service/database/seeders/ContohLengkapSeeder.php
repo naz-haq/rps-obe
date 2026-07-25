@@ -184,7 +184,7 @@ class ContohLengkapSeeder extends Seeder
             'jenis' => 'pemerintah',
             'disiplin' => null,
         ]);
-        BadanRujukan::create([
+        $aptfi = BadanRujukan::create([
             'institusi_id' => null,
             'nama' => 'APTFI',
             'jenis' => 'asosiasi',
@@ -246,11 +246,18 @@ class ContohLengkapSeeder extends Seeder
                 'teori_mandiri' => 60,
                 'praktik' => 170,
             ],
+            // Invarian beban (Permendikbudristek 53/2023) + mode distribusi + durasi sesi.
+            'beban_sks_semester' => ['jam_per_sks' => 45],
+            'mode_distribusi_waktu' => ['reguler' => 'sebar', 'blok' => 'padat', 'profesi' => 'lapangan'],
+            'durasi_sesi' => ['menit_per_sesi' => 50],
+            // Profesi/PKPA: durasi & jadwal wahana (rujukan APTFI).
+            'konversi_minggu_profesi' => ['minggu_per_sks' => 1, 'jam_per_hari' => 8, 'hari_per_minggu' => 5],
         ];
+        $badanPerJenis = ['konversi_minggu_profesi' => $aptfi->id];
         foreach ($konfigurasi as $jenis => $nilai) {
             KonfigurasiAturan::create([
                 'institusi_id' => $this->institusiId,
-                'badan_rujukan_id' => $kpt->id,
+                'badan_rujukan_id' => $badanPerJenis[$jenis] ?? $kpt->id,
                 'jenis_aturan' => $jenis,
                 'nilai' => $nilai,
                 'referensi_dokumen_id' => $dokumen->id,

@@ -251,6 +251,10 @@ class RpsPrintContext
         if ($total > 0) {
             $teks .= ($teks !== '' ? ' · ' : '') . "Total {$total} menit/minggu";
         }
+        $pertemuan = (int) ($waktu['jumlah_pertemuan'] ?? 0);
+        if ($pertemuan > 0) {
+            $teks .= ($teks !== '' ? ' · ' : '') . "{$pertemuan} pertemuan/minggu";
+        }
         if ($teks === '') {
             // Fallback: bersihkan prime `′` dari teks lama.
             $teks = trim((string) ($waktu['teks'] ?? ''));

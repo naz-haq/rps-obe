@@ -9,7 +9,6 @@ use App\Models\DokumenChunk;
 use App\Models\GenerateSession;
 use App\Models\Indikator;
 use App\Models\KomponenPenilaian;
-use App\Models\KonfigurasiAturan;
 use App\Models\MataKuliah;
 use App\Models\MkBahanKajian;
 use App\Models\ProfilLulusan;
@@ -742,63 +741,17 @@ class RpsGeneratorService
     }
 
     /**
-     * Jumlah pekan efektif MK: nilai eksplisit per-MK menimpa; jika kosong pakai
-     * default global `konfigurasi_aturan.jumlah_minggu.minggu_efektif` (fallback 16).
-     * Khusus pola 'profesi' tanpa nilai eksplisit: dihitung dari SKS via aturan
-     * `konfigurasi_aturan.konversi_minggu_profesi.minggu_per_sks` (default 1).
-     * Fakta kaku → sumber utamanya isian manusia (Kaprodi), bukan tebakan AI.
-     */
-    private function jumlahMingguUntuk(MataKuliah $mk): int
-    {
-        if (! empty($mk->jumlah_minggu) && (int) $mk->jumlah_minggu > 0) {
-            return (int) $mk->jumlah_minggu;
-        }
-
-        // Profesi/klinik: durasi diturunkan dari beban SKS (bila belum diisi manual).
-        if (($mk->pola ?: 'reguler') === 'profesi') {
-            $dari = $this->mingguProfesiDariSks($mk);
-            if ($dari > 0) {
-                return $dari;
-            }
-        }
-
-        $nilai = KonfigurasiAturan::query()
-            ->where('jenis_aturan', 'jumlah_minggu')
-            ->where(fn($q) => $q->where('institusi_id', $mk->institusi_id)->orWhereNull('institusi_id'))
-            ->orderByRaw('institusi_id IS NULL')
-            ->value('nilai');
-
-        $efektif = is_array($nilai) ? ($nilai['minggu_efektif'] ?? null) : null;
-
-        return is_numeric($efektif) && (int) $efektif > 0 ? (int) $efektif : 16;
-    }
-
-    /**
-     * Pekan MK profesi diturunkan dari total SKS × faktor (minggu_per_sks).
-     * Faktor dari `konfigurasi_aturan.konversi_minggu_profesi` (default 1).
-     */
-    private function mingguProfesiDariSks(MataKuliah $mk): int
-    {
-        $nilai = KonfigurasiAturan::query()
-            ->where('jenis_aturan', 'konversi_minggu_profesi')
-            ->where(fn($q) => $q->where('institusi_id', $mk->institusi_id)->orWhereNull('institusi_id'))
-            ->orderByRaw('institusi_id IS NULL')
-            ->value('nilai');
-
-        $faktor = is_array($nilai) ? ($nilai['minggu_per_sks'] ?? null) : null;
-        $faktor = is_numeric($faktor) && (float) $faktor > 0 ? (float) $faktor : 1.0;
-
-        return (int) ceil(((int) $mk->sks_teori + (int) $mk->sks_praktik) * $faktor);
-    }
-
-    /**
      * Direktif otoritatif jumlah pekan + pola evaluasi untuk tahap 'mingguan',
-     * disesuaikan pola pelaksanaan MK (reguler/blok/profesi).
+     * disesuaikan pola pelaksanaan MK (reguler/blok/profesi). Jumlah pekan & estimasi
+     * beban di-resolve oleh EstimasiWaktuService (sumber tunggal aturan SKS/waktu).
      */
     private function rencanaMingguanDirective(MataKuliah $mk): string
     {
-        $n = $this->jumlahMingguUntuk($mk);
+        $n    = $this->estimasi->jumlahMingguUntuk($mk);
         $pola = $mk->pola ?: 'reguler';
+        $est  = $this->estimasi->untukMataKuliah($mk, $n);
+        $jam  = round(((int) ($est['total_menit'] ?? 0)) / 60, 1);
+        $sesi = (int) ($est['jumlah_pertemuan'] ?? 0);
 
         $evaluasi = match ($pola) {
             'blok'    => "Ini mata kuliah BLOK berdurasi {$n} pekan. Letakkan evaluasi/ujian AKHIR BLOK pada pekan terakhir; JANGAN memaksakan UTS di tengah semester.",
@@ -806,9 +759,14 @@ class RpsGeneratorService
             default   => "Sertakan UTS pada sekitar pekan tengah dan UAS pada pekan terakhir.",
         };
 
+        $beban = $sesi > 0
+            ? "- Perkiraan beban per pekan: ~{$jam} jam ({$est['total_menit']} menit), sekitar {$sesi} pertemuan/pekan.\n"
+            : '';
+
         return "PARAMETER RENCANA MINGGUAN (WAJIB DIPATUHI):\n"
             . "- Susun TEPAT {$n} pekan (minggu_ke berurutan 1..{$n}); JANGAN kurang atau lebih dari {$n}.\n"
             . "- Pola pelaksanaan: {$pola}.\n"
+            . $beban
             . "- {$evaluasi}";
     }
 
