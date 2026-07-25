@@ -35,9 +35,10 @@ return [
                 . '(3) integrasikan ketiga ranah (sikap, pengetahuan, keterampilan) secara proporsional sesuai CPL; '
                 . '(4) tiap CPMK cantumkan taksonomi_kode (BOLEH lebih dari satu bila CPMK menggabung ranah, mis. ["C4","A3"]; kognitif C1-C6, psikomotorik P1-P7, afektif A1-A5); '
                 . '(5) PATUHI blok "JENJANG PROGRAM" pada konteks — level taksonomi CPMK TIDAK BOLEH di bawah lantai jenjang (Sarjana/Profesi menuntut level tinggi); '
-                . '(6) PATUHI blok "BATASAN SKOP" — jangan menyusun capaian di luar lingkup mata kuliah & bahan kajian yang diberikan. '
+                . '(6) PATUHI blok "BATASAN SKOP" — jangan menyusun capaian di luar lingkup mata kuliah & bahan kajian yang diberikan; '
+                . '(7) cpl_kode WAJIB disalin PERSIS SAMA dengan kode pada daftar "CPL TERKAIT" di konteks (jangan mengubah format, tanda hubung, atau penomoran — contoh pada skema hanya ilustrasi). '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
-            'schema' => '{"cpmk":[{"kode":"CPMK1","deskripsi":"...","cpl_kode":["CPL01"],"taksonomi_kode":["C4"]}]}',
+            'schema' => '{"cpmk":[{"kode":"CPMK1","deskripsi":"...","cpl_kode":["<kode persis dari CPL TERKAIT>"],"taksonomi_kode":["C4"]}]}',
         ],
 
         'sub_cpmk' => [

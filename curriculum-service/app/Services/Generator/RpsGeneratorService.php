@@ -97,6 +97,12 @@ class RpsGeneratorService
             $outcome = $this->runGenerate($session, $stage, $stageCfg, $mk, $koreksi, $reGenerate);
             $data = $this->parseJson($outcome->text(), $stage);
 
+            // Normalisasi kode CPL keluaran AI ke kode kanonik kurikulum
+            // (model kerap meniru format contoh skema, mis. "CPL01" vs "CPL-01").
+            if (($stageCfg['jenis_output'] ?? '') === 'cpmk') {
+                $data = $this->normalisasiCplKode($mk, $data);
+            }
+
             $validasi = $this->validateStage($session, $stage, $data, $outcome);
 
             // Selesai bila validasi dilewati/bersih, atau jatah revisi habis.
@@ -566,7 +572,60 @@ class RpsGeneratorService
             return null;
         }
 
-        return Cpl::where('kurikulum_id', $mk->kurikulum_id)->where('kode', $kode)->first();
+        $cpl = Cpl::where('kurikulum_id', $mk->kurikulum_id)->where('kode', $kode)->first();
+        if ($cpl) {
+            return $cpl;
+        }
+
+        // Fallback toleran format: cocokkan bentuk kanonik (abaikan kapital,
+        // tanda hubung/spasi) agar "CPL01" tetap ketemu "CPL-01" saat commit.
+        $target = $this->kodeKanonik($kode);
+        if ($target === '') {
+            return null;
+        }
+
+        return Cpl::where('kurikulum_id', $mk->kurikulum_id)->get()
+            ->first(fn($c) => $this->kodeKanonik((string) $c->kode) === $target);
+    }
+
+    /** Bentuk kanonik kode utk pencocokan longgar: uppercase, hanya alfanumerik. */
+    private function kodeKanonik(string $kode): string
+    {
+        return strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $kode));
+    }
+
+    /**
+     * Ganti cpl_kode pada draf CPMK dengan kode kanonik kurikulum bila cocok
+     * secara bentuk kanonik (unik). Kode yang tak dikenal dibiarkan apa adanya
+     * agar tetap tertangkap peringatan di editor.
+     */
+    private function normalisasiCplKode(MataKuliah $mk, array $data): array
+    {
+        if (! $mk->kurikulum_id || empty($data['cpmk']) || ! is_array($data['cpmk'])) {
+            return $data;
+        }
+
+        $peta = [];   // kanonik => kode asli DB
+        foreach (Cpl::where('kurikulum_id', $mk->kurikulum_id)->pluck('kode') as $kode) {
+            $k = $this->kodeKanonik((string) $kode);
+            // Tabrakan kanonik (ambigu) → jangan dipetakan.
+            $peta[$k] = array_key_exists($k, $peta) ? null : (string) $kode;
+        }
+
+        foreach ($data['cpmk'] as $i => $item) {
+            if (empty($item['cpl_kode']) || ! is_array($item['cpl_kode'])) {
+                continue;
+            }
+            $data['cpmk'][$i]['cpl_kode'] = array_values(array_unique(array_map(
+                function ($kode) use ($peta) {
+                    $canon = $this->kodeKanonik((string) $kode);
+                    return $peta[$canon] ?? (string) $kode;
+                },
+                $item['cpl_kode']
+            )));
+        }
+
+        return $data;
     }
 
     private function findTaksonomiId(int $institusiId, ?string $kode): ?int
