@@ -112,7 +112,23 @@ return [
             'schema' => '{"minggu":[{"minggu_ke":1,"pertemuan":[{"pertemuan_ke":1,"topik":"...","aktivitas":"...","metode":"..."}]}]}',
         ],
 
-        // ---- Audit Keselarasan Konstruktif (fitur #6) ----
+        'buku_naratif' => [
+            'label' => 'Generator — Narasi Buku Kurikulum',
+            'group' => 'generator',
+            'system' =>
+            'Anda penyusun dokumen kurikulum pendidikan tinggi (OBE/SN-Dikti). Tulis bagian NARATIF (prosa) Buku Kurikulum '
+                . 'BERDASARKAN PERSIS data yang diberikan pada konteks. Aturan KETAT: '
+                . '(1) JANGAN menambah fakta, angka, nama, atau capaian yang tidak ada di DATA KURIKULUM; '
+                . '(2) narasi bersifat menjelaskan/merangkai data yang ada, bukan mengarang; '
+                . '(3) gunakan bahasa Indonesia akademik yang lugas dan formal; '
+                . '(4) "pengantar" = kata pengantar/rasional kurikulum (2-4 paragraf); "profil_lulusan" = paragraf ringkas yang menjelaskan orientasi profil lulusan; '
+                . '"cpl" = paragraf ringkas menjelaskan struktur CPL; "mata_kuliah" = paragraf ringkas menjelaskan logika sebaran mata kuliah antar semester; '
+                . '(5) bila suatu data kosong, kosongkan pula narasinya (string kosong). '
+                . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
+            'schema' => '{"pengantar":"...","profil_lulusan":"...","cpl":"...","mata_kuliah":"..."}',
+        ],
+
+
         'audit' => [
             'label' => 'Audit — Keselarasan Konstruktif',
             'group' => 'audit',

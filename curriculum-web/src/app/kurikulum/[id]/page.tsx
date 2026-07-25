@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   apiGet,
+  BACKEND_PROXY,
   type Single,
   type Kurikulum,
   type Matriks,
@@ -9,6 +10,7 @@ import {
   type MatriksProfilLulusan,
   type MatriksBahanKajian,
   type MatriksMkBahanKajian,
+  type BukuKelengkapan,
 } from "@/lib/api";
 import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { KurikulumTabs } from "./tabs";
@@ -41,6 +43,10 @@ export default async function KurikulumDetailPage({ params }: { params: Promise<
   const bkMatriks = bkRes?.data ?? null;
   const mkBkMatriks = mkBkRes?.data ?? null;
 
+  const buku = await apiGet<Single<BukuKelengkapan>>(`/kurikulum/${id}/buku/kelengkapan`)
+    .then((r) => r.data)
+    .catch(() => null);
+
   return (
     <div>
       <PageHeader
@@ -70,6 +76,62 @@ export default async function KurikulumDetailPage({ params }: { params: Promise<
           hint={trace && trace.cpl_yatim.length > 0 ? "Perlu ditautkan ke MK" : "Semua CPL terpetakan"}
         />
       </div>
+
+      {/* Buku Kurikulum — ekspor dokumen kurikulum prodi (.docx) */}
+      <Card className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Buku Kurikulum</h2>
+            <p className="mt-0.5 text-xs text-muted">
+              Dokumen kurikulum prodi (identitas, profil lulusan, CPL, matriks, sebaran MK, ringkasan RPS) — ekspor .docx untuk dilengkapi prodi.
+            </p>
+          </div>
+          {buku?.lengkap ? (
+            <div className="flex items-center gap-2">
+              <a
+                href={`${BACKEND_PROXY}/kurikulum/${id}/buku/docx`}
+                className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                Unduh DOCX
+              </a>
+              <a
+                href={`${BACKEND_PROXY}/kurikulum/${id}/buku/docx?naratif=1`}
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-gray-50"
+              >
+                Unduh DOCX + Narasi AI
+              </a>
+            </div>
+          ) : (
+            <Badge tone="warn">Belum siap</Badge>
+          )}
+        </div>
+        <CardBody>
+          {buku ? (
+            buku.lengkap ? (
+              <p className="text-sm text-muted">
+                Semua {buku.total_mk} mata kuliah sudah memiliki RPS. Buku Kurikulum siap diunduh.
+              </p>
+            ) : (
+              <div className="text-sm">
+                <p className="text-ink">
+                  {buku.mk_ada_rps} dari {buku.total_mk} mata kuliah sudah memiliki RPS. Lengkapi RPS mata kuliah berikut
+                  sebelum membuat Buku Kurikulum:
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {buku.mk_belum_rps.map((m) => (
+                    <li key={m.kode_mk} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                      {m.kode_mk} — {m.nama}
+                      {m.semester ? ` (Sem ${m.semester})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-muted">Status kelengkapan belum tersedia.</p>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Matriks Profil Lulusan × CPL (interaktif) */}
       <Card className="mt-6">

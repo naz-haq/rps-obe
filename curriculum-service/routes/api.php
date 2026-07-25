@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\GovernanceController;
 use App\Http\Controllers\Api\InstitusiController;
 use App\Http\Controllers\Api\KerangkaAcuanController;
 use App\Http\Controllers\Api\KonfigurasiAturanController;
+use App\Http\Controllers\Api\KurikulumBukuController;
 use App\Http\Controllers\Api\KurikulumController;
 use App\Http\Controllers\Api\MataKuliahController;
 use App\Http\Controllers\Api\OnboardingController;
@@ -154,6 +155,11 @@ Route::post('kurikulum/{kurikulum}/matriks-profil-lulusan/link', [PetaKurikulumC
 Route::delete('kurikulum/{kurikulum}/matriks-profil-lulusan/link', [PetaKurikulumController::class, 'unlinkProfilLulusan']);
 Route::post('kurikulum/{kurikulum}/matriks-profil-lulusan/suggest', [PetaKurikulumController::class, 'suggestProfilLulusan']);
 Route::get('kurikulum/{kurikulum}/traceability', [PetaKurikulumController::class, 'traceability']);
+
+// Modul — Buku Kurikulum (dokumen kurikulum prodi, ekspor .docx)
+Route::get('kurikulum/{kurikulum}/buku/kelengkapan', [KurikulumBukuController::class, 'kelengkapan']);
+Route::get('kurikulum/{kurikulum}/buku/pratinjau', [KurikulumBukuController::class, 'pratinjau']);
+Route::get('kurikulum/{kurikulum}/buku/docx', [KurikulumBukuController::class, 'unduhDocx']);
 
 // Modul 2 — RPS Generator (bertahap + grounding)
 Route::apiResource('generate-sessions', GenerateSessionController::class)

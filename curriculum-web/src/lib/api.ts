@@ -41,6 +41,13 @@ export type Kurikulum = {
   created_at?: string;
 };
 
+export type BukuKelengkapan = {
+  total_mk: number;
+  mk_ada_rps: number;
+  mk_belum_rps: { kode_mk: string; nama: string; semester: number | null }[];
+  lengkap: boolean;
+};
+
 export type Cpl = {
   id: number;
   institusi_id: number;
