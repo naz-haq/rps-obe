@@ -31,6 +31,16 @@ return [
         'enabled' => env('GENERATOR_GROUNDING', true),
     ],
 
+    // RAG saat GENERATE: kutipan dari dokumen rujukan ber-flag 'sumber_konten'
+    // (dokumen KEILMUAN, bukan rujukan format) disuntik ke prompt sebagai
+    // pendukung — instrumen utama (CPL/PL/BK/MK) tetap otoritatif. Tanpa
+    // dokumen ber-flag, tidak ada kutipan (opt-in per dokumen via toggle UI).
+    'rag' => [
+        'enabled'   => env('GENERATOR_RAG', true),
+        'top_k'     => (int) env('GENERATOR_RAG_TOP_K', 4),
+        'min_score' => (float) env('GENERATOR_RAG_MIN_SCORE', 0.5),
+    ],
+
     // Struktur pipeline. Teks prompt (system) & skema JSON per tahap ada di
     // config/prompts.php slot yang sama dengan 'jenis_output'.
     'stages' => [

@@ -7,6 +7,7 @@ import {
   CreateBadanButton,
   DeleteBadanButton,
   AutoRefreshWhilePending,
+  SumberKontenToggle,
 } from "./forms";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; jenis?: string }>;
@@ -61,7 +62,7 @@ export default async function DokumenRujukanPage({ searchParams }: { searchParam
       {adaMenunggu && <AutoRefreshWhilePending />}
       <PageHeader
         title="Dokumen Rujukan"
-        subtitle="Unggah pedoman KPT, rujukan asosiasi, kriteria akreditasi, atau template RPS. Dokumen diindeks (RAG) untuk grounding & anti-halusinasi AI."
+        subtitle="Unggah pedoman KPT, rujukan asosiasi, kriteria akreditasi, atau template RPS. Nyalakan 'Sumber Keilmuan' hanya pada dokumen yang bicara substansi bidang ilmu — dokumen itulah yang dipakai AI saat generate & grounding; sisanya diperlakukan sebagai rujukan format."
         actions={
           <div className="flex items-center gap-2">
             <CreateBadanButton />
@@ -83,6 +84,7 @@ export default async function DokumenRujukanPage({ searchParams }: { searchParam
                 <SortableTh label="Jenis" column="jenis" sort={sort} dir={dir} basePath={basePath} params={params} />
                 <Th>Badan</Th>
                 <SortableTh label="Status" column="status_indexing" sort={sort} dir={dir} basePath={basePath} params={params} />
+                <SortableTh label="Sumber Keilmuan" column="sumber_konten" sort={sort} dir={dir} basePath={basePath} params={params} />
                 <SortableTh label="Potongan" column="chunk_count" sort={sort} dir={dir} basePath={basePath} params={params} className="text-right" />
                 <Th className="text-right">Aksi</Th>
               </tr>
@@ -97,6 +99,12 @@ export default async function DokumenRujukanPage({ searchParams }: { searchParam
                   <Td><Badge tone="neutral">{JENIS_LABEL[d.jenis] ?? d.jenis}</Badge></Td>
                   <Td className="text-muted">{d.badan_rujukan ?? "—"}</Td>
                   <Td><Badge tone={STATUS_TONE[d.status_indexing] ?? "neutral"}>{STATUS_LABEL[d.status_indexing] ?? d.status_indexing}</Badge></Td>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      <SumberKontenToggle id={d.id} aktif={d.sumber_konten} />
+                      <span className="text-xs text-muted">{d.sumber_konten ? "Keilmuan" : "Format"}</span>
+                    </div>
+                  </Td>
                   <Td className="text-right tabular-nums">{d.chunk_count ?? 0}</Td>
                   <Td>
                     <div className="flex justify-end gap-1">

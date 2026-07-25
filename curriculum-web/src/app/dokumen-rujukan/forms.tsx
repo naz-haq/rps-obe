@@ -6,7 +6,7 @@ import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass, Spinner } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import type { BadanRujukan, ApiResult } from "@/lib/api";
-import { uploadDokumen, reindexDokumen, deleteDokumen, createBadan, deleteBadan } from "./actions";
+import { uploadDokumen, reindexDokumen, deleteDokumen, createBadan, deleteBadan, toggleSumberKonten } from "./actions";
 
 const JENIS_DOK_OPTS = [
   { value: "kpt", label: "Pedoman KPT" },
@@ -86,6 +86,13 @@ function UploadForm({ badanList, close }: { badanList: BadanRujukan[]; close: ()
         />
         <span className="mt-1 block text-xs text-muted">PDF, DOCX, TXT, MD, atau CSV (maks 50MB). Dokumen akan diindeks otomatis untuk grounding AI.</span>
       </label>
+      <label className="flex items-start gap-2">
+        <input type="checkbox" name="sumber_konten" value="1" className="mt-0.5 accent-emerald-600" />
+        <span className="text-xs text-ink">
+          Jadikan <b>sumber keilmuan AI</b>
+          <span className="block text-muted">Nyalakan hanya bila dokumen bicara substansi bidang ilmu (standar kompetensi, naskah akademik). Biarkan mati untuk rujukan format/template.</span>
+        </span>
+      </label>
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={close} disabled={pending} className={buttonClass("secondary")}>Batal</button>
@@ -121,6 +128,48 @@ export function ReindexButton({ id }: { id: number }) {
       <button type="submit" disabled={pending} className={buttonClass("ghost", "sm")}>
         {pending && <Spinner />}
         {pending ? "Memproses\u2026" : "Indeks ulang"}
+      </button>
+    </form>
+  );
+}
+
+// Toggle peran AI: ON = dokumen KEILMUAN (dipakai membentuk hasil generate &
+// bukti grounding); OFF = rujukan format saja (diabaikan sebagai sumber substansi).
+export function SumberKontenToggle({ id, aktif }: { id: number; aktif: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [pending, setPending] = useState(false);
+  return (
+    <form
+      action={async (fd) => {
+        setPending(true);
+        const r = await toggleSumberKonten(fd);
+        setPending(false);
+        if (r.ok) {
+          toast({
+            type: "success",
+            message: aktif
+              ? "Dokumen kini hanya rujukan format — tidak dipakai AI sebagai sumber keilmuan."
+              : "Dokumen ditandai sumber keilmuan — dipakai AI saat generate & grounding.",
+          });
+          router.refresh();
+        } else {
+          toast({ type: "error", message: r.message ?? "Gagal mengubah peran dokumen." });
+        }
+      }}
+      className="inline"
+    >
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="next" value={aktif ? "0" : "1"} />
+      <button
+        type="submit"
+        disabled={pending}
+        role="switch"
+        aria-checked={aktif}
+        title={aktif ? "Sumber keilmuan AI — klik untuk jadikan rujukan format saja" : "Rujukan format saja — klik untuk jadikan sumber keilmuan AI"}
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${aktif ? "bg-emerald-500" : "bg-gray-300"}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${aktif ? "translate-x-[18px]" : "translate-x-0.5"}`} />
       </button>
     </form>
   );

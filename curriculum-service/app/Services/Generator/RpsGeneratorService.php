@@ -21,6 +21,7 @@ use App\Models\SubCpmk;
 use App\Models\Taksonomi;
 use App\Services\Ai\AiOutcome;
 use App\Services\Ai\AiService;
+use App\Services\Ai\EmbeddingService;
 use App\Services\Ai\GroundingValidator;
 use App\Services\Ai\PromptRepository;
 use App\Services\Generator\Exceptions\GeneratorException;
@@ -44,6 +45,7 @@ class RpsGeneratorService
         private GroundingValidator $grounding,
         private PromptRepository $prompts,
         private EstimasiWaktuService $estimasi,
+        private EmbeddingService $embeddings,
     ) {}
 
     /**
@@ -179,10 +181,10 @@ class RpsGeneratorService
         }
 
         $adaBukti = DokumenChunk::whereNotNull('embedding')
-            ->whereHas('dokumen', fn($q) => $q->where('institusi_id', $session->institusi_id))
+            ->whereHas('dokumen', fn($q) => $q->where('institusi_id', $session->institusi_id)->where('sumber_konten', true))
             ->exists();
         if (! $adaBukti) {
-            return ['bersih' => true, 'konteks' => [], 'lolos' => true, 'ditolak' => [], 'hasil' => [], 'jumlah_klaim' => 0, 'dilewati' => 'tak ada dokumen rujukan'];
+            return ['bersih' => true, 'konteks' => [], 'lolos' => true, 'ditolak' => [], 'hasil' => [], 'jumlah_klaim' => 0, 'dilewati' => 'tak ada dokumen rujukan keilmuan (sumber_konten)'];
         }
 
         $klaim = $this->klaimDariDraf($stage, $data);
@@ -689,6 +691,16 @@ class RpsGeneratorService
             'deskripsi' => $mk->deskripsi_singkat,
         ], JSON_UNESCAPED_UNICODE);
 
+        // Jenjang program (dari level KKNI CPL) → lantai taksonomi agar CPMK/Sub-CPMK
+        // tidak berada di bawah level yang layak (mis. profesi minimal C4 dominan).
+        $jenjang = $this->jenjangDirective($mk);
+        if ($jenjang !== '') {
+            $bagian[] = "\n" . $jenjang;
+        }
+
+        // Pagar skop: cegah AI menambah topik/kompetensi di luar MK & bahan kajian.
+        $bagian[] = "\n" . $this->skopDirective();
+
         // Tahap 'mingguan': durasi bervariasi per-MK (reguler/blok/profesi) →
         // suntik jumlah pekan & pola evaluasi otoritatif agar AI tidak selalu 16.
         if (($stageCfg['jenis_output'] ?? '') === 'mingguan') {
@@ -719,6 +731,16 @@ class RpsGeneratorService
             $bagian[] = json_encode($pustaka, JSON_UNESCAPED_UNICODE);
         }
 
+        // Kutipan dokumen rujukan KEILMUAN (opt-in via toggle sumber_konten).
+        // Pendukung substansi — instrumen utama di atas tetap otoritatif.
+        $kutipan = $this->dokumenRujukanContext($session, $mk);
+        if ($kutipan !== []) {
+            $bagian[] = "\nKUTIPAN DOKUMEN RUJUKAN KEILMUAN (PENDUKUNG — pakai untuk memperkaya/meluruskan substansi; instrumen utama di atas tetap otoritatif; JANGAN meniru format/gaya dokumen):";
+            foreach ($kutipan as $k) {
+                $bagian[] = '- [' . $k['sumber'] . '] ' . $k['teks'];
+            }
+        }
+
         foreach ($stageCfg['context_from'] as $dep) {
             $draf = $session->draf[$dep] ?? null;
             if ($draf !== null) {
@@ -738,6 +760,52 @@ class RpsGeneratorService
         $bagian[] = $schema;
 
         return [$system, implode("\n", $bagian)];
+    }
+
+    /**
+     * Direktif jenjang program: level KKNI tertinggi dari CPL kurikulum → lantai
+     * level taksonomi CPMK/Sub-CPMK. Kosong bila CPL tak mencantumkan level_kkni.
+     */
+    private function jenjangDirective(MataKuliah $mk): string
+    {
+        if (! $mk->kurikulum_id) {
+            return '';
+        }
+
+        $level = Cpl::query()
+            ->where('kurikulum_id', $mk->kurikulum_id)
+            ->whereNotNull('level_kkni')
+            ->pluck('level_kkni')
+            ->map(fn($v) => (int) filter_var((string) $v, FILTER_SANITIZE_NUMBER_INT))
+            ->filter(fn($v) => $v > 0)
+            ->max();
+
+        if (! $level) {
+            return '';
+        }
+
+        $aturan = match (true) {
+            $level >= 8 => 'CPMK dominan C5-C6 (mengevaluasi/mencipta); JANGAN ada CPMK di bawah C4. Sub-CPMK paling rendah C3.',
+            $level >= 7 => 'jenjang PROFESI — CPMK dominan C4-C6 disertai keterampilan P3+ (penerapan nyata di lapangan/klinik/wahana); JANGAN ada CPMK di bawah C3; Sub-CPMK C1-C2 hanya boleh sebagai pengantar paling awal.',
+            $level >= 6 => 'jenjang SARJANA — CPMK dominan C3-C5; JANGAN ada CPMK level C1-C2 (level rendah hanya boleh pada Sub-CPMK pengantar).',
+            default     => "sesuaikan kedalaman dengan level KKNI {$level}.",
+        };
+
+        return "JENJANG PROGRAM (WAJIB DIPATUHI):\n"
+            . "- Level KKNI tertinggi pada CPL kurikulum ini: {$level}.\n"
+            . "- Aturan level taksonomi: {$aturan}";
+    }
+
+    /**
+     * Pagar skop: keluaran wajib berada dalam lingkup MK & bahan kajian yang
+     * diberikan; cegah model menambah topik dari pengetahuan umum di luar konteks.
+     */
+    private function skopDirective(): string
+    {
+        return "BATASAN SKOP (WAJIB DIPATUHI):\n"
+            . "- Seluruh capaian, materi, contoh, dan aktivitas HARUS berada dalam lingkup mata kuliah ini (nama & deskripsi) serta BAHAN KAJIAN MK pada konteks.\n"
+            . "- JANGAN menambah topik/kompetensi di luar bahan kajian; bila merinci, rincian tetap turunan langsung bahan kajian tsb.\n"
+            . "- JANGAN menciptakan entitas baru (topik, bahan kajian, referensi) dari pengetahuan umum di luar konteks yang diberikan.";
     }
 
     /**
@@ -778,8 +846,13 @@ class RpsGeneratorService
 
         return Cpl::query()
             ->where('kurikulum_id', $mk->kurikulum_id)
-            ->get(['kode', 'deskripsi'])
-            ->map(fn($c) => ['kode' => $c->kode, 'deskripsi' => $c->deskripsi])
+            ->get(['kode', 'deskripsi', 'aspek', 'level_kkni'])
+            ->map(fn($c) => array_filter([
+                'kode'       => $c->kode,
+                'deskripsi'  => $c->deskripsi,
+                'aspek'      => $c->aspek,
+                'level_kkni' => $c->level_kkni,
+            ], fn($v) => $v !== null && $v !== ''))
             ->all();
     }
 
@@ -843,6 +916,58 @@ class RpsGeneratorService
             'tipe'   => $r->tipe ?: 'utama',
             'sitasi' => $r->sitasi,
         ])->values()->all();
+    }
+
+    /**
+     * Kutipan RAG dari dokumen rujukan ber-flag sumber_konten (keilmuan) yang
+     * relevan dengan MK. Kosong bila fitur nonaktif, tak ada dokumen ber-flag
+     * terindeks, atau retrieval gagal (generate tak boleh ikut gagal).
+     *
+     * @return array<int,array{sumber:string,teks:string}>
+     */
+    private function dokumenRujukanContext(GenerateSession $session, MataKuliah $mk): array
+    {
+        if (! config('generator.rag.enabled', true)) {
+            return [];
+        }
+
+        $ada = DokumenChunk::whereNotNull('embedding')
+            ->whereHas('dokumen', fn($q) => $q->where('institusi_id', $session->institusi_id)->where('sumber_konten', true))
+            ->exists();
+        if (! $ada) {
+            return [];
+        }
+
+        $query = trim(implode(' — ', array_filter([
+            (string) $mk->nama,
+            (string) ($mk->deskripsi_singkat ?? ''),
+            implode(', ', array_slice(array_column($this->bahanKajianContext($mk), 'nama'), 0, 8)),
+        ])));
+        if ($query === '') {
+            return [];
+        }
+
+        try {
+            $hits = $this->embeddings->search(
+                (int) $session->institusi_id,
+                mb_substr($query, 0, 1500),
+                max(1, (int) config('generator.rag.top_k', 4)),
+                ['min_score' => (float) config('generator.rag.min_score', 0.5), 'sumber_konten' => true],
+            );
+        } catch (\Throwable) {
+            return []; // retrieval gagal → lanjut tanpa kutipan
+        }
+
+        $out = [];
+        foreach ($hits as $h) {
+            $chunk = $h['chunk'];
+            $out[] = [
+                'sumber' => (string) ($chunk->dokumen?->judul ?? 'Dokumen rujukan'),
+                'teks'   => mb_strimwidth(trim((string) $chunk->teks), 0, 600, '…'),
+            ];
+        }
+
+        return $out;
     }
 
     private function parseJson(string $text, string $stage): array

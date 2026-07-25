@@ -16,6 +16,7 @@ class DokumenRujukanResource extends JsonResource
             'badan_rujukan_id' => $this->badan_rujukan_id,
             'badan_rujukan'    => $this->whenLoaded('badanRujukan', fn() => $this->badanRujukan?->nama),
             'jenis'            => $this->jenis,
+            'sumber_konten'    => (bool) $this->sumber_konten,
             'judul'            => $this->judul,
             'file_asal'        => $this->file_asal,
             'status_indexing'  => $this->status_indexing,

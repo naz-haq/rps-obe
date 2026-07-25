@@ -58,7 +58,9 @@ class GroundingValidator
                 continue;
             }
 
-            $hits = $this->embeddings->search($institusiId, $teksKlaim, $topK, ['min_score' => $minScore]);
+            // Bukti hanya dari dokumen KEILMUAN (sumber_konten=true); dokumen
+            // rujukan format/template tidak layak jadi bukti klaim substansi.
+            $hits = $this->embeddings->search($institusiId, $teksKlaim, $topK, ['min_score' => $minScore, 'sumber_konten' => true]);
 
             if ($hits === []) {
                 // Guardrail: tanpa bukti -> tak didukung, tanpa memanggil LLM.

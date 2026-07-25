@@ -222,6 +222,7 @@ Route::get('dokumen-rujukan', [DokumenRujukanController::class, 'index']);
 Route::post('dokumen-rujukan', [DokumenRujukanController::class, 'store']);
 Route::get('dokumen-rujukan/search', [DokumenRujukanController::class, 'search']);
 Route::get('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'show']);
+Route::patch('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'update']);
 Route::post('dokumen-rujukan/{dokumenRujukan}/reindex', [DokumenRujukanController::class, 'reindex']);
 Route::delete('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'destroy']);
 

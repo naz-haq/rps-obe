@@ -120,6 +120,7 @@ export type DokumenRujukan = {
   badan_rujukan_id: number | null;
   badan_rujukan?: string | null;
   jenis: "kpt" | "asosiasi" | "akreditasi" | "template_rps";
+  sumber_konten: boolean;
   judul: string | null;
   file_asal: string | null;
   status_indexing: "pending" | "indexed" | "error";
@@ -739,6 +740,7 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<Ap
 
 export const apiPost = <T>(path: string, body?: unknown) => send<T>("POST", path, body);
 export const apiPut = <T>(path: string, body?: unknown) => send<T>("PUT", path, body);
+export const apiPatch = <T>(path: string, body?: unknown) => send<T>("PATCH", path, body);
 export const apiDelete = <T>(path: string, body?: unknown) => send<T>("DELETE", path, body);
 
 export async function apiPostForm<T>(path: string, form: FormData): Promise<ApiResult<T>> {

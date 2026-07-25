@@ -39,7 +39,7 @@ class DokumenRujukanController extends Controller
             $query->where('judul', 'like', "%{$q}%");
         }
 
-        $this->applySort($query, $request, ['judul', 'jenis', 'status_indexing', 'chunk_count', 'created_at'], 'created_at', 'desc');
+        $this->applySort($query, $request, ['judul', 'jenis', 'status_indexing', 'sumber_konten', 'chunk_count', 'created_at'], 'created_at', 'desc');
 
         return DokumenRujukanResource::collection($query->paginate($request->integer('per_page', 15)));
     }
@@ -50,6 +50,7 @@ class DokumenRujukanController extends Controller
             'institusi_id'     => ['required', 'exists:institusi,id'],
             'badan_rujukan_id' => ['nullable', 'exists:badan_rujukan,id'],
             'jenis'            => ['required', 'in:kpt,asosiasi,akreditasi,template_rps'],
+            'sumber_konten'    => ['nullable', 'boolean'],
             'judul'            => ['nullable', 'string', 'max:255'],
             'file'             => ['required', 'file', 'mimes:pdf,docx,txt,md,csv', 'max:51200'],
         ]);
@@ -61,6 +62,7 @@ class DokumenRujukanController extends Controller
             'institusi_id'     => $data['institusi_id'],
             'badan_rujukan_id' => $data['badan_rujukan_id'] ?? null,
             'jenis'            => $data['jenis'],
+            'sumber_konten'    => (bool) ($data['sumber_konten'] ?? false),
             'judul'            => $data['judul'] ?? $file->getClientOriginalName(),
             'file_asal'        => $file->getClientOriginalName(),
             'file_path'        => $path,
@@ -81,6 +83,25 @@ class DokumenRujukanController extends Controller
     public function show(DokumenRujukan $dokumenRujukan)
     {
         return new DokumenRujukanResource($dokumenRujukan->load('badanRujukan')->loadCount('chunks'));
+    }
+
+    /**
+     * Perbarui metadata dokumen — terutama toggle 'sumber_konten' (dokumen
+     * keilmuan vs rujukan format). Hanya dokumen keilmuan yang dipakai AI
+     * sebagai sumber substansi generate & bukti grounding.
+     */
+    public function update(Request $request, DokumenRujukan $dokumenRujukan)
+    {
+        $data = $request->validate([
+            'judul'            => ['sometimes', 'nullable', 'string', 'max:255'],
+            'jenis'            => ['sometimes', 'in:kpt,asosiasi,akreditasi,template_rps'],
+            'badan_rujukan_id' => ['sometimes', 'nullable', 'exists:badan_rujukan,id'],
+            'sumber_konten'    => ['sometimes', 'boolean'],
+        ]);
+
+        $dokumenRujukan->update($data);
+
+        return new DokumenRujukanResource($dokumenRujukan->fresh()->load('badanRujukan')->loadCount('chunks'));
     }
 
     public function reindex(DokumenRujukan $dokumenRujukan)
