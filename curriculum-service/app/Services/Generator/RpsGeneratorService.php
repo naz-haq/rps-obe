@@ -674,6 +674,138 @@ class RpsGeneratorService
      * @param  array<int,string>  $koreksi  konteks pengganti dari grounding (regenerasi)
      * @return array{0:string,1:string} [system, prompt]
      */
+    /**
+     * Generate LANJUTAN: pecah rencana mingguan RPS committed menjadi rincian
+     * per-pertemuan (untuk MK blok/profesi dengan >1 pertemuan/pekan). Satu
+     * panggilan AI; topik/aktivitas/metode dari AI, durasi per pertemuan
+     * dihitung deterministik oleh sistem dari estimasi waktu (bukan AI).
+     *
+     * @return array<int,array<int,array<string,mixed>>> peta minggu_ke => rincian tersimpan
+     */
+    public function generatePertemuan(RpsVersion $rps, array $opts = []): array
+    {
+        $mk = MataKuliah::query()
+            ->where('institusi_id', $rps->institusi_id)
+            ->where('kode_mk', $rps->kode_mk)
+            ->first();
+        if (! $mk) {
+            throw new GeneratorException('Mata kuliah untuk RPS ini tidak ditemukan.');
+        }
+
+        $rows = $rps->minggu()->with('subCpmk')->orderBy('minggu_ke')->get();
+        if ($rows->isEmpty()) {
+            throw new GeneratorException('RPS belum memiliki rencana mingguan.');
+        }
+
+        $est  = $this->estimasi->untukMataKuliah($mk, $rows->count());
+        $sesi = max(1, (int) ($est['jumlah_pertemuan'] ?? 1));
+        if ($sesi <= 1) {
+            throw new GeneratorException('MK ini hanya 1 pertemuan/pekan — rincian pertemuan tidak diperlukan.');
+        }
+
+        $prompt = $this->prompts->resolve('pertemuan', $rps->institusi_id, $mk->jenis_mk);
+        $pola   = $mk->pola ?: 'reguler';
+        $kontak = (int) ($est['tm_menit'] ?? 0) + (int) ($est['praktik_menit'] ?? 0);
+
+        $bagian = [];
+        $bagian[] = 'DATA MATA KULIAH:';
+        $bagian[] = json_encode([
+            'kode_mk'   => $mk->kode_mk,
+            'nama'      => $mk->nama,
+            'jenis_mk'  => $mk->jenis_mk,
+            'sks'       => $mk->sks,
+            'semester'  => $mk->semester,
+            'deskripsi' => $mk->deskripsi_singkat,
+        ], JSON_UNESCAPED_UNICODE);
+        $bagian[] = "\nPARAMETER RINCIAN PERTEMUAN (WAJIB DIPATUHI):\n"
+            . "- Susun TEPAT {$sesi} pertemuan untuk SETIAP pekan (pertemuan_ke berurutan 1..{$sesi}).\n"
+            . "- Pola pelaksanaan MK: {$pola}. Jumlah pekan: {$rows->count()}.\n"
+            . ($kontak > 0 ? "- Total waktu kontak per pekan ~{$kontak} menit; durasi per pertemuan dihitung sistem — JANGAN mengisi menit.\n" : '')
+            . '- Pekan evaluasi/ujian: rinci kegiatan ujiannya (boleh lebih sedikit pertemuan bila memang sesi ujian).';
+        $bagian[] = "\n" . $this->skopDirective();
+        $bagian[] = "\nRENCANA MINGGUAN RPS (BASIS PEMECAHAN — topik pertemuan wajib turunan langsung materi pekan ini, JANGAN menambah topik baru):";
+        $bagian[] = json_encode($rows->map(fn($m) => array_filter([
+            'minggu_ke'          => $m->minggu_ke,
+            'sub_cpmk'           => $m->subCpmk?->kode,
+            'sub_cpmk_deskripsi' => $m->subCpmk?->deskripsi,
+            'indikator'          => $m->indikator,
+            'metode_pembelajaran' => $m->metode_pembelajaran,
+            'bentuk_luring'      => $m->bentuk_luring,
+            'materi_pustaka'     => $m->materi_pustaka,
+        ], fn($v) => $v !== null && $v !== ''))->values()->all(), JSON_UNESCAPED_UNICODE);
+        $bagian[] = "\nBalas HANYA JSON valid dengan struktur berikut (tanpa teks lain):";
+        $bagian[] = $prompt['schema'];
+
+        $outcome = $this->ai->run('generate', $prompt['system'], implode("\n", $bagian), [
+            'institusi_id' => $rps->institusi_id,
+            'user_id'      => $opts['user_id'] ?? null,
+            'entity_type'  => 'RpsVersion',
+            'entity_id'    => $rps->id,
+            'mode'         => 'generate:pertemuan',
+            'max_tokens'   => 9000,
+            'no_cache'     => true,
+        ]);
+        if ($outcome->failed()) {
+            throw new GeneratorException('Panggilan AI gagal pada rincian pertemuan: ' . ($outcome->result->error ?? 'tidak diketahui'));
+        }
+
+        $data = $this->parseJson($outcome->text(), 'pertemuan');
+        $byWeek = [];
+        foreach ((array) ($data['minggu'] ?? []) as $item) {
+            $ke   = (int) ($item['minggu_ke'] ?? 0);
+            $list = is_array($item['pertemuan'] ?? null) ? $item['pertemuan'] : [];
+            if ($ke >= 1 && $list !== []) {
+                $byWeek[$ke] = $list;
+            }
+        }
+        if ($byWeek === []) {
+            throw new GeneratorException('AI tidak mengembalikan rincian pertemuan yang bisa dibaca.');
+        }
+
+        $tersimpan = [];
+        foreach ($rows as $row) {
+            $list = $byWeek[$row->minggu_ke] ?? null;
+            if (! $list) {
+                continue;
+            }
+
+            // Durasi deterministik: waktu kontak pekan ini dibagi rata jumlah pertemuan.
+            $ew = is_array($row->estimasi_waktu) ? $row->estimasi_waktu : $est;
+            $kontakMg = (int) ($ew['tm_menit'] ?? 0) + (int) ($ew['praktik_menit'] ?? 0);
+            if ($kontakMg <= 0) {
+                $kontakMg = (int) ($ew['total_menit'] ?? 0);
+            }
+            $durasi = $kontakMg > 0 ? (int) round($kontakMg / count($list)) : null;
+
+            $bersih = [];
+            $urut = 1;
+            foreach ($list as $p) {
+                if (! is_array($p)) {
+                    continue;
+                }
+                $bersih[] = [
+                    'pertemuan_ke' => $urut++,
+                    'topik'        => trim((string) ($p['topik'] ?? '')) ?: null,
+                    'aktivitas'    => trim((string) ($p['aktivitas'] ?? '')) ?: null,
+                    'metode'       => trim((string) ($p['metode'] ?? '')) ?: null,
+                    'durasi_menit' => $durasi,
+                ];
+            }
+            if ($bersih === []) {
+                continue;
+            }
+
+            $row->update(['rincian_pertemuan' => $bersih]);
+            $tersimpan[$row->minggu_ke] = $bersih;
+        }
+
+        if ($tersimpan === []) {
+            throw new GeneratorException('Rincian pertemuan dari AI tidak cocok dengan pekan pada RPS ini.');
+        }
+
+        return $tersimpan;
+    }
+
     private function buildPrompt(GenerateSession $session, string $stage, array $stageCfg, MataKuliah $mk, array $koreksi = []): array
     {
         $prompt = $this->prompts->resolve($stageCfg['jenis_output'], $session->institusi_id, $mk->jenis_mk);

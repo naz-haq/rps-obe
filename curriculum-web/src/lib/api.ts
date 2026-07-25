@@ -418,6 +418,14 @@ export type Notifikasi = {
   created_at: string;
 };
 
+export type RincianPertemuan = {
+  pertemuan_ke: number;
+  topik: string | null;
+  aktivitas: string | null;
+  metode: string | null;
+  durasi_menit: number | null;
+};
+
 export type RpsMinggu = {
   minggu_ke: number;
   sub_cpmk: string | null;
@@ -433,6 +441,7 @@ export type RpsMinggu = {
   pengalaman_belajar: string | null;
   materi_pustaka: string | null;
   estimasi_waktu: EstimasiWaktu | null;
+  rincian_pertemuan?: RincianPertemuan[] | null;
   bobot_penilaian: number | null;
 };
 export type RpsKomponen = {

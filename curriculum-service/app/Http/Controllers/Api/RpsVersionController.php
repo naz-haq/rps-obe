@@ -79,6 +79,7 @@ class RpsVersionController extends Controller
                 'estimasi_waktu'       => is_array($m->estimasi_waktu)
                     ? array_merge($m->estimasi_waktu, ['teks' => $ctx->formatEstimasi($m->estimasi_waktu)])
                     : $m->estimasi_waktu,
+                'rincian_pertemuan'    => $m->rincian_pertemuan,
                 'bobot_penilaian'      => $m->bobot_penilaian,
             ])->values();
 

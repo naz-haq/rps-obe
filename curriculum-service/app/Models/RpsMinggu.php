@@ -13,6 +13,7 @@ class RpsMinggu extends Model
     protected $casts = [
         'minggu_ke' => 'integer',
         'estimasi_waktu' => 'array',
+        'rincian_pertemuan' => 'array',
         'bobot_penilaian' => 'decimal:2',
     ];
 

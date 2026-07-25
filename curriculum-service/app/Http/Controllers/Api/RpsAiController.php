@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\GenerateSession;
 use App\Models\RpsVersion;
+use App\Services\Generator\Exceptions\GeneratorException;
+use App\Services\Generator\RpsGeneratorService;
 use App\Services\Rps\KurikulumChatService;
 use App\Services\Rps\RpsAuditService;
 use App\Services\Rps\RpsSnapshot;
@@ -39,6 +41,25 @@ class RpsAiController extends Controller
         $hasil = $this->audit->audit($snapshot, $rpsVersion->institusi_id);
 
         return response()->json(['data' => $hasil]);
+    }
+
+    /**
+     * Generate lanjutan: rincian per-PERTEMUAN dari rencana mingguan RPS committed
+     * (MK blok/profesi dengan >1 pertemuan/pekan). Hasil disimpan di
+     * rps_minggu.rincian_pertemuan dan ikut terbawa di GET rps-versions/{id}.
+     */
+    public function generatePertemuan(RpsVersion $rpsVersion, RpsGeneratorService $generator)
+    {
+        try {
+            $hasil = $generator->generatePertemuan($rpsVersion);
+        } catch (GeneratorException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Rincian pertemuan tersusun untuk ' . count($hasil) . ' pekan.',
+            'data'    => ['minggu_terisi' => array_keys($hasil)],
+        ]);
     }
 
     /** Chat konsultan; opsional sadar konteks sesi generate atau RPS resmi. */

@@ -20,3 +20,11 @@ export async function aksiPersetujuan(input: {
   revalidatePath("/persetujuan");
   return res;
 }
+
+/** Generate lanjutan: rincian per-pertemuan dari rencana mingguan (MK blok/profesi). */
+export async function generateRincianPertemuan(id: number): Promise<ApiResult> {
+  const res = await apiPost(`/rps-versions/${id}/generate-pertemuan`);
+  revalidatePath(`/rps/${id}`);
+  revalidatePath(`/rps/${id}/pertemuan`);
+  return res;
+}

@@ -174,6 +174,7 @@ Route::get('rps-versions/{rpsVersion}/docx', [RpsVersionController::class, 'undu
 // Modul 2 — Layanan AI di atas RPS: audit keselarasan (#6) & chat konsultan (#7)
 Route::post('generate-sessions/{generateSession}/audit', [RpsAiController::class, 'auditSession']);
 Route::post('rps-versions/{rpsVersion}/audit', [RpsAiController::class, 'auditRpsVersion']);
+Route::post('rps-versions/{rpsVersion}/generate-pertemuan', [RpsAiController::class, 'generatePertemuan']);
 Route::post('rps/ai/chat', [RpsAiController::class, 'chat']);
 
 // Modul 3 — Validator Overlap (deteksi keterampilan diklaim >1 MK)

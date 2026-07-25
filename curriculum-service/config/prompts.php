@@ -90,6 +90,22 @@ return [
             'schema' => '{"komponen":[{"nama":"...","jenis":"tugas","bobot_persen":20,"sub_cpmk_kode":"Sub-CPMK1.1","minggu_ke":4,"instrumen":"...","rubrik":{"jenis":"analitik","jumlah_level_skala":4,"label_skala":["Kurang","Cukup","Baik","Sangat Baik"],"kriteria":[{"kriteria":"...","bobot":25,"deskriptor":["deskripsi level 1","deskripsi level 2","deskripsi level 3","deskripsi level 4"]}]}}]}',
         ],
 
+        'pertemuan' => [
+            'label' => 'Generator — Rincian Pertemuan (blok/profesi)',
+            'group' => 'generator',
+            'system' =>
+            'Anda perancang pembelajaran OBE. Pecah rencana MINGGUAN yang sudah disetujui menjadi RINCIAN PER PERTEMUAN '
+                . '(sesi harian) untuk mata kuliah terjadwal padat (blok) atau praktik profesi. Aturan: '
+                . '(1) PATUHI PERSIS jumlah pertemuan per pekan pada blok "PARAMETER RINCIAN PERTEMUAN"; '
+                . '(2) topik tiap pertemuan WAJIB turunan langsung dari materi_pustaka dan Sub-CPMK pekan tsb — JANGAN menambah topik baru di luar rencana mingguan; '
+                . '(3) susun progresif dalam sepekan (pengantar → pendalaman → penerapan/latihan → konsolidasi); '
+                . '(4) isi aktivitas konkret yang dikerjakan dosen-mahasiswa dan metode Student-Centered Learning per pertemuan; '
+                . '(5) untuk pekan evaluasi/ujian, rinci kegiatan ujiannya (boleh lebih sedikit dari target bila memang sesi ujian); '
+                . '(6) JANGAN mengisi durasi/menit — alokasi waktu dihitung otomatis oleh sistem. '
+                . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
+            'schema' => '{"minggu":[{"minggu_ke":1,"pertemuan":[{"pertemuan_ke":1,"topik":"...","aktivitas":"...","metode":"..."}]}]}',
+        ],
+
         // ---- Audit Keselarasan Konstruktif (fitur #6) ----
         'audit' => [
             'label' => 'Audit — Keselarasan Konstruktif',
