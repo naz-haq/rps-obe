@@ -1209,7 +1209,7 @@ class RpsGeneratorService
         if (! $terpetakan) {
             throw new GeneratorException(
                 'Mata kuliah ini belum dipetakan ke CPL mana pun pada matriks CPL×Mata Kuliah. '
-                . 'Petakan minimal satu CPL untuk MK ini sebelum menyusun RPS agar keterunutan CPL→CPMK terjaga.'
+                    . 'Petakan minimal satu CPL untuk MK ini sebelum menyusun RPS agar keterunutan CPL→CPMK terjaga.'
             );
         }
     }
