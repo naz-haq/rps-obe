@@ -103,6 +103,20 @@ class RpsGeneratorService
                 $data = $this->normalisasiCplKode($mk, $data);
             }
 
+            // Jaring pengaman cakupan: rencana mingguan WAJIB memuat semua
+            // Sub-CPMK. Model tertentu (mis. gpt-4o) menafsirkan "N pekan"
+            // sebagai N baris sehingga Sub-CPMK tersisa terlewat — deteksi
+            // deterministik lalu ulangi dengan instruksi koreksi eksplisit.
+            if (($stageCfg['jenis_output'] ?? '') === 'mingguan' && $percobaan < $maks) {
+                $hilang = $this->subCpmkTakTercakup($session, $data);
+                if ($hilang !== []) {
+                    $koreksi[] = 'Rencana mingguan WAJIB mencakup SEMUA Sub-CPMK; keluaran sebelumnya melewatkan: '
+                        . implode(', ', $hilang)
+                        . '. Susun ulang — bila jumlah pekan terbatas, buat BEBERAPA BARIS dengan minggu_ke yang sama (satu baris per Sub-CPMK).';
+                    continue;
+                }
+            }
+
             $validasi = $this->validateStage($session, $stage, $data, $outcome);
 
             // Selesai bila validasi dilewati/bersih, atau jatah revisi habis.
@@ -628,6 +642,32 @@ class RpsGeneratorService
         return $data;
     }
 
+    /**
+     * Daftar kode Sub-CPMK (dari draf tahap sub_cpmk sesi) yang TIDAK muncul
+     * pada draf rencana mingguan. Kosong = semua tercakup / tak bisa dicek.
+     *
+     * @return list<string>
+     */
+    private function subCpmkTakTercakup(GenerateSession $session, array $data): array
+    {
+        $harus = [];
+        foreach (($session->draf ?? [])['sub_cpmk']['sub_cpmk'] ?? [] as $item) {
+            $kode = trim((string) ($item['kode'] ?? ''));
+            if ($kode !== '') {
+                $harus[$this->kodeKanonik($kode)] = $kode;
+            }
+        }
+        if ($harus === []) {
+            return [];
+        }
+
+        foreach ($data['minggu'] ?? [] as $baris) {
+            unset($harus[$this->kodeKanonik((string) ($baris['sub_cpmk_kode'] ?? ''))]);
+        }
+
+        return array_values($harus);
+    }
+
     private function findTaksonomiId(int $institusiId, ?string $kode): ?int
     {
         if (! $kode) {
@@ -1023,7 +1063,10 @@ class RpsGeneratorService
             : '';
 
         return "PARAMETER RENCANA MINGGUAN (WAJIB DIPATUHI):\n"
-            . "- Susun TEPAT {$n} pekan (minggu_ke berurutan 1..{$n}); JANGAN kurang atau lebih dari {$n}.\n"
+            . "- Gunakan TEPAT {$n} pekan (minggu_ke hanya boleh bernilai 1..{$n}); JANGAN membuat pekan di luar rentang itu.\n"
+            . "- SEMUA Sub-CPMK WAJIB tercakup, masing-masing minimal SATU baris. Jumlah BARIS boleh LEBIH dari jumlah pekan: "
+            . "bila jumlah pekan lebih sedikit dari jumlah Sub-CPMK (mis. blok {$n} pekan dengan banyak pertemuan), "
+            . "buat BEBERAPA BARIS dengan minggu_ke yang SAMA — satu baris per Sub-CPMK, berurutan sesuai skenario pembelajaran.\n"
             . "- Pola pelaksanaan: {$pola}.\n"
             . $beban
             . "- {$evaluasi}";

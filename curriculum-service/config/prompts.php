@@ -62,6 +62,8 @@ return [
             'system' =>
             'Anda perancang pembelajaran OBE. Susun rencana pekanan pertemuan mengikuti FORMAT TABEL RPS Panduan KPT/SN-Dikti. '
                 . 'PATUHI PERSIS "PARAMETER RENCANA MINGGUAN" pada konteks: jumlah pekan, pola pelaksanaan (reguler/blok/profesi), dan pola evaluasinya. '
+                . 'WAJIB mencakup SEMUA Sub-CPMK dari konteks — setiap Sub-CPMK minimal satu baris; satu pekan BOLEH berisi beberapa baris '
+                . '(ulangi minggu_ke yang sama) bila jumlah pekan lebih sedikit dari jumlah Sub-CPMK. '
                 . 'Untuk tiap pekan isi: sub_cpmk_kode (kemampuan akhir), '
                 . 'indikator penilaian, kriteria_penilaian, metode_pembelajaran, '
                 . 'bentuk_luring dan bentuk_daring (bentuk pembelajaran), pengalaman_belajar (penugasan mahasiswa), '
