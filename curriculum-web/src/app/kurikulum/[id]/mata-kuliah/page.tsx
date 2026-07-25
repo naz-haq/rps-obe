@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { apiGet, type Single, type Paginated, type Kurikulum, type MataKuliah, type InstitusiData } from "@/lib/api";
+import { apiGet, type Single, type Paginated, type Kurikulum, type MataKuliah, type InstitusiData, type KonfigurasiAturan } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { KurikulumTabs } from "../tabs";
 import { CreateMkButton, EditMkButton, DeleteMkButton } from "./forms";
@@ -57,6 +57,22 @@ export default async function MataKuliahPage({
     prodiOptions = [];
   }
 
+  // Aturan pekan efektif (untuk pratinjau di form MK) — cocokkan dgn resolver backend.
+  let aturan = { mingguEfektif: 16, mingguPerSks: 1 };
+  try {
+    const kf = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", {
+      institusi_id: kurikulum.institusi_id,
+    });
+    const jm = kf.data.find((k) => k.jenis_aturan === "jumlah_minggu")?.nilai as Record<string, number> | undefined;
+    const kp = kf.data.find((k) => k.jenis_aturan === "konversi_minggu_profesi")?.nilai as Record<string, number> | undefined;
+    aturan = {
+      mingguEfektif: Number(jm?.minggu_efektif) || 16,
+      mingguPerSks: Number(kp?.minggu_per_sks) || 1,
+    };
+  } catch {
+    // pakai default bila aturan belum diatur
+  }
+
   const params2 = { sort, dir, jenis_mk: sp.jenis_mk, semester: sp.semester, q: sp.q };
   const basePath = `/kurikulum/${id}/mata-kuliah`;
 
@@ -87,7 +103,7 @@ export default async function MataKuliahPage({
               ]}
               contoh={"kode_mk,nama,sks_teori,sks_praktik,semester\nFAR101,Kimia Dasar,2,1,1"}
             />
-            <CreateMkButton kurikulumId={kurikulum.id} prodiOptions={prodiOptions} />
+            <CreateMkButton kurikulumId={kurikulum.id} prodiOptions={prodiOptions} aturan={aturan} />
           </>
         }
       />
@@ -108,6 +124,7 @@ export default async function MataKuliahPage({
                 <SortableTh label="Jenis" column="jenis_mk" sort={sort} dir={dir} basePath={basePath} params={params2} />
                 <Th className="text-right">SKS</Th>
                 <SortableTh label="Smt" column="semester" sort={sort} dir={dir} basePath={basePath} params={params2} className="text-right" />
+                <Th>Durasi &amp; Beban</Th>
                 <Th className="text-right">Aksi</Th>
               </tr>
             </thead>
@@ -124,9 +141,22 @@ export default async function MataKuliahPage({
                   <Td>{m.jenis_mk ? <Badge tone="neutral">{JENIS_LABEL[m.jenis_mk] ?? m.jenis_mk}</Badge> : <span className="text-muted">—</span>}</Td>
                   <Td className="text-right tabular-nums">{m.sks ?? (m.sks_teori ?? 0) + (m.sks_praktik ?? 0)}</Td>
                   <Td className="text-right tabular-nums">{m.semester ?? "—"}</Td>
+                  <Td className="max-w-xs">
+                    <p className="text-ink tabular-nums">
+                      {m.jumlah_minggu_efektif ?? "—"} pekan
+                      {m.jumlah_minggu != null ? (
+                        <span className="ml-1 text-[11px] text-amber-600">(manual)</span>
+                      ) : (
+                        <span className="ml-1 text-[11px] text-muted">(aturan)</span>
+                      )}
+                    </p>
+                    {m.estimasi_waktu?.teks && (
+                      <p className="text-xs text-muted line-clamp-1">{m.estimasi_waktu.teks}</p>
+                    )}
+                  </Td>
                   <Td>
                     <div className="flex justify-end gap-1">
-                      <EditMkButton m={m} kurikulumId={kurikulum.id} prodiOptions={prodiOptions} />
+                      <EditMkButton m={m} kurikulumId={kurikulum.id} prodiOptions={prodiOptions} aturan={aturan} />
                       <DeleteMkButton m={m} kurikulumId={kurikulum.id} />
                     </div>
                   </Td>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, AiTextArea, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
@@ -22,7 +22,7 @@ const SIFAT_OPTS = [
 ];
 
 const POLA_OPTS = [
-  { value: "reguler", label: "Reguler (± 16 pekan)" },
+  { value: "reguler", label: "Reguler (default pekan)" },
   { value: "blok", label: "Blok (durasi khusus)" },
   { value: "profesi", label: "Praktek Profesi / Klinik" },
 ];
@@ -31,24 +31,44 @@ type State = ApiResult | null;
 
 type ProdiOpt = { value: string; label: string };
 
-/** Input Jumlah Pekan + tombol "Hitung dari SKS" (≈1 pekan/SKS untuk profesi). */
-function JumlahPekanField({ m }: { m?: MataKuliah }) {
-  const ref = useRef<HTMLLabelElement>(null);
+/** Aturan pekan efektif (dari KonfigurasiAturan) untuk pratinjau di form. */
+export type AturanPekan = { mingguEfektif: number; mingguPerSks: number };
+
+/**
+ * Input Jumlah Pekan (override manual) + pratinjau nilai yang mengikuti ATURAN.
+ * Cermin resolver backend jumlahMingguUntuk(): profesi = ceil(SKS × faktor),
+ * lainnya = minggu efektif. Kosong ⇒ ikut aturan; terisi ⇒ menimpa aturan.
+ */
+function JumlahPekanField({
+  m,
+  pola,
+  sksTotal,
+  aturan,
+}: {
+  m?: MataKuliah;
+  pola: string;
+  sksTotal: number;
+  aturan: AturanPekan;
+}) {
   const [minggu, setMinggu] = useState(m?.jumlah_minggu != null ? String(m.jumlah_minggu) : "");
 
-  const hitungDariSks = () => {
-    const form = ref.current?.closest("form");
-    const num = (n: string) => Number((form?.elements.namedItem(n) as HTMLInputElement | null)?.value) || 0;
-    const sks = num("sks_teori") + num("sks_praktik");
-    if (sks > 0) setMinggu(String(sks));
-  };
+  const pekanAturan =
+    pola === "profesi"
+      ? Math.ceil(sksTotal * aturan.mingguPerSks) || aturan.mingguEfektif
+      : aturan.mingguEfektif;
+
+  const kosong = minggu.trim() === "";
 
   return (
-    <label ref={ref} className="block">
+    <label className="block">
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-ink">Jumlah Pekan</span>
-        <button type="button" onClick={hitungDariSks} className="text-[11px] font-medium text-brand-700 hover:underline">
-          Hitung dari SKS
+        <button
+          type="button"
+          onClick={() => setMinggu(String(pekanAturan))}
+          className="text-[11px] font-medium text-brand-700 hover:underline"
+        >
+          Isi sesuai aturan ({pekanAturan})
         </button>
       </div>
       <input
@@ -58,21 +78,27 @@ function JumlahPekanField({ m }: { m?: MataKuliah }) {
         max={60}
         value={minggu}
         onChange={(e) => setMinggu(e.target.value)}
-        placeholder="kosong = default (16)"
+        placeholder={`kosong = ikut aturan (${pekanAturan})`}
         className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-ring placeholder:text-gray-400"
       />
       <span className="mt-1 block text-[11px] text-muted">
-        Profesi: klik Hitung (≈1 pekan/SKS) lalu sesuaikan · Blok: isi manual · Reguler: kosongkan.
+        {kosong
+          ? `Kosong → mengikuti aturan: ${pekanAturan} pekan (pola ${pola}).`
+          : `Override manual: ${minggu} pekan (menimpa aturan).`}
       </span>
     </label>
   );
 }
 
-function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: MataKuliah; prodiOptions: ProdiOpt[] }) {
+function MkFields({ kurikulumId, m, prodiOptions, aturan }: { kurikulumId: number; m?: MataKuliah; prodiOptions: ProdiOpt[]; aturan: AturanPekan }) {
   const prodiOpts =
     prodiOptions.length > 0
       ? [{ value: "", label: "— Pilih Prodi —" }, ...prodiOptions]
       : [{ value: "", label: "— Belum ada prodi, tambahkan di menu Prodi & Unit —" }];
+  const [pola, setPola] = useState<string>(m?.pola ?? "reguler");
+  const [sksTeori, setSksTeori] = useState<number>(Number(m?.sks_teori ?? 0) || 0);
+  const [sksPraktik, setSksPraktik] = useState<number>(Number(m?.sks_praktik ?? 0) || 0);
+  const sksTotal = (Number.isFinite(sksTeori) ? sksTeori : 0) + (Number.isFinite(sksPraktik) ? sksPraktik : 0);
   return (
     <div className="space-y-3">
       <input type="hidden" name="kurikulum_id" value={kurikulumId} />
@@ -101,12 +127,13 @@ function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: M
           name="pola"
           options={POLA_OPTS}
           defaultValue={m?.pola ?? "reguler"}
+          onChange={(e) => setPola(e.target.value)}
         />
-        <JumlahPekanField m={m} />
+        <JumlahPekanField m={m} pola={pola} sksTotal={sksTotal} aturan={aturan} />
       </div>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="SKS Teori" name="sks_teori" type="number" defaultValue={m?.sks_teori ?? ""} placeholder="2" />
-        <Field label="SKS Praktik" name="sks_praktik" type="number" defaultValue={m?.sks_praktik ?? ""} placeholder="1" />
+        <Field label="SKS Teori" name="sks_teori" type="number" defaultValue={m?.sks_teori ?? ""} placeholder="2" onChange={(e) => setSksTeori(Number(e.target.value) || 0)} />
+        <Field label="SKS Praktik" name="sks_praktik" type="number" defaultValue={m?.sks_praktik ?? ""} placeholder="1" onChange={(e) => setSksPraktik(Number(e.target.value) || 0)} />
         <Field label="Semester" name="semester" type="number" defaultValue={m?.semester ?? ""} placeholder="1" />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -134,20 +161,20 @@ function MkFields({ kurikulumId, m, prodiOptions }: { kurikulumId: number; m?: M
   );
 }
 
-export function CreateMkButton({ kurikulumId, prodiOptions }: { kurikulumId: number; prodiOptions: ProdiOpt[] }) {
+export function CreateMkButton({ kurikulumId, prodiOptions, aturan }: { kurikulumId: number; prodiOptions: ProdiOpt[]; aturan: AturanPekan }) {
   return (
     <Modal trigger="+ Mata Kuliah" title="Tambah Mata Kuliah" size="lg">
-      {(close) => <CreateForm kurikulumId={kurikulumId} prodiOptions={prodiOptions} close={close} />}
+      {(close) => <CreateForm kurikulumId={kurikulumId} prodiOptions={prodiOptions} aturan={aturan} close={close} />}
     </Modal>
   );
 }
 
-function CreateForm({ kurikulumId, prodiOptions, close }: { kurikulumId: number; prodiOptions: ProdiOpt[]; close: () => void }) {
+function CreateForm({ kurikulumId, prodiOptions, aturan, close }: { kurikulumId: number; prodiOptions: ProdiOpt[]; aturan: AturanPekan; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => createMataKuliah(fd), null);
   useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Mata kuliah tersimpan." });
   return (
     <form action={action} className="space-y-4">
-      <MkFields kurikulumId={kurikulumId} prodiOptions={prodiOptions} />
+      <MkFields kurikulumId={kurikulumId} prodiOptions={prodiOptions} aturan={aturan} />
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={close} className={buttonClass("secondary")}>Batal</button>
@@ -157,20 +184,20 @@ function CreateForm({ kurikulumId, prodiOptions, close }: { kurikulumId: number;
   );
 }
 
-export function EditMkButton({ m, kurikulumId, prodiOptions }: { m: MataKuliah; kurikulumId: number; prodiOptions: ProdiOpt[] }) {
+export function EditMkButton({ m, kurikulumId, prodiOptions, aturan }: { m: MataKuliah; kurikulumId: number; prodiOptions: ProdiOpt[]; aturan: AturanPekan }) {
   return (
     <Modal trigger="Edit" title="Ubah Mata Kuliah" triggerVariant="ghost" triggerSize="sm" size="lg">
-      {(close) => <EditForm m={m} kurikulumId={kurikulumId} prodiOptions={prodiOptions} close={close} />}
+      {(close) => <EditForm m={m} kurikulumId={kurikulumId} prodiOptions={prodiOptions} aturan={aturan} close={close} />}
     </Modal>
   );
 }
 
-function EditForm({ m, kurikulumId, prodiOptions, close }: { m: MataKuliah; kurikulumId: number; prodiOptions: ProdiOpt[]; close: () => void }) {
+function EditForm({ m, kurikulumId, prodiOptions, aturan, close }: { m: MataKuliah; kurikulumId: number; prodiOptions: ProdiOpt[]; aturan: AturanPekan; close: () => void }) {
   const [state, action] = useActionState<State, FormData>(async (_prev, fd) => updateMataKuliah(fd), null);
   useActionResult(state, { refresh: false, onSuccess: close, successMessage: "Mata kuliah diperbarui." });
   return (
     <form action={action} className="space-y-4">
-      <MkFields m={m} kurikulumId={kurikulumId} prodiOptions={prodiOptions} />
+      <MkFields m={m} kurikulumId={kurikulumId} prodiOptions={prodiOptions} aturan={aturan} />
       {state && !state.ok && <p className="text-xs text-red-600">{state.message}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={close} className={buttonClass("secondary")}>Batal</button>

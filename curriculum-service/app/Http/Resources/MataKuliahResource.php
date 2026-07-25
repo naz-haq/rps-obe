@@ -11,6 +11,8 @@ class MataKuliahResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $estimasi = app(EstimasiWaktuService::class);
+
         return [
             'id'                => $this->id,
             'ulid'              => $this->ulid,
@@ -22,6 +24,7 @@ class MataKuliahResource extends JsonResource
             'jenis_mk'          => $this->jenis_mk,
             'pola'              => $this->pola ?? 'reguler',
             'jumlah_minggu'     => $this->jumlah_minggu,
+            'jumlah_minggu_efektif' => $estimasi->jumlahMingguUntuk($this->resource),
             'sifat'             => $this->sifat,
             'rumpun'            => $this->rumpun,
             'deskripsi_singkat' => $this->deskripsi_singkat,
@@ -31,7 +34,7 @@ class MataKuliahResource extends JsonResource
             'semester'          => $this->semester,
             'prodi_kode'        => $this->prodi_kode,
             'prasyarat_kode'    => $this->prasyarat_kode,
-            'estimasi_waktu'    => app(EstimasiWaktuService::class)->untukMataKuliah($this->resource),
+            'estimasi_waktu'    => $estimasi->untukMataKuliah($this->resource),
             'created_at'        => $this->created_at,
             'updated_at'        => $this->updated_at,
         ];

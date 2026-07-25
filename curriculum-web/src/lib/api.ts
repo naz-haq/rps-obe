@@ -71,6 +71,7 @@ export type MataKuliah = {
   jenis_mk: string;
   pola?: "reguler" | "blok" | "profesi";
   jumlah_minggu?: number | null;
+  jumlah_minggu_efektif?: number;
   sifat: string | null;
   rumpun: string | null;
   deskripsi_singkat: string | null;
@@ -89,6 +90,8 @@ export type EstimasiWaktu = {
   bm_menit: number;
   praktik_menit: number;
   total_menit: number;
+  jumlah_pertemuan?: number;
+  mode?: "sebar" | "padat" | "lapangan";
   teks: string;
 };
 
@@ -562,7 +565,15 @@ export type BobotKomponen = { nama: string; bobot: number };
 export type KonfigurasiAturan = {
   id: number;
   institusi_id: number;
-  jenis_aturan: "jumlah_minggu" | "bobot_teori" | "bobot_praktikum" | "konversi_sks";
+  jenis_aturan:
+    | "jumlah_minggu"
+    | "bobot_teori"
+    | "bobot_praktikum"
+    | "konversi_sks"
+    | "konversi_minggu_profesi"
+    | "beban_sks_semester"
+    | "mode_distribusi_waktu"
+    | "durasi_sesi";
   nilai: Record<string, unknown>;
   badan_rujukan_id: number | null;
   referensi_dokumen_id: number | null;
