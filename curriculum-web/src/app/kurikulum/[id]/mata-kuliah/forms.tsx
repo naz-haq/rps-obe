@@ -31,60 +31,64 @@ type State = ApiResult | null;
 
 type ProdiOpt = { value: string; label: string };
 
-/** Aturan pekan efektif (dari KonfigurasiAturan) untuk pratinjau di form. */
-export type AturanPekan = { mingguEfektif: number; mingguPerSks: number };
+/** Aturan efektif (dari KonfigurasiAturan) untuk pratinjau di form MK. */
+export type AturanPekan = {
+  mingguEfektif: number;
+  mingguPerSks: number;
+  durasiSesi: number;
+  hariPerMinggu: number;
+  tmPerSks: number;
+  praktikPerSks: number;
+};
 
 /**
- * Input Jumlah Pekan (override manual) + pratinjau nilai yang mengikuti ATURAN.
- * Cermin resolver backend jumlahMingguUntuk(): profesi = ceil(SKS × faktor),
- * lainnya = minggu efektif. Kosong ⇒ ikut aturan; terisi ⇒ menimpa aturan.
+ * Input override per-MK (Jumlah Pekan / Pertemuan). Kosong ⇒ ikut ATURAN (nilai
+ * pratinjau ditampilkan); terisi ⇒ menimpa aturan. Tombol mengisi nilai aturan.
  */
-function JumlahPekanField({
-  m,
-  pola,
-  sksTotal,
-  aturan,
+function OverrideField({
+  label,
+  name,
+  value,
+  onChange,
+  aturanValue,
+  satuan,
+  max,
+  hintKosong,
 }: {
-  m?: MataKuliah;
-  pola: string;
-  sksTotal: number;
-  aturan: AturanPekan;
+  label: string;
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  aturanValue: number;
+  satuan: string;
+  max: number;
+  hintKosong: string;
 }) {
-  const [minggu, setMinggu] = useState(m?.jumlah_minggu != null ? String(m.jumlah_minggu) : "");
-
-  const pekanAturan =
-    pola === "profesi"
-      ? Math.ceil(sksTotal * aturan.mingguPerSks) || aturan.mingguEfektif
-      : aturan.mingguEfektif;
-
-  const kosong = minggu.trim() === "";
-
+  const kosong = value.trim() === "";
   return (
     <label className="block">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-ink">Jumlah Pekan</span>
+        <span className="text-xs font-medium text-ink">{label}</span>
         <button
           type="button"
-          onClick={() => setMinggu(String(pekanAturan))}
+          onClick={() => onChange(String(aturanValue))}
           className="text-[11px] font-medium text-brand-700 hover:underline"
         >
-          Isi sesuai aturan ({pekanAturan})
+          Isi sesuai aturan ({aturanValue})
         </button>
       </div>
       <input
-        name="jumlah_minggu"
+        name={name}
         type="number"
         min={1}
-        max={60}
-        value={minggu}
-        onChange={(e) => setMinggu(e.target.value)}
-        placeholder={`kosong = ikut aturan (${pekanAturan})`}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={`kosong = ikut aturan (${aturanValue})`}
         className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-ring placeholder:text-gray-400"
       />
       <span className="mt-1 block text-[11px] text-muted">
-        {kosong
-          ? `Kosong → mengikuti aturan: ${pekanAturan} pekan (pola ${pola}).`
-          : `Override manual: ${minggu} pekan (menimpa aturan).`}
+        {kosong ? hintKosong : `Override manual: ${value} ${satuan} (menimpa aturan).`}
       </span>
     </label>
   );
@@ -98,7 +102,26 @@ function MkFields({ kurikulumId, m, prodiOptions, aturan }: { kurikulumId: numbe
   const [pola, setPola] = useState<string>(m?.pola ?? "reguler");
   const [sksTeori, setSksTeori] = useState<number>(Number(m?.sks_teori ?? 0) || 0);
   const [sksPraktik, setSksPraktik] = useState<number>(Number(m?.sks_praktik ?? 0) || 0);
+  const [minggu, setMinggu] = useState<string>(m?.jumlah_minggu != null ? String(m.jumlah_minggu) : "");
+  const [pertemuan, setPertemuan] = useState<string>(m?.jumlah_pertemuan != null ? String(m.jumlah_pertemuan) : "");
+
   const sksTotal = (Number.isFinite(sksTeori) ? sksTeori : 0) + (Number.isFinite(sksPraktik) ? sksPraktik : 0);
+
+  // Pekan sesuai aturan (cermin backend jumlahMingguUntuk).
+  const pekanAturan =
+    pola === "profesi" ? Math.ceil(sksTotal * aturan.mingguPerSks) || aturan.mingguEfektif : aturan.mingguEfektif;
+  const efektifWeeks = minggu.trim() !== "" ? Number(minggu) || pekanAturan : pekanAturan;
+
+  // Mode + pertemuan/pekan sesuai aturan (cermin backend estimasi).
+  const mode = pola === "profesi" ? "lapangan" : pola === "blok" ? "padat" : "sebar";
+  const modeLabel = mode === "lapangan" ? "Lapangan" : mode === "padat" ? "Padat" : "Sebar";
+  const pertemuanAturan = (() => {
+    if (mode === "lapangan") return aturan.hariPerMinggu;
+    let kontak = sksTeori * aturan.tmPerSks + sksPraktik * aturan.praktikPerSks;
+    if (mode === "padat") kontak = kontak * (efektifWeeks > 0 ? aturan.mingguEfektif / efektifWeeks : 1);
+    return aturan.durasiSesi > 0 && kontak > 0 ? Math.ceil(kontak / aturan.durasiSesi) : 0;
+  })();
+
   return (
     <div className="space-y-3">
       <input type="hidden" name="kurikulum_id" value={kurikulumId} />
@@ -129,12 +152,38 @@ function MkFields({ kurikulumId, m, prodiOptions, aturan }: { kurikulumId: numbe
           defaultValue={m?.pola ?? "reguler"}
           onChange={(e) => setPola(e.target.value)}
         />
-        <JumlahPekanField m={m} pola={pola} sksTotal={sksTotal} aturan={aturan} />
+        <OverrideField
+          label="Jumlah Pekan"
+          name="jumlah_minggu"
+          value={minggu}
+          onChange={setMinggu}
+          aturanValue={pekanAturan}
+          satuan="pekan"
+          max={60}
+          hintKosong={`Kosong → ${pekanAturan} pekan (pola ${pola}).`}
+        />
       </div>
       <div className="grid grid-cols-3 gap-3">
         <Field label="SKS Teori" name="sks_teori" type="number" defaultValue={m?.sks_teori ?? ""} placeholder="2" onChange={(e) => setSksTeori(Number(e.target.value) || 0)} />
         <Field label="SKS Praktik" name="sks_praktik" type="number" defaultValue={m?.sks_praktik ?? ""} placeholder="1" onChange={(e) => setSksPraktik(Number(e.target.value) || 0)} />
         <Field label="Semester" name="semester" type="number" defaultValue={m?.semester ?? ""} placeholder="1" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <OverrideField
+          label="Pertemuan / Pekan"
+          name="jumlah_pertemuan"
+          value={pertemuan}
+          onChange={setPertemuan}
+          aturanValue={pertemuanAturan}
+          satuan="pertemuan/pekan"
+          max={50}
+          hintKosong={`Kosong → ${pertemuanAturan} pertemuan/pekan (dihitung dari aturan).`}
+        />
+        <div className="flex flex-col justify-end">
+          <div className="rounded-lg border border-border bg-gray-50 px-3 py-2 text-[11px] text-muted">
+            Mode <span className="font-medium text-ink">{modeLabel}</span> · {efektifWeeks} pekan × ~{pertemuan.trim() !== "" ? pertemuan : pertemuanAturan} pertemuan/pekan
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Rumpun" name="rumpun" defaultValue={m?.rumpun ?? ""} placeholder="Farmasi Klinik" />

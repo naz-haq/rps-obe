@@ -246,8 +246,7 @@ class ContohLengkapSeeder extends Seeder
                 'teori_mandiri' => 60,
                 'praktik' => 170,
             ],
-            // Invarian beban (Permendikbudristek 53/2023) + mode distribusi + durasi sesi.
-            'beban_sks_semester' => ['jam_per_sks' => 45],
+            // Mode distribusi + durasi sesi.
             'mode_distribusi_waktu' => ['reguler' => 'sebar', 'blok' => 'padat', 'profesi' => 'lapangan'],
             'durasi_sesi' => ['menit_per_sesi' => 50],
             // Profesi/PKPA: durasi & jadwal wahana (rujukan APTFI).

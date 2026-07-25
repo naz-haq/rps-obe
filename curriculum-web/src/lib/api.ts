@@ -72,6 +72,7 @@ export type MataKuliah = {
   pola?: "reguler" | "blok" | "profesi";
   jumlah_minggu?: number | null;
   jumlah_minggu_efektif?: number;
+  jumlah_pertemuan?: number | null;
   sifat: string | null;
   rumpun: string | null;
   deskripsi_singkat: string | null;
@@ -571,7 +572,6 @@ export type KonfigurasiAturan = {
     | "bobot_praktikum"
     | "konversi_sks"
     | "konversi_minggu_profesi"
-    | "beban_sks_semester"
     | "mode_distribusi_waktu"
     | "durasi_sesi";
   nilai: Record<string, unknown>;

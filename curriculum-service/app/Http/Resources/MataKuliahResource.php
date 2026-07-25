@@ -25,6 +25,7 @@ class MataKuliahResource extends JsonResource
             'pola'              => $this->pola ?? 'reguler',
             'jumlah_minggu'     => $this->jumlah_minggu,
             'jumlah_minggu_efektif' => $estimasi->jumlahMingguUntuk($this->resource),
+            'jumlah_pertemuan'  => $this->jumlah_pertemuan,
             'sifat'             => $this->sifat,
             'rumpun'            => $this->rumpun,
             'deskripsi_singkat' => $this->deskripsi_singkat,

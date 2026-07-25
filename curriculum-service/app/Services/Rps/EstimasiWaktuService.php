@@ -12,9 +12,8 @@ use App\Models\MataKuliah;
  *
  * Rujukan angka default:
  *  - Permendikbud No. 3/2020 (SN-Dikti): 1 SKS teori/pekan = 50' TM + 60' PT + 60' BM = 170';
- *    praktikum 170'/pekan. (jenis_aturan 'konversi_sks')
- *  - Permendikbudristek No. 53/2023: 1 SKS = 45 jam/semester (invarian beban).
- *    (jenis_aturan 'beban_sks_semester')
+ *    praktikum 170'/pekan. (jenis_aturan 'konversi_sks'). Selaras dgn Permendikbudristek
+ *    53/2023 (1 SKS ≈ 45 jam/semester = 170' × 16 pekan).
  *
  * Mode distribusi beban (jenis_aturan 'mode_distribusi_waktu', per pola MK):
  *  - 'sebar'    (reguler): beban 170'/SKS disebar rata ~16 pekan.
@@ -22,8 +21,8 @@ use App\Models\MataKuliah;
  *                          (menit/pekan × minggu_efektif/N).
  *  - 'lapangan' (profesi/PKPA): beban dari jam kerja di wahana
  *                          (jam_per_hari × hari_per_minggu).
- * Jumlah pertemuan/pekan = ceil((TM+Praktik) / durasi_sesi)
- *  (jenis_aturan 'durasi_sesi', default 50' — tidak diatur pusat, murni institusional).
+ * Jumlah pertemuan/pekan: default dihitung (kelas = ceil((TM+Praktik)/durasi_sesi);
+ *  profesi = hari_per_minggu). MK boleh menimpa via kolom mata_kuliah.jumlah_pertemuan.
  */
 class EstimasiWaktuService
 {
@@ -34,7 +33,6 @@ class EstimasiWaktuService
         'praktik'           => 170,
     ];
 
-    private const JAM_PER_SKS_DEFAULT            = 45;   // Permendikbudristek 53/2023
     private const MINGGU_EFEKTIF_DEFAULT         = 16;
     private const MENIT_PER_SESI_DEFAULT         = 50;   // SN-Dikti tatap muka
     private const MINGGU_PER_SKS_PROFESI_DEFAULT = 1.0;
@@ -73,14 +71,6 @@ class EstimasiWaktuService
             'teori_mandiri'     => (int) ($nilai['teori_mandiri']     ?? self::DEFAULT['teori_mandiri']),
             'praktik'           => (int) ($nilai['praktik']           ?? self::DEFAULT['praktik']),
         ];
-    }
-
-    /** Invarian beban: jam per 1 SKS per semester (Permendikbudristek 53/2023). */
-    public function bebanJamPerSks(?int $institusiId): float
-    {
-        $v = $this->nilaiAturan($institusiId, 'beban_sks_semester')['jam_per_sks'] ?? null;
-
-        return is_numeric($v) && (float) $v > 0 ? (float) $v : (float) self::JAM_PER_SKS_DEFAULT;
     }
 
     /** Jumlah pekan efektif satu semester (default 16). */
@@ -211,12 +201,13 @@ class EstimasiWaktuService
      */
     public function untukMataKuliah(MataKuliah $mk, ?int $jumlahMinggu = null): array
     {
-        $pola   = $mk->pola ?: 'reguler';
-        $mode   = $this->modeDistribusi($mk->institusi_id, $pola);
-        $minggu = $jumlahMinggu !== null && $jumlahMinggu > 0 ? $jumlahMinggu : $this->jumlahMingguUntuk($mk);
+        $pola     = $mk->pola ?: 'reguler';
+        $mode     = $this->modeDistribusi($mk->institusi_id, $pola);
+        $minggu   = $jumlahMinggu !== null && $jumlahMinggu > 0 ? $jumlahMinggu : $this->jumlahMingguUntuk($mk);
+        $override = ! empty($mk->jumlah_pertemuan) && (int) $mk->jumlah_pertemuan > 0 ? (int) $mk->jumlah_pertemuan : null;
 
         if ($mode === 'lapangan') {
-            return $this->estimasiLapangan($mk, $mode);
+            return $this->estimasiLapangan($mk, $mode, $override);
         }
 
         $base = $this->hitung(
@@ -232,7 +223,7 @@ class EstimasiWaktuService
             $base    = $this->skalakan($base, $faktor);
         }
 
-        return $this->lengkapiPertemuan($base, $mk->institusi_id, $mode);
+        return $this->lengkapiPertemuan($base, $mk->institusi_id, $mode, $override);
     }
 
     /** Skala komponen menit dengan faktor (untuk mode 'padat'). */
@@ -252,8 +243,8 @@ class EstimasiWaktuService
         ];
     }
 
-    /** Lengkapi hasil dengan jumlah pertemuan/pekan + teks + mode. */
-    private function lengkapiPertemuan(array $w, ?int $institusiId, string $mode): array
+    /** Lengkapi hasil dengan jumlah pertemuan/pekan (override menang) + teks + mode. */
+    private function lengkapiPertemuan(array $w, ?int $institusiId, string $mode, ?int $override = null): array
     {
         $tm    = (int) ($w['tm_menit'] ?? 0);
         $pt    = (int) ($w['pt_menit'] ?? 0);
@@ -263,7 +254,8 @@ class EstimasiWaktuService
 
         $durasi    = $this->durasiSesi($institusiId);
         $kontak    = $tm + $pr; // tatap muka + praktik = sesi terjadwal
-        $pertemuan = $durasi > 0 && $kontak > 0 ? (int) ceil($kontak / $durasi) : 0;
+        $derived   = $durasi > 0 && $kontak > 0 ? (int) ceil($kontak / $durasi) : 0;
+        $pertemuan = $override ?? $derived;
 
         return [
             'tm_menit'         => $tm,
@@ -277,12 +269,12 @@ class EstimasiWaktuService
         ];
     }
 
-    /** Estimasi mingguan MK profesi/PKPA dari jadwal kerja wahana. */
-    private function estimasiLapangan(MataKuliah $mk, string $mode): array
+    /** Estimasi mingguan MK profesi/PKPA dari jadwal kerja wahana (override hari menang). */
+    private function estimasiLapangan(MataKuliah $mk, string $mode, ?int $override = null): array
     {
         $jadwal      = $this->jadwalProfesi($mk->institusi_id);
-        $menitMinggu = (int) round($jadwal['jam_per_hari'] * $jadwal['hari_per_minggu'] * 60);
-        $hari        = (int) $jadwal['hari_per_minggu'];
+        $hari        = $override ?? (int) $jadwal['hari_per_minggu'];
+        $menitMinggu = (int) round($jadwal['jam_per_hari'] * $hari * 60);
         $jam         = rtrim(rtrim(number_format($jadwal['jam_per_hari'], 1, '.', ''), '0'), '.');
 
         return [

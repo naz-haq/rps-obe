@@ -82,6 +82,7 @@ class MataKuliahController extends Controller
             'jenis_mk'          => ['nullable', Rule::in(['murni', 'praktikum'])],
             'pola'              => ['nullable', Rule::in(['reguler', 'blok', 'profesi'])],
             'jumlah_minggu'     => ['nullable', 'integer', 'min:1', 'max:60'],
+            'jumlah_pertemuan'  => ['nullable', 'integer', 'min:1', 'max:50'],
             'sifat'             => ['nullable', Rule::in(['wajib', 'pilihan'])],
             'rumpun'            => ['nullable', 'string', 'max:255'],
             'deskripsi_singkat' => ['nullable', 'string'],

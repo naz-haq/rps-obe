@@ -57,17 +57,24 @@ export default async function MataKuliahPage({
     prodiOptions = [];
   }
 
-  // Aturan pekan efektif (untuk pratinjau di form MK) — cocokkan dgn resolver backend.
-  let aturan = { mingguEfektif: 16, mingguPerSks: 1 };
+  // Aturan efektif (untuk pratinjau di form MK) — cocokkan dgn resolver backend.
+  let aturan = { mingguEfektif: 16, mingguPerSks: 1, durasiSesi: 50, hariPerMinggu: 5, tmPerSks: 50, praktikPerSks: 170 };
   try {
     const kf = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", {
       institusi_id: kurikulum.institusi_id,
     });
-    const jm = kf.data.find((k) => k.jenis_aturan === "jumlah_minggu")?.nilai as Record<string, number> | undefined;
-    const kp = kf.data.find((k) => k.jenis_aturan === "konversi_minggu_profesi")?.nilai as Record<string, number> | undefined;
+    const val = (j: string) => kf.data.find((k) => k.jenis_aturan === j)?.nilai as Record<string, number> | undefined;
+    const jm = val("jumlah_minggu");
+    const kp = val("konversi_minggu_profesi");
+    const ds = val("durasi_sesi");
+    const ks = val("konversi_sks");
     aturan = {
       mingguEfektif: Number(jm?.minggu_efektif) || 16,
       mingguPerSks: Number(kp?.minggu_per_sks) || 1,
+      durasiSesi: Number(ds?.menit_per_sesi) || 50,
+      hariPerMinggu: Number(kp?.hari_per_minggu) || 5,
+      tmPerSks: Number(ks?.teori_tatap_muka) || 50,
+      praktikPerSks: Number(ks?.praktik) || 170,
     };
   } catch {
     // pakai default bila aturan belum diatur

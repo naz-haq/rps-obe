@@ -249,10 +249,6 @@ export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
   const [teoriMandiri, setTeoriMandiri] = useState<number | "">(ks.teori_mandiri ?? 60);
   const [praktik, setPraktik] = useState<number | "">(ks.praktik ?? 170);
 
-  // Beban SKS per semester (invarian Permendikbudristek 53/2023)
-  const bs = pick(list, "beban_sks_semester") as NilaiMap;
-  const [jamPerSks, setJamPerSks] = useState<number | "">(bs.jam_per_sks ?? 45);
-
   // Durasi sesi/pertemuan
   const ds = pick(list, "durasi_sesi") as NilaiMap;
   const [menitPerSesi, setMenitPerSesi] = useState<number | "">(ds.menit_per_sesi ?? 50);
@@ -346,23 +342,19 @@ export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
           Durasi & Pola Pelaksanaan
         </p>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {/* Beban & durasi sesi */}
+          {/* Durasi sesi */}
           <Card className="animate-fade-up">
             <div className="border-b border-border px-5 py-3.5">
-              <h2 className="text-sm font-semibold text-ink">Beban SKS & Durasi Sesi</h2>
+              <h2 className="text-sm font-semibold text-ink">Durasi Sesi / Pertemuan</h2>
               <p className="mt-0.5 text-xs text-muted">
-                Invarian beban (Permendikbudristek 53/2023) & durasi 1 pertemuan.
+                Durasi 1 pertemuan — dasar hitung jumlah pertemuan per pekan.
               </p>
             </div>
             <CardBody className="space-y-4">
               <div className="space-y-3">
-                <NumberInput label="Beban 1 SKS per semester" value={jamPerSks} onChange={setJamPerSks} suffix="jam" />
-                <SaveBar jenis="beban_sks_semester" nilai={{ jam_per_sks: num(jamPerSks) }} />
-              </div>
-              <div className="space-y-3 border-t border-border pt-3">
                 <NumberInput label="Durasi satu sesi/pertemuan" value={menitPerSesi} onChange={setMenitPerSesi} suffix="menit" />
                 <p className="text-[11px] text-muted">
-                  Dipakai menghitung jumlah pertemuan/pekan = (tatap muka + praktik) ÷ durasi sesi.
+                  Jumlah pertemuan/pekan = (tatap muka + praktik) ÷ durasi sesi. MK boleh menimpa nilai ini.
                 </p>
                 <SaveBar jenis="durasi_sesi" nilai={{ menit_per_sesi: num(menitPerSesi) }} />
               </div>
