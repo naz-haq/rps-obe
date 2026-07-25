@@ -83,22 +83,22 @@ export default async function KurikulumDetailPage({ params }: { params: Promise<
           <div>
             <h2 className="text-sm font-semibold text-ink">Buku Kurikulum</h2>
             <p className="mt-0.5 text-xs text-muted">
-              Dokumen kurikulum prodi (identitas, profil lulusan, CPL, matriks, sebaran MK, ringkasan RPS) — ekspor .docx untuk dilengkapi prodi.
+              Dokumen kurikulum prodi (identitas, profil lulusan, CPL, matriks, sebaran MK, ringkasan RPS) — pratinjau, generate narasi, lalu ekspor .docx.
             </p>
           </div>
           {buku?.lengkap ? (
             <div className="flex items-center gap-2">
-              <a
-                href={`${BACKEND_PROXY}/kurikulum/${id}/buku/docx`}
+              <Link
+                href={`/kurikulum/${id}/buku`}
                 className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
               >
-                Unduh DOCX
-              </a>
+                Pratinjau & Unduh
+              </Link>
               <a
-                href={`${BACKEND_PROXY}/kurikulum/${id}/buku/docx?naratif=1`}
+                href={`${BACKEND_PROXY}/kurikulum/${id}/buku/docx`}
                 className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-gray-50"
               >
-                Unduh DOCX + Narasi AI
+                Unduh DOCX
               </a>
             </div>
           ) : (

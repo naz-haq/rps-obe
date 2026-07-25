@@ -6,6 +6,7 @@ const TABS = [
   { seg: "cpl", label: "CPL" },
   { seg: "bahan-kajian", label: "Bahan Kajian" },
   { seg: "mata-kuliah", label: "Mata Kuliah" },
+  { seg: "buku", label: "Buku Kurikulum" },
 ];
 
 export function KurikulumTabs({ id, active }: { id: string; active: string }) {

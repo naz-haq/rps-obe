@@ -48,6 +48,55 @@ export type BukuKelengkapan = {
   lengkap: boolean;
 };
 
+export type BukuData = {
+  identitas: {
+    kurikulum: { nama: string; kode: string | null; tahun: string; status: string; tanggal_berlaku: string | null };
+    prodi: { nama: string } | null;
+    fakultas: { nama: string } | null;
+    universitas: { nama: string } | null;
+  };
+  profil_lulusan: { kode: string; deskripsi: string }[];
+  cpl: { kode: string; deskripsi: string; aspek: string | null; level_kkni: string | number | null }[];
+  matriks_pl_cpl: { profil: string; cpl: string[] }[];
+  bahan_kajian: { nama: string; deskripsi: string | null }[];
+  matriks_cpl_bk: { cpl: string; bahan_kajian: string[] }[];
+  mata_kuliah: {
+    semester: number | null;
+    mata_kuliah: {
+      kode_mk: string;
+      nama: string;
+      sks: number;
+      sks_teori: number;
+      sks_praktik: number;
+      sifat: string | null;
+      jenis_mk: string | null;
+    }[];
+  }[];
+  matriks_mk_cpl: { kode_mk: string; nama: string; cpl: string[] }[];
+  rps_ringkas: {
+    kode_mk: string;
+    nama: string;
+    versi: number;
+    jumlah_cpmk: number;
+    jumlah_sub_cpmk: number;
+    jumlah_minggu: number;
+    jumlah_komponen: number;
+  }[];
+};
+
+export type BukuNaratif = {
+  pengantar?: string;
+  profil_lulusan?: string;
+  cpl?: string;
+  mata_kuliah?: string;
+};
+
+export type BukuPratinjau = {
+  data: BukuData;
+  naratif: BukuNaratif;
+  naratif_pada: string | null;
+};
+
 export type Cpl = {
   id: number;
   institusi_id: number;

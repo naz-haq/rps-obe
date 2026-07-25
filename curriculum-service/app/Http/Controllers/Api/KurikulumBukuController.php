@@ -3,16 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\BukuKurikulumNaratif;
 use App\Models\Kurikulum;
 use App\Services\Kurikulum\BukuKurikulumBuilder;
 use App\Services\Kurikulum\BukuKurikulumDocxExporter;
 use App\Services\Kurikulum\BukuKurikulumNaratifService;
-use Illuminate\Http\Request;
 use PhpOffice\PhpWord\IOFactory;
 
 /**
- * Modul Buku Kurikulum: rakit dokumen kurikulum prodi (deterministik) + ekspor
- * .docx. Diblokir bila ada Mata Kuliah yang belum memiliki RPS ter-commit.
+ * Modul Buku Kurikulum: rakit dokumen kurikulum prodi (deterministik) + narasi
+ * AI yang dapat dipratinjau/di-regenerate, lalu ekspor .docx. Diblokir bila ada
+ * Mata Kuliah yang belum memiliki RPS ter-commit.
  */
 class KurikulumBukuController extends Controller
 {
@@ -24,7 +25,7 @@ class KurikulumBukuController extends Controller
         return response()->json(['data' => $this->builder->kelengkapan($kurikulum)]);
     }
 
-    /** Pratinjau struktur Buku Kurikulum (JSON) — hormati blokir kelengkapan. */
+    /** Pratinjau: struktur deterministik + narasi tersimpan (hormati blokir). */
     public function pratinjau(Kurikulum $kurikulum)
     {
         $kelengkapan = $this->builder->kelengkapan($kurikulum);
@@ -32,11 +33,17 @@ class KurikulumBukuController extends Controller
             return $this->tolakBelumLengkap($kelengkapan);
         }
 
-        return response()->json(['data' => $this->builder->build($kurikulum)]);
+        $tersimpan = BukuKurikulumNaratif::where('kurikulum_id', $kurikulum->id)->first();
+
+        return response()->json([
+            'data'         => $this->builder->build($kurikulum),
+            'naratif'      => $tersimpan?->naratif ?? [],
+            'naratif_pada' => optional($tersimpan?->digenerate_pada)->toIso8601String(),
+        ]);
     }
 
-    /** Ekspor Buku Kurikulum sebagai .docx (opsional narasi AI via ?naratif=1). */
-    public function unduhDocx(Request $request, Kurikulum $kurikulum, BukuKurikulumDocxExporter $exporter, BukuKurikulumNaratifService $naratif)
+    /** Generate / regenerate narasi AI lalu SIMPAN (untuk ditinjau & diunduh). */
+    public function generateNaratif(Kurikulum $kurikulum, BukuKurikulumNaratifService $naratif)
     {
         $kelengkapan = $this->builder->kelengkapan($kurikulum);
         if (! $kelengkapan['lengkap']) {
@@ -44,12 +51,34 @@ class KurikulumBukuController extends Controller
         }
 
         $buku = $this->builder->build($kurikulum);
+        $prosa = $naratif->generate($kurikulum, $buku);
 
-        $prosa = [];
-        if ($request->boolean('naratif')) {
-            // Fail-safe: bila AI gagal/tak tersedia, dokumen tetap dirakit tanpa narasi.
-            $prosa = $naratif->generate($kurikulum, $buku);
+        $row = BukuKurikulumNaratif::updateOrCreate(
+            ['kurikulum_id' => $kurikulum->id],
+            ['naratif' => $prosa, 'digenerate_pada' => now()],
+        );
+
+        return response()->json([
+            'naratif'      => $prosa,
+            'kosong'       => $prosa === [],
+            'naratif_pada' => optional($row->digenerate_pada)->toIso8601String(),
+            'message'      => $prosa === []
+                ? 'Narasi AI belum tersedia (layanan AI gagal/kosong). Dokumen tetap dapat diunduh tanpa narasi.'
+                : 'Narasi berhasil dibuat.',
+        ]);
+    }
+
+    /** Ekspor .docx memakai narasi tersimpan yang sudah ditinjau. */
+    public function unduhDocx(Kurikulum $kurikulum, BukuKurikulumDocxExporter $exporter)
+    {
+        $kelengkapan = $this->builder->kelengkapan($kurikulum);
+        if (! $kelengkapan['lengkap']) {
+            return $this->tolakBelumLengkap($kelengkapan);
         }
+
+        $buku = $this->builder->build($kurikulum);
+        $prosa = BukuKurikulumNaratif::where('kurikulum_id', $kurikulum->id)->value('naratif');
+        $prosa = is_array($prosa) ? $prosa : [];
 
         $phpWord = $exporter->build($buku, $prosa);
         $writer = IOFactory::createWriter($phpWord, 'Word2007');

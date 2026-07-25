@@ -159,6 +159,7 @@ Route::get('kurikulum/{kurikulum}/traceability', [PetaKurikulumController::class
 // Modul — Buku Kurikulum (dokumen kurikulum prodi, ekspor .docx)
 Route::get('kurikulum/{kurikulum}/buku/kelengkapan', [KurikulumBukuController::class, 'kelengkapan']);
 Route::get('kurikulum/{kurikulum}/buku/pratinjau', [KurikulumBukuController::class, 'pratinjau']);
+Route::post('kurikulum/{kurikulum}/buku/naratif', [KurikulumBukuController::class, 'generateNaratif']);
 Route::get('kurikulum/{kurikulum}/buku/docx', [KurikulumBukuController::class, 'unduhDocx']);
 
 // Modul 2 — RPS Generator (bertahap + grounding)
