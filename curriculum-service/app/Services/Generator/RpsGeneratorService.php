@@ -4,6 +4,7 @@ namespace App\Services\Generator;
 
 use App\Models\BahanKajian;
 use App\Models\Cpl;
+use App\Models\CplBahanKajian;
 use App\Models\Cpmk;
 use App\Models\DokumenChunk;
 use App\Models\GenerateSession;
@@ -83,6 +84,13 @@ class RpsGeneratorService
         $mk = $session->mataKuliah;
         if (! $mk) {
             throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
+        }
+
+        // Prasyarat matriks: penurunan CPL->CPMK menuntut MK sudah dipetakan ke
+        // minimal satu CPL (matriks CPL x MK). Tanpa itu keterunutan kehilangan
+        // jangkar dan capaian bisa melebar ke CPL yang tak relevan.
+        if (($stageCfg['jenis_output'] ?? '') === 'cpmk') {
+            $this->pastikanMatriksCplSiap($mk);
         }
 
         $maks = $this->autoRevisiMaks();
@@ -1028,7 +1036,8 @@ class RpsGeneratorService
 
         $bk = $this->bahanKajianContext($mk);
         if ($bk !== []) {
-            $bagian[] = "\nBAHAN KAJIAN MK (WAJIB dijadikan basis materi_pustaka tiap minggu, dipilih sesuai Sub-CPMK):";
+            $bagian[] = "\nBAHAN KAJIAN MK (WAJIB dijadikan basis materi_pustaka tiap minggu, dipilih sesuai Sub-CPMK; "
+                . "field \"cpl\" tiap bahan kajian menandai CPL yang ditopangnya — pilih bahan kajian yang CPL-nya SELARAS dengan CPL induk Sub-CPMK pekan tsb):";
             $bagian[] = json_encode($bk, JSON_UNESCAPED_UNICODE);
         }
 
@@ -1178,6 +1187,33 @@ class RpsGeneratorService
             ->all();
     }
 
+    /**
+     * Tegakkan prasyarat matriks CPL×MK sebelum menurunkan CPMK: MK dalam
+     * kurikulum ber-CPL WAJIB dipetakan ke minimal satu CPL (mk_cpl). Dilewati
+     * bila MK di luar kurikulum atau kurikulum belum punya CPL sama sekali.
+     */
+    private function pastikanMatriksCplSiap(MataKuliah $mk): void
+    {
+        if (! $mk->kurikulum_id) {
+            return;
+        }
+        if (! Cpl::where('kurikulum_id', $mk->kurikulum_id)->exists()) {
+            return;
+        }
+
+        $terpetakan = MkCpl::query()
+            ->where('institusi_id', $mk->institusi_id)
+            ->where('kode_mk', $mk->kode_mk)
+            ->exists();
+
+        if (! $terpetakan) {
+            throw new GeneratorException(
+                'Mata kuliah ini belum dipetakan ke CPL mana pun pada matriks CPL×Mata Kuliah. '
+                . 'Petakan minimal satu CPL untuk MK ini sebelum menyusun RPS agar keterunutan CPL→CPMK terjaga.'
+            );
+        }
+    }
+
     private function profilLulusanContext(MataKuliah $mk): array
     {
         if (! $mk->kurikulum_id) {
@@ -1193,6 +1229,10 @@ class RpsGeneratorService
 
     private function bahanKajianContext(MataKuliah $mk): array
     {
+        // Peta CPL yang ditopang tiap bahan kajian (matriks CPL x BK) agar AI
+        // dapat menyelaraskan materi_pustaka tiap pekan ke CPL induk Sub-CPMK.
+        $cplPerBk = $this->cplPerBahanKajian($mk);
+
         // Prioritaskan BK yang sudah dipetakan ke MK (mk_bahan_kajian);
         // fallback ke BK kurikulum bila belum ada mapping.
         $mapped = MkBahanKajian::query()
@@ -1200,18 +1240,19 @@ class RpsGeneratorService
             ->where('kode_mk', $mk->kode_mk)
             ->with(['bahanKajian.keterampilan'])
             ->get()
-            ->map(function ($mkbk) {
+            ->map(function ($mkbk) use ($cplPerBk) {
                 $bk = $mkbk->bahanKajian;
                 if (! $bk) {
                     return null;
                 }
-                return [
+                return array_filter([
                     'nama'         => (string) ($bk->nama ?? ''),
                     'deskripsi'    => $bk->deskripsi,
+                    'cpl'          => $cplPerBk[$bk->id] ?? [],
                     'keterampilan' => $bk->keterampilan
                         ->map(fn($k) => (string) ($k->deskripsi ?? ''))
                         ->filter()->values()->all(),
-                ];
+                ], fn($v) => $v !== null && $v !== [] && $v !== '');
             })
             ->filter()->values()->all();
 
@@ -1223,9 +1264,40 @@ class RpsGeneratorService
         }
         return BahanKajian::query()
             ->where('kurikulum_id', $mk->kurikulum_id)
-            ->get(['nama', 'deskripsi'])
-            ->map(fn($b) => ['nama' => $b->nama, 'deskripsi' => $b->deskripsi])
+            ->get(['id', 'nama', 'deskripsi'])
+            ->map(fn($b) => array_filter([
+                'nama'      => $b->nama,
+                'deskripsi' => $b->deskripsi,
+                'cpl'       => $cplPerBk[$b->id] ?? [],
+            ], fn($v) => $v !== null && $v !== [] && $v !== ''))
             ->all();
+    }
+
+    /**
+     * Peta bahan_kajian_id => daftar kode CPL yang ditopangnya, dari matriks
+     * CPL x Bahan Kajian (cpl_bahan_kajian) dalam lingkup kurikulum MK.
+     *
+     * @return array<int,list<string>>
+     */
+    private function cplPerBahanKajian(MataKuliah $mk): array
+    {
+        if (! $mk->kurikulum_id) {
+            return [];
+        }
+
+        $peta = [];
+        CplBahanKajian::query()
+            ->whereHas('cpl', fn($q) => $q->where('kurikulum_id', $mk->kurikulum_id))
+            ->with('cpl:id,kode')
+            ->get()
+            ->each(function ($row) use (&$peta) {
+                $kode = $row->cpl?->kode;
+                if ($kode) {
+                    $peta[$row->bahan_kajian_id][] = (string) $kode;
+                }
+            });
+
+        return $peta;
     }
 
     private function pustakaContext(MataKuliah $mk): array
