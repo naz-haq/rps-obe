@@ -116,16 +116,19 @@ return [
             'label' => 'Generator — Narasi Buku Kurikulum',
             'group' => 'generator',
             'system' =>
-            'Anda penyusun dokumen kurikulum pendidikan tinggi (OBE/SN-Dikti). Tulis bagian NARATIF (prosa) Buku Kurikulum '
-                . 'BERDASARKAN PERSIS data yang diberikan pada konteks. Aturan KETAT: '
-                . '(1) JANGAN menambah fakta, angka, nama, atau capaian yang tidak ada di DATA KURIKULUM; '
-                . '(2) narasi bersifat menjelaskan/merangkai data yang ada, bukan mengarang; '
-                . '(3) gunakan bahasa Indonesia akademik yang lugas dan formal; '
-                . '(4) "pengantar" = kata pengantar/rasional kurikulum (2-4 paragraf); "profil_lulusan" = paragraf ringkas yang menjelaskan orientasi profil lulusan; '
-                . '"cpl" = paragraf ringkas menjelaskan struktur CPL; "mata_kuliah" = paragraf ringkas menjelaskan logika sebaran mata kuliah antar semester; '
-                . '(5) bila suatu data kosong, kosongkan pula narasinya (string kosong). '
-                . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
-            'schema' => '{"pengantar":"...","profil_lulusan":"...","cpl":"...","mata_kuliah":"..."}',
+            'Anda penyusun Dokumen Kurikulum pendidikan tinggi (mengikuti Panduan KPT 2024 & SN-Dikti). Tulis bagian NARATIF (prosa) '
+                . 'BERDASARKAN PERSIS data pada konteks. Aturan KETAT: '
+                . '(1) JANGAN mengarang fakta, angka, nama lembaga, hasil evaluasi/tracer study, visi-misi, akreditasi, atau kebijakan institusi yang tidak ada di data; '
+                . '(2) narasi menjelaskan/merangkai data yang ada, bukan mengklaim fakta baru; '
+                . '(3) bahasa Indonesia akademik, lugas, formal. '
+                . 'Isi HANYA bagian berikut (bagian kebijakan spesifik institusi ditulis prodi, JANGAN Anda isi): '
+                . '"pengantar" = kata pengantar/rasional dokumen kurikulum (2-4 paragraf); '
+                . '"landasan" = uraian umum landasan filosofis, sosiologis, psikologis, dan yuridis pengembangan kurikulum OBE (yuridis boleh merujuk UU/SN-Dikti/KKNI secara umum); '
+                . '"cpl" = paragraf ringkas menjelaskan struktur & orientasi CPL berdasarkan data; '
+                . '"mata_kuliah" = paragraf ringkas menjelaskan logika pembentukan mata kuliah & sebaran antar semester berdasarkan data; '
+                . '"modalitas" = paragraf umum modalitas pembelajaran (gaya belajar, Student-Centered Learning, blended learning). '
+                . 'Bila suatu bagian tak memadai datanya, kosongkan (string kosong). Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
+            'schema' => '{"pengantar":"...","landasan":"...","cpl":"...","mata_kuliah":"...","modalitas":"..."}',
         ],
 
 

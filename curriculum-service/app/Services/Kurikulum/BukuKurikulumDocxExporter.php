@@ -9,11 +9,15 @@ use PhpOffice\PhpWord\SimpleType\JcTable;
 use PhpOffice\PhpWord\SimpleType\TblWidth;
 
 /**
- * Membangun Buku Kurikulum dalam format Word (.docx) via PhpWord.
+ * Membangun Buku (Dokumen) Kurikulum dalam format Word (.docx) via PhpWord,
+ * mengikuti sistematika 12 bagian (I–XII) Panduan KPT 2024 (Pasal 44
+ * Permendikbudristek 53/2023).
  *
- * Menerima struktur deterministik dari BukuKurikulumBuilder dan (opsional) peta
- * narasi AI per bagian. Tabel/angka selalu dari data; narasi hanya melengkapi
- * prosa. Dokumen sengaja tanpa template khusus — prodi masih akan melengkapinya.
+ * Bagian berbasis data (I sebagian, V–IX) diisi otomatis dari
+ * BukuKurikulumBuilder. Bagian naratif akademik (Pengantar, III Landasan,
+ * IX Modalitas) diisi narasi AI bila tersedia. Bagian kebijakan spesifik
+ * institusi (II, IV, X, XI, XII, sebagian I) ditampilkan sebagai placeholder
+ * untuk dilengkapi program studi — sistem tidak mengarang fakta institusi.
  */
 class BukuKurikulumDocxExporter
 {
@@ -46,36 +50,106 @@ class BukuKurikulumDocxExporter
         $section->addPageBreak();
 
         if (! empty($naratif['pengantar'])) {
-            $this->bab($section, 'Kata Pengantar');
+            $this->judulTanpaNomor($section, 'Kata Pengantar');
             $this->paragraf($section, (string) $naratif['pengantar']);
+            $section->addPageBreak();
         }
 
-        $this->addProfilLulusan($section, $buku['profil_lulusan'] ?? [], $naratif['profil_lulusan'] ?? null);
-        $this->addCpl($section, $buku['cpl'] ?? [], $naratif['cpl'] ?? null);
-        $this->addMatriksKode(
+        // I. Identitas Program Studi
+        $this->bab($section, 'I', 'Identitas Program Studi');
+        $this->addIdentitas($section, $buku['identitas'] ?? []);
+
+        // II. Evaluasi Kurikulum dan Tracer Study
+        $this->bab($section, 'II', 'Evaluasi Kurikulum dan Tracer Study');
+        $this->naratifAtauPlaceholder(
             $section,
-            'Matriks Profil Lulusan × CPL',
-            $buku['matriks_pl_cpl'] ?? [],
-            'profil',
-            'cpl',
-            $this->kodeCpl($buku['cpl'] ?? []),
+            $naratif['evaluasi'] ?? null,
+            'Sajikan mekanisme dan hasil evaluasi kurikulum yang telah/sedang berjalan, serta analisis kebutuhan berdasarkan tracer study dan masukan pemangku kepentingan.'
         );
+
+        // III. Landasan Perancangan dan Pengembangan Kurikulum
+        $this->bab($section, 'III', 'Landasan Perancangan dan Pengembangan Kurikulum');
+        $this->naratifAtauPlaceholder(
+            $section,
+            $naratif['landasan'] ?? null,
+            'Uraikan landasan filosofis, sosiologis, psikologis, dan yuridis pengembangan kurikulum.'
+        );
+
+        // IV. Visi, Misi, Tujuan, dan Strategi
+        $this->bab($section, 'IV', 'Visi, Misi, Tujuan, dan Strategi');
+        $this->naratifAtauPlaceholder(
+            $section,
+            $naratif['vmts'] ?? null,
+            'Tuliskan Visi, Misi, Tujuan, dan Strategi program studi beserta University Value.'
+        );
+
+        // V. Capaian Pembelajaran Lulusan (CPL)
+        $this->bab($section, 'V', 'Capaian Pembelajaran Lulusan (CPL)');
+        if (! empty($naratif['cpl'])) {
+            $this->paragraf($section, (string) $naratif['cpl']);
+        }
+        $this->subJudul($section, 'Profil Lulusan');
+        $this->addProfilLulusan($section, $buku['profil_lulusan'] ?? []);
+        $this->subJudul($section, 'Rumusan CPL');
+        $this->addCpl($section, $buku['cpl'] ?? []);
+
+        // VI. Penetapan Bahan Kajian
+        $this->bab($section, 'VI', 'Penetapan Bahan Kajian');
         $this->addBahanKajian($section, $buku['bahan_kajian'] ?? [], $buku['matriks_cpl_bk'] ?? []);
-        $this->addStrukturMk($section, $buku['mata_kuliah'] ?? [], $naratif['mata_kuliah'] ?? null);
-        $this->addMatriksKode(
+
+        // VII. Pembentukan Mata Kuliah dan Penentuan Bobot SKS
+        $this->bab($section, 'VII', 'Pembentukan Mata Kuliah dan Penentuan Bobot SKS');
+        if (! empty($naratif['mata_kuliah'])) {
+            $this->paragraf($section, (string) $naratif['mata_kuliah']);
+        }
+        $this->addStrukturMk($section, $buku['mata_kuliah'] ?? []);
+
+        // VIII. Matrik, Peta Kurikulum, dan Masa Tempuh
+        $this->bab($section, 'VIII', 'Matrik, Peta Kurikulum, dan Masa Tempuh');
+        $this->subJudul($section, 'Matriks Profil Lulusan × CPL');
+        $this->addMatriksKode($section, $buku['matriks_pl_cpl'] ?? [], 'profil', 'cpl', $this->kodeCpl($buku['cpl'] ?? []), 'Profil');
+        $this->subJudul($section, 'Matriks CPL × Mata Kuliah');
+        $this->addMatriksKode($section, $this->siapkanMkCpl($buku['matriks_mk_cpl'] ?? []), 'label', 'cpl', $this->kodeCpl($buku['cpl'] ?? []), 'Mata Kuliah');
+
+        // IX. Modalitas Pembelajaran dan RPS
+        $this->bab($section, 'IX', 'Modalitas Pembelajaran dan Rencana Pembelajaran Semester (RPS)');
+        $this->naratifAtauPlaceholder(
             $section,
-            'Matriks CPL × Mata Kuliah',
-            $this->siapkanMkCpl($buku['matriks_mk_cpl'] ?? []),
-            'label',
-            'cpl',
-            $this->kodeCpl($buku['cpl'] ?? []),
+            $naratif['modalitas'] ?? null,
+            'Jelaskan modalitas pembelajaran (gaya belajar, metode Student-Centered Learning, blended learning) yang menjadi dasar penyusunan RPS.'
         );
+        $this->subJudul($section, 'Ringkasan RPS per Mata Kuliah');
         $this->addRpsRingkas($section, $buku['rps_ringkas'] ?? []);
+
+        // X. Hak Belajar Maksimum 3 Semester di Luar Program Studi (MBKM)
+        $this->bab($section, 'X', 'Rencana Implementasi Hak Belajar Maksimum 3 Semester di Luar Program Studi');
+        $this->naratifAtauPlaceholder(
+            $section,
+            $naratif['mbkm'] ?? null,
+            'Uraikan penempatan Bentuk Kegiatan Pembelajaran (BKP) MBKM dalam struktur kurikulum dan mekanisme pengakuan kredit.'
+        );
+
+        // XI. Manajemen dan Mekanisme Pelaksanaan Kurikulum
+        $this->bab($section, 'XI', 'Manajemen dan Mekanisme Pelaksanaan Kurikulum');
+        $this->naratifAtauPlaceholder(
+            $section,
+            $naratif['manajemen'] ?? null,
+            'Jelaskan rencana pelaksanaan kurikulum dan perangkat Sistem Penjaminan Mutu Internal (SPMI).'
+        );
+
+        // XII. Tata Cara Penerimaan Mahasiswa pada Berbagai Tahapan Kurikulum
+        $this->bab($section, 'XII', 'Tata Cara Penerimaan Mahasiswa pada Berbagai Tahapan Kurikulum');
+        $this->naratifAtauPlaceholder(
+            $section,
+            $naratif['penerimaan'] ?? null,
+            'Tuliskan tata cara penerimaan mahasiswa pada setiap tahapan kurikulum sesuai kebijakan dan standar perguruan tinggi.'
+        );
 
         $section->addTextBreak(1);
         $section->addText(
-            'Dokumen Buku Kurikulum dirakit otomatis dari data kurikulum · ' . now()->format('d M Y H:i')
-                . ' · Silakan lengkapi dan sunting sesuai kebutuhan program studi.',
+            'Dokumen Kurikulum mengikuti sistematika Panduan Penyusunan Kurikulum Pendidikan Tinggi (KPT) 2024 · '
+                . 'Bagian berbasis data dirakit otomatis; bagian bertanda placeholder dilengkapi program studi · '
+                . now()->format('d M Y H:i'),
             ['size' => 8, 'italic' => true, 'color' => self::MUTED],
             ['alignment' => Jc::END]
         );
@@ -93,7 +167,7 @@ class BukuKurikulumDocxExporter
         $kur = $identitas['kurikulum'] ?? [];
 
         $section->addTextBreak(3);
-        $section->addText('BUKU KURIKULUM', ['bold' => true, 'size' => 22, 'color' => self::BRAND], ['alignment' => Jc::CENTER]);
+        $section->addText('DOKUMEN KURIKULUM', ['bold' => true, 'size' => 22, 'color' => self::BRAND], ['alignment' => Jc::CENTER]);
         $section->addTextBreak(1);
         if ($prodi) {
             $section->addText('Program Studi ' . $prodi, ['bold' => true, 'size' => 16], ['alignment' => Jc::CENTER]);
@@ -113,14 +187,41 @@ class BukuKurikulumDocxExporter
         }
     }
 
-    // ------------------------------------------------------------------ Bab-bab
+    // ------------------------------------------------------------------ Bab I
 
-    private function addProfilLulusan(Section $section, array $items, ?string $narasi): void
+    private function addIdentitas(Section $section, array $identitas): void
     {
-        $this->bab($section, 'Profil Lulusan');
-        if ($narasi) {
-            $this->paragraf($section, $narasi);
+        $kur = $identitas['kurikulum'] ?? [];
+        $table = $this->tabel($section);
+        $baris = [
+            ['Perguruan Tinggi', $identitas['universitas']['nama'] ?? null],
+            ['Fakultas', $identitas['fakultas']['nama'] ?? null],
+            ['Program Studi', $identitas['prodi']['nama'] ?? null],
+            ['Akreditasi', null],
+            ['Jenjang Pendidikan', null],
+            ['Gelar Lulusan', null],
+            ['Nama Kurikulum', $kur['nama'] ?? null],
+            ['Tahun Kurikulum', $kur['tahun'] ?? null],
+            ['Status', isset($kur['status']) ? ucfirst((string) $kur['status']) : null],
+            ['Visi & Misi', null],
+        ];
+        foreach ($baris as [$label, $nilai]) {
+            $table->addRow();
+            $c1 = $table->addCell(3200, ['bgColor' => self::HEAD_FILL, 'valign' => 'center']);
+            $c1->addText($label, ['size' => 10, 'bold' => true, 'color' => self::INK], ['spaceAfter' => 0]);
+            $c2 = $table->addCell(6800, ['valign' => 'center']);
+            if ($nilai !== null && $nilai !== '') {
+                $c2->addText((string) $nilai, ['size' => 10, 'color' => self::INK], ['spaceAfter' => 0]);
+            } else {
+                $c2->addText('[Dilengkapi oleh program studi]', ['size' => 10, 'italic' => true, 'color' => self::MUTED], ['spaceAfter' => 0]);
+            }
         }
+    }
+
+    // ------------------------------------------------------------------ Sub-renderer data
+
+    private function addProfilLulusan(Section $section, array $items): void
+    {
         $table = $this->tabel($section);
         $this->baris($table, ['Kode', 'Deskripsi Profil Lulusan'], [1500, 8500], true);
         foreach ($items as $it) {
@@ -128,12 +229,8 @@ class BukuKurikulumDocxExporter
         }
     }
 
-    private function addCpl(Section $section, array $items, ?string $narasi): void
+    private function addCpl(Section $section, array $items): void
     {
-        $this->bab($section, 'Capaian Pembelajaran Lulusan (CPL)');
-        if ($narasi) {
-            $this->paragraf($section, $narasi);
-        }
         $table = $this->tabel($section);
         $this->baris($table, ['Kode', 'Aspek', 'KKNI', 'Deskripsi CPL'], [1200, 1800, 900, 6100], true);
         foreach ($items as $it) {
@@ -148,15 +245,13 @@ class BukuKurikulumDocxExporter
 
     private function addBahanKajian(Section $section, array $bk, array $matriksCplBk): void
     {
-        $this->bab($section, 'Bahan Kajian');
         $table = $this->tabel($section);
         $this->baris($table, ['Bahan Kajian', 'Deskripsi'], [3200, 6800], true);
         foreach ($bk as $it) {
             $this->baris($table, [(string) ($it['nama'] ?? ''), (string) ($it['deskripsi'] ?? '')], [3200, 6800]);
         }
 
-        $section->addTextBreak(1);
-        $section->addText('Keterkaitan CPL × Bahan Kajian', ['bold' => true, 'size' => 11, 'color' => self::INK]);
+        $this->subJudul($section, 'Keterkaitan CPL × Bahan Kajian');
         $table2 = $this->tabel($section);
         $this->baris($table2, ['CPL', 'Bahan Kajian Penopang'], [1500, 8500], true);
         foreach ($matriksCplBk as $row) {
@@ -165,12 +260,8 @@ class BukuKurikulumDocxExporter
         }
     }
 
-    private function addStrukturMk(Section $section, array $perSemester, ?string $narasi): void
+    private function addStrukturMk(Section $section, array $perSemester): void
     {
-        $this->bab($section, 'Struktur Mata Kuliah');
-        if ($narasi) {
-            $this->paragraf($section, $narasi);
-        }
         foreach ($perSemester as $grup) {
             $sem = $grup['semester'] ?? null;
             $section->addTextBreak(1);
@@ -194,7 +285,6 @@ class BukuKurikulumDocxExporter
 
     private function addRpsRingkas(Section $section, array $items): void
     {
-        $this->bab($section, 'Ringkasan RPS per Mata Kuliah');
         $table = $this->tabel($section);
         $this->baris($table, ['Kode', 'Mata Kuliah', 'Versi', 'CPMK', 'Sub-CPMK', 'Pekan', 'Komponen'], [1200, 4000, 900, 900, 1100, 900, 1100], true);
         foreach ($items as $it) {
@@ -213,12 +303,11 @@ class BukuKurikulumDocxExporter
     /**
      * Matriks centang generik: baris = entitas, kolom = daftar kode CPL.
      *
-     * @param  list<array<string,mixed>>  $rows    tiap row punya key label + array kode
-     * @param  list<string>  $kolom  daftar kode CPL sebagai kolom
+     * @param  list<array<string,mixed>>  $rows
+     * @param  list<string>  $kolom
      */
-    private function addMatriksKode(Section $section, string $judul, array $rows, string $labelKey, string $nilaiKey, array $kolom): void
+    private function addMatriksKode(Section $section, array $rows, string $labelKey, string $nilaiKey, array $kolom, string $labelHead): void
     {
-        $this->bab($section, $judul);
         if ($kolom === [] || $rows === []) {
             $this->paragraf($section, 'Belum ada data pemetaan.');
             return;
@@ -229,7 +318,7 @@ class BukuKurikulumDocxExporter
         $colW = max(500, (int) floor($sisa / max(1, count($kolom))));
 
         $table = $this->tabel($section);
-        $header = array_merge([''], $kolom);
+        $header = array_merge([$labelHead], $kolom);
         $widths = array_merge([$labelW], array_fill(0, count($kolom), $colW));
         $this->baris($table, $header, $widths, true, Jc::CENTER);
 
@@ -240,9 +329,8 @@ class BukuKurikulumDocxExporter
             $terpetakan = array_map('strval', $row[$nilaiKey] ?? []);
             foreach ($kolom as $kode) {
                 $cell = $table->addCell($colW, ['valign' => 'center']);
-                $ada = in_array($kode, $terpetakan, true);
                 $cell->addText(
-                    $ada ? '✓' : '',
+                    in_array($kode, $terpetakan, true) ? '✓' : '',
                     ['size' => 10, 'bold' => true, 'color' => self::HIT],
                     ['alignment' => Jc::CENTER, 'spaceAfter' => 0]
                 );
@@ -252,13 +340,12 @@ class BukuKurikulumDocxExporter
 
     // ------------------------------------------------------------------ Util
 
-    /** @return list<string> kode CPL sebagai kolom matriks */
+    /** @return list<string> */
     private function kodeCpl(array $cpl): array
     {
         return array_values(array_map(fn($c) => (string) ($c['kode'] ?? ''), $cpl));
     }
 
-    /** Normalisasi matriks MK×CPL: gabung kode+nama sebagai label baris. */
     private function siapkanMkCpl(array $rows): array
     {
         return array_map(fn($r) => [
@@ -267,10 +354,35 @@ class BukuKurikulumDocxExporter
         ], $rows);
     }
 
-    private function bab(Section $section, string $judul): void
+    private function bab(Section $section, string $nomor, string $judul): void
     {
         $section->addTextBreak(1);
+        $section->addText($nomor . '. ' . $judul, ['bold' => true, 'size' => 14, 'color' => self::BRAND], ['spaceAfter' => 120]);
+    }
+
+    private function judulTanpaNomor(Section $section, string $judul): void
+    {
         $section->addText($judul, ['bold' => true, 'size' => 14, 'color' => self::BRAND], ['spaceAfter' => 120]);
+    }
+
+    private function subJudul(Section $section, string $judul): void
+    {
+        $section->addTextBreak(1);
+        $section->addText($judul, ['bold' => true, 'size' => 11, 'color' => self::INK], ['spaceAfter' => 80]);
+    }
+
+    private function naratifAtauPlaceholder(Section $section, ?string $narasi, string $panduan): void
+    {
+        $narasi = trim((string) $narasi);
+        if ($narasi !== '') {
+            $this->paragraf($section, $narasi);
+            return;
+        }
+        $section->addText(
+            '[Bagian ini dilengkapi oleh program studi] ' . $panduan,
+            ['size' => 10, 'italic' => true, 'color' => self::MUTED],
+            ['alignment' => Jc::BOTH, 'spaceAfter' => 120]
+        );
     }
 
     private function paragraf(Section $section, string $teks): void

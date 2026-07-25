@@ -86,9 +86,10 @@ export type BukuData = {
 
 export type BukuNaratif = {
   pengantar?: string;
-  profil_lulusan?: string;
+  landasan?: string;
   cpl?: string;
   mata_kuliah?: string;
+  modalitas?: string;
 };
 
 export type BukuPratinjau = {

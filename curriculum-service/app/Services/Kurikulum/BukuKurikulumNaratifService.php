@@ -53,7 +53,7 @@ class BukuKurikulumNaratifService
 
             // Hanya ambil kunci prosa yang dikenal exporter, sebagai string.
             $out = [];
-            foreach (['pengantar', 'profil_lulusan', 'cpl', 'mata_kuliah'] as $key) {
+            foreach (['pengantar', 'landasan', 'cpl', 'mata_kuliah', 'modalitas'] as $key) {
                 $val = trim((string) ($data[$key] ?? ''));
                 if ($val !== '') {
                     $out[$key] = $val;

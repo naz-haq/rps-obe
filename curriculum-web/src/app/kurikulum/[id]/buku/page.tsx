@@ -7,7 +7,7 @@ import {
   type BukuKelengkapan,
   type BukuPratinjau,
 } from "@/lib/api";
-import { PageHeader, Card, CardBody, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
+import { PageHeader, Card, CardBody, Table, Th, Td, EmptyState } from "@/components/ui";
 import { KurikulumTabs } from "../tabs";
 import { BukuControls } from "./controls";
 
@@ -39,7 +39,7 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
     <div>
       <PageHeader
         title={kurikulum.nama}
-        subtitle={`${kurikulum.kode ? kurikulum.kode + " · " : ""}Tahun ${kurikulum.tahun} · Buku Kurikulum`}
+        subtitle={`${kurikulum.kode ? kurikulum.kode + " · " : ""}Tahun ${kurikulum.tahun} · Dokumen Kurikulum (KPT 2024)`}
         actions={
           <Link href={`/kurikulum/${id}`} className="text-sm text-brand-700 hover:underline">
             ← Ringkasan
@@ -52,7 +52,7 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
       {!lengkap ? (
         <Card>
           <div className="border-b border-border px-5 py-3.5">
-            <h2 className="text-sm font-semibold text-ink">Buku Kurikulum belum dapat dibuat</h2>
+            <h2 className="text-sm font-semibold text-ink">Dokumen Kurikulum belum dapat dibuat</h2>
           </div>
           <CardBody>
             {kelengkapan ? (
@@ -88,7 +88,8 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
               <div>
                 <h2 className="text-sm font-semibold text-ink">Narasi (AI) — tinjau sebelum unduh</h2>
                 <p className="mt-0.5 text-xs text-muted">
-                  Narasi hanya melengkapi prosa; seluruh data/tabel di bawah tetap deterministik dari kurikulum.
+                  Narasi hanya melengkapi bagian prosa akademik (pengantar, landasan, penjelasan CPL/MK, modalitas).
+                  Data/tabel tetap deterministik. Bagian kebijakan institusi tetap diisi program studi.
                 </p>
               </div>
               <BukuControls
@@ -101,33 +102,64 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
               {Object.keys(naratif).length === 0 ? (
                 <p className="text-sm text-muted">
                   Belum ada narasi. Klik <span className="font-medium text-ink">Generate Narasi (AI)</span> untuk menyusun
-                  kata pengantar dan penjelasan naratif berdasarkan data kurikulum.
+                  draf prosa berdasarkan data kurikulum.
                 </p>
               ) : (
                 <div className="space-y-4">
                   <NarasiBlok judul="Kata Pengantar" teks={naratif.pengantar} />
-                  <NarasiBlok judul="Profil Lulusan" teks={naratif.profil_lulusan} />
-                  <NarasiBlok judul="Capaian Pembelajaran (CPL)" teks={naratif.cpl} />
-                  <NarasiBlok judul="Struktur Mata Kuliah" teks={naratif.mata_kuliah} />
+                  <NarasiBlok judul="Landasan Pengembangan Kurikulum" teks={naratif.landasan} />
+                  <NarasiBlok judul="Penjelasan CPL" teks={naratif.cpl} />
+                  <NarasiBlok judul="Penjelasan Pembentukan Mata Kuliah" teks={naratif.mata_kuliah} />
+                  <NarasiBlok judul="Modalitas Pembelajaran" teks={naratif.modalitas} />
                 </div>
               )}
             </CardBody>
           </Card>
 
-          {/* Identitas */}
-          <Seksi judul="Identitas">
+          <p className="text-xs text-muted">
+            Struktur mengikuti sistematika 12 bagian (I–XII) Panduan KPT 2024. Bagian bertanda{" "}
+            <span className="italic">placeholder</span> dilengkapi program studi setelah diunduh.
+          </p>
+
+          {/* I. Identitas */}
+          <Bab nomor="I" judul="Identitas Program Studi">
             <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-              <Info label="Program Studi" nilai={buku.identitas.prodi?.nama} />
+              <Info label="Perguruan Tinggi" nilai={buku.identitas.universitas?.nama} />
               <Info label="Fakultas" nilai={buku.identitas.fakultas?.nama} />
-              <Info label="Universitas" nilai={buku.identitas.universitas?.nama} />
-              <Info label="Kurikulum" nilai={buku.identitas.kurikulum.nama} />
+              <Info label="Program Studi" nilai={buku.identitas.prodi?.nama} />
+              <Info label="Akreditasi" />
+              <Info label="Jenjang Pendidikan" />
+              <Info label="Gelar Lulusan" />
+              <Info label="Nama Kurikulum" nilai={buku.identitas.kurikulum.nama} />
               <Info label="Tahun" nilai={buku.identitas.kurikulum.tahun} />
               <Info label="Status" nilai={buku.identitas.kurikulum.status} />
+              <Info label="Visi & Misi" />
             </dl>
-          </Seksi>
+          </Bab>
 
-          {/* Profil Lulusan */}
-          <Seksi judul={`Profil Lulusan (${buku.profil_lulusan.length})`}>
+          {/* II. Evaluasi Kurikulum & Tracer Study */}
+          <Bab nomor="II" judul="Evaluasi Kurikulum dan Tracer Study">
+            <Placeholder teks="Sajikan mekanisme dan hasil evaluasi kurikulum serta analisis kebutuhan dari tracer study dan pemangku kepentingan." />
+          </Bab>
+
+          {/* III. Landasan */}
+          <Bab nomor="III" judul="Landasan Perancangan dan Pengembangan Kurikulum">
+            {naratif.landasan ? (
+              <NarasiBlok teks={naratif.landasan} />
+            ) : (
+              <Placeholder teks="Uraikan landasan filosofis, sosiologis, psikologis, dan yuridis. Dapat dibantu tombol Generate Narasi (AI)." />
+            )}
+          </Bab>
+
+          {/* IV. VMTS */}
+          <Bab nomor="IV" judul="Visi, Misi, Tujuan, dan Strategi">
+            <Placeholder teks="Tuliskan Visi, Misi, Tujuan, dan Strategi program studi beserta University Value." />
+          </Bab>
+
+          {/* V. CPL */}
+          <Bab nomor="V" judul="Capaian Pembelajaran Lulusan (CPL)">
+            {naratif.cpl && <NarasiBlok teks={naratif.cpl} />}
+            <SubJudul teks={`Profil Lulusan (${buku.profil_lulusan.length})`} />
             <Table>
               <thead>
                 <tr>
@@ -144,10 +176,7 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
                 ))}
               </tbody>
             </Table>
-          </Seksi>
-
-          {/* CPL */}
-          <Seksi judul={`Capaian Pembelajaran Lulusan (${buku.cpl.length})`}>
+            <SubJudul teks={`Rumusan CPL (${buku.cpl.length})`} />
             <Table>
               <thead>
                 <tr>
@@ -168,19 +197,10 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
                 ))}
               </tbody>
             </Table>
-          </Seksi>
+          </Bab>
 
-          {/* Matriks PL × CPL */}
-          <Seksi judul="Matriks Profil Lulusan × CPL">
-            <MatriksGrid
-              kolom={cplKolom}
-              baris={buku.matriks_pl_cpl.map((r) => ({ label: r.profil, aktif: r.cpl }))}
-              labelHead="Profil"
-            />
-          </Seksi>
-
-          {/* Bahan Kajian + CPL×BK */}
-          <Seksi judul={`Bahan Kajian (${buku.bahan_kajian.length})`}>
+          {/* VI. Bahan Kajian */}
+          <Bab nomor="VI" judul="Penetapan Bahan Kajian">
             <Table>
               <thead>
                 <tr>
@@ -197,29 +217,28 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
                 ))}
               </tbody>
             </Table>
-            <div className="mt-4">
-              <h4 className="mb-2 text-xs font-semibold text-muted">Keterkaitan CPL × Bahan Kajian</h4>
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>CPL</Th>
-                    <Th>Bahan Kajian Penopang</Th>
+            <SubJudul teks="Keterkaitan CPL × Bahan Kajian" />
+            <Table>
+              <thead>
+                <tr>
+                  <Th>CPL</Th>
+                  <Th>Bahan Kajian Penopang</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {buku.matriks_cpl_bk.map((r) => (
+                  <tr key={r.cpl}>
+                    <Td className="font-medium">{r.cpl}</Td>
+                    <Td>{r.bahan_kajian.length ? r.bahan_kajian.join("; ") : "—"}</Td>
                   </tr>
-                </thead>
-                <tbody>
-                  {buku.matriks_cpl_bk.map((r) => (
-                    <tr key={r.cpl}>
-                      <Td className="font-medium">{r.cpl}</Td>
-                      <Td>{r.bahan_kajian.length ? r.bahan_kajian.join("; ") : "—"}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          </Seksi>
+                ))}
+              </tbody>
+            </Table>
+          </Bab>
 
-          {/* Struktur MK per semester */}
-          <Seksi judul="Struktur Mata Kuliah">
+          {/* VII. MK & SKS */}
+          <Bab nomor="VII" judul="Pembentukan Mata Kuliah dan Penentuan Bobot SKS">
+            {naratif.mata_kuliah && <NarasiBlok teks={naratif.mata_kuliah} />}
             <div className="space-y-4">
               {buku.mata_kuliah.map((grup) => (
                 <div key={grup.semester ?? "none"}>
@@ -251,19 +270,32 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
                 </div>
               ))}
             </div>
-          </Seksi>
+          </Bab>
 
-          {/* Matriks CPL × MK */}
-          <Seksi judul="Matriks CPL × Mata Kuliah">
+          {/* VIII. Matrik & Peta */}
+          <Bab nomor="VIII" judul="Matrik, Peta Kurikulum, dan Masa Tempuh">
+            <SubJudul teks="Matriks Profil Lulusan × CPL" />
             <MatriksGrid
               kolom={cplKolom}
-              baris={buku.matriks_mk_cpl.map((r) => ({ label: `${r.kode_mk}`, aktif: r.cpl }))}
+              baris={buku.matriks_pl_cpl.map((r) => ({ label: r.profil, aktif: r.cpl }))}
+              labelHead="Profil"
+            />
+            <SubJudul teks="Matriks CPL × Mata Kuliah" />
+            <MatriksGrid
+              kolom={cplKolom}
+              baris={buku.matriks_mk_cpl.map((r) => ({ label: r.kode_mk, aktif: r.cpl }))}
               labelHead="Mata Kuliah"
             />
-          </Seksi>
+          </Bab>
 
-          {/* Ringkasan RPS */}
-          <Seksi judul="Ringkasan RPS per Mata Kuliah">
+          {/* IX. Modalitas & RPS */}
+          <Bab nomor="IX" judul="Modalitas Pembelajaran dan Rencana Pembelajaran Semester (RPS)">
+            {naratif.modalitas ? (
+              <NarasiBlok teks={naratif.modalitas} />
+            ) : (
+              <Placeholder teks="Jelaskan modalitas pembelajaran (gaya belajar, Student-Centered Learning, blended learning). Dapat dibantu tombol Generate Narasi (AI)." />
+            )}
+            <SubJudul teks="Ringkasan RPS per Mata Kuliah" />
             <Table>
               <thead>
                 <tr>
@@ -290,21 +322,50 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
                 ))}
               </tbody>
             </Table>
-          </Seksi>
+          </Bab>
+
+          {/* X. MBKM */}
+          <Bab nomor="X" judul="Rencana Implementasi Hak Belajar Maksimum 3 Semester di Luar Program Studi">
+            <Placeholder teks="Uraikan penempatan BKP MBKM dalam struktur kurikulum dan mekanisme pengakuan kredit." />
+          </Bab>
+
+          {/* XI. Manajemen & SPMI */}
+          <Bab nomor="XI" judul="Manajemen dan Mekanisme Pelaksanaan Kurikulum">
+            <Placeholder teks="Jelaskan rencana pelaksanaan kurikulum dan perangkat Sistem Penjaminan Mutu Internal (SPMI)." />
+          </Bab>
+
+          {/* XII. Penerimaan Mahasiswa */}
+          <Bab nomor="XII" judul="Tata Cara Penerimaan Mahasiswa pada Berbagai Tahapan Kurikulum">
+            <Placeholder teks="Tuliskan tata cara penerimaan mahasiswa pada setiap tahapan kurikulum sesuai kebijakan perguruan tinggi." />
+          </Bab>
         </div>
       )}
     </div>
   );
 }
 
-function Seksi({ judul, children }: { judul: string; children: React.ReactNode }) {
+function Bab({ nomor, judul, children }: { nomor: string; judul: string; children: React.ReactNode }) {
   return (
     <Card>
       <div className="border-b border-border px-5 py-3.5">
-        <h3 className="text-sm font-semibold text-ink">{judul}</h3>
+        <h3 className="text-sm font-semibold text-ink">
+          <span className="text-brand-700">{nomor}.</span> {judul}
+        </h3>
       </div>
       <CardBody>{children}</CardBody>
     </Card>
+  );
+}
+
+function SubJudul({ teks }: { teks: string }) {
+  return <h4 className="mb-1.5 mt-4 text-xs font-semibold text-muted first:mt-0">{teks}</h4>;
+}
+
+function Placeholder({ teks }: { teks: string }) {
+  return (
+    <p className="rounded-md border border-dashed border-border bg-gray-50 px-3 py-2 text-sm italic text-muted">
+      [Dilengkapi oleh program studi] {teks}
+    </p>
   );
 }
 
@@ -312,16 +373,20 @@ function Info({ label, nilai }: { label: string; nilai?: string | null }) {
   return (
     <div>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="text-ink">{nilai || "—"}</dd>
+      {nilai ? (
+        <dd className="text-ink">{nilai}</dd>
+      ) : (
+        <dd className="text-sm italic text-muted">[dilengkapi prodi]</dd>
+      )}
     </div>
   );
 }
 
-function NarasiBlok({ judul, teks }: { judul: string; teks?: string }) {
+function NarasiBlok({ judul, teks }: { judul?: string; teks?: string }) {
   if (!teks) return null;
   return (
     <div>
-      <h4 className="mb-1 text-xs font-semibold text-brand-700">{judul}</h4>
+      {judul && <h4 className="mb-1 text-xs font-semibold text-brand-700">{judul}</h4>}
       {teks.split(/\n{2,}/).map((par, i) => (
         <p key={i} className="mb-2 whitespace-pre-line text-sm leading-relaxed text-ink">
           {par}
