@@ -28,6 +28,13 @@
 /benchmark-harness/
 /rps-obe-builder/
 
+# ===== Dokumen konsep/perencanaan & rujukan (bukan bagian aplikasi; tetap di disk) =====
+/*.md
+!/README.md
+/*.mermaid
+/*.html
+/*.pdf
+
 # ===== Misc =====
 .DS_Store
 **/*.log
