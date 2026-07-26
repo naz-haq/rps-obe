@@ -12,6 +12,7 @@ import { PageHeader, Card, CardBody, Table, Th, Td, EmptyState } from "@/compone
 import { KurikulumTabs } from "../tabs";
 import { BukuControls } from "./controls";
 import { VmtsManager } from "./vmts-manager";
+import { KelengkapanRpsModal } from "../kelengkapan-rps";
 
 export default async function BukuKurikulumPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,22 +65,13 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
           </div>
           <CardBody>
             {kelengkapan ? (
-              <div className="text-sm">
-                <p className="text-ink">
-                  {kelengkapan.mk_ada_rps} dari {kelengkapan.total_mk} mata kuliah sudah memiliki RPS. Lengkapi RPS mata
-                  kuliah berikut lebih dulu:
-                </p>
-                <ul className="mt-2 flex flex-wrap gap-2">
-                  {kelengkapan.mk_belum_rps.map((m) => (
-                    <li
-                      key={m.kode_mk}
-                      className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
-                    >
-                      {m.kode_mk} — {m.nama}
-                      {m.semester ? ` (Sem ${m.semester})` : ""}
-                    </li>
-                  ))}
-                </ul>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <span className="text-ink">
+                  <span className="font-semibold tabular-nums">{kelengkapan.mk_ada_rps}</span> / {kelengkapan.total_mk}{" "}
+                  mata kuliah sudah memiliki RPS
+                </span>
+                <span className="text-amber-700 tabular-nums">{kelengkapan.mk_belum_rps.length} MK belum ber-RPS</span>
+                <KelengkapanRpsModal kelengkapan={kelengkapan} />
               </div>
             ) : (
               <p className="text-sm text-muted">Status kelengkapan belum tersedia.</p>

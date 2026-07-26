@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { KurikulumTabs } from "./tabs";
+import { KelengkapanRpsModal } from "./kelengkapan-rps";
 import { ProfilLulusanCplMatrix } from "./profil-lulusan/matriks";
 import { CplBahanKajianMatrix } from "./bahan-kajian/matriks";
 import { CplMataKuliahMatrix } from "./mata-kuliah/matriks";
@@ -107,26 +108,20 @@ export default async function KurikulumDetailPage({ params }: { params: Promise<
         </div>
         <CardBody>
           {buku ? (
-            buku.lengkap ? (
-              <p className="text-sm text-muted">
-                Semua {buku.total_mk} mata kuliah sudah memiliki RPS. Buku Kurikulum siap diunduh.
-              </p>
-            ) : (
-              <div className="text-sm">
-                <p className="text-ink">
-                  {buku.mk_ada_rps} dari {buku.total_mk} mata kuliah sudah memiliki RPS. Lengkapi RPS mata kuliah berikut
-                  sebelum membuat Buku Kurikulum:
-                </p>
-                <ul className="mt-2 flex flex-wrap gap-2">
-                  {buku.mk_belum_rps.map((m) => (
-                    <li key={m.kode_mk} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                      {m.kode_mk} — {m.nama}
-                      {m.semester ? ` (Sem ${m.semester})` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+              <span className="text-ink">
+                <span className="font-semibold tabular-nums">{buku.mk_ada_rps}</span> / {buku.total_mk} mata kuliah
+                sudah memiliki RPS
+              </span>
+              {buku.lengkap ? (
+                <span className="text-emerald-700">Buku Kurikulum siap diunduh.</span>
+              ) : (
+                <>
+                  <span className="text-amber-700 tabular-nums">{buku.mk_belum_rps.length} MK belum ber-RPS</span>
+                  <KelengkapanRpsModal kelengkapan={buku} />
+                </>
+              )}
+            </div>
           ) : (
             <p className="text-sm text-muted">Status kelengkapan belum tersedia.</p>
           )}
