@@ -167,7 +167,6 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
           <Bab nomor="IV" judul="Visi, Misi, Tujuan, dan Strategi">
             <VmtsManager
               kurikulumId={id}
-              institusiId={kurikulum.institusi_id}
               currentVmtsId={kurikulum.vmts_id ?? null}
               versions={vmtsVersions}
             />

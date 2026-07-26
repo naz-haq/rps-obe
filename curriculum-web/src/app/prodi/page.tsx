@@ -1,6 +1,7 @@
-import { apiGet, type InstitusiData } from "@/lib/api";
+import { apiGet, type InstitusiData, type ProdiVmts } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, Badge, EmptyState } from "@/components/ui";
 import { CreateInstitusiButton, EditInstitusiButton, DeleteInstitusiButton } from "./forms";
+import { ManageVmtsButton } from "./vmts-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,14 @@ type UnitOpt = { id: number; nama: string };
 export default async function ProdiPage() {
   const res = await apiGet<{ data: InstitusiData[] }>("/institusi").catch(() => ({ data: [] as InstitusiData[] }));
   const items = res.data;
+
+  const vmtsRes = await apiGet<{ data: ProdiVmts[] }>("/prodi-vmts").catch(() => ({ data: [] as ProdiVmts[] }));
+  const vmtsByProdi = new Map<number, ProdiVmts[]>();
+  for (const v of vmtsRes.data) {
+    const list = vmtsByProdi.get(v.institusi_id) ?? [];
+    list.push(v);
+    vmtsByProdi.set(v.institusi_id, list);
+  }
 
   const universitas = items.filter((i) => i.jenis === "universitas");
   const fakultas = items.filter((i) => i.jenis === "fakultas");
@@ -48,7 +57,7 @@ export default async function ProdiPage() {
     }
   }
 
-  const opts = { fakultasOpts, universitasOpts };
+  const opts = { fakultasOpts, universitasOpts, vmtsByProdi };
 
   return (
     <div>
@@ -125,7 +134,7 @@ export default async function ProdiPage() {
   );
 }
 
-type Opts = { fakultasOpts: UnitOpt[]; universitasOpts: UnitOpt[] };
+type Opts = { fakultasOpts: UnitOpt[]; universitasOpts: UnitOpt[]; vmtsByProdi: Map<number, ProdiVmts[]> };
 
 function UniversitasGroup({
   universitas,
@@ -133,12 +142,13 @@ function UniversitasGroup({
   prodiByParent,
   fakultasOpts,
   universitasOpts,
+  vmtsByProdi,
 }: {
   universitas: InstitusiData;
   fakultas: InstitusiData[];
   prodiByParent: Map<number, InstitusiData[]>;
 } & Opts) {
-  const opts = { fakultasOpts, universitasOpts };
+  const opts = { fakultasOpts, universitasOpts, vmtsByProdi };
   return (
     <>
       <tr className="bg-brand-100/60 hover:bg-brand-100">
@@ -172,12 +182,13 @@ function FakultasGroup({
   indent,
   fakultasOpts,
   universitasOpts,
+  vmtsByProdi,
 }: {
   fakultas: InstitusiData;
   prodi: InstitusiData[];
   indent?: boolean;
 } & Opts) {
-  const opts = { fakultasOpts, universitasOpts };
+  const opts = { fakultasOpts, universitasOpts, vmtsByProdi };
   return (
     <>
       <tr className="bg-brand-50/60 hover:bg-brand-50">
@@ -213,6 +224,7 @@ function ProdiRow({
   indent,
   fakultasOpts,
   universitasOpts,
+  vmtsByProdi,
 }: {
   item: InstitusiData;
   indent?: boolean | "deep";
@@ -235,6 +247,7 @@ function ProdiRow({
       <Td className="text-right tabular-nums">{item.mata_kuliah_count}</Td>
       <Td>
         <div className="flex justify-end gap-1">
+          <ManageVmtsButton institusiId={item.id} versions={vmtsByProdi.get(item.id) ?? []} />
           <EditInstitusiButton item={item} fakultas={fakultasOpts} universitas={universitasOpts} />
           <DeleteInstitusiButton item={item} />
         </div>
