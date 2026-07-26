@@ -30,4 +30,9 @@ class Institusi extends Model
     {
         return $this->hasMany(MataKuliah::class, 'institusi_id');
     }
+
+    public function vmts(): HasMany
+    {
+        return $this->hasMany(ProdiVmts::class, 'institusi_id');
+    }
 }

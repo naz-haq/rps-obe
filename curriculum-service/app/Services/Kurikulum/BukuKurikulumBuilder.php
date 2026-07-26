@@ -79,7 +79,7 @@ class BukuKurikulumBuilder
         ];
     }
 
-    /** Identitas program studi (hierarki institusi + metadata kurikulum). */
+    /** Identitas program studi (hierarki institusi + metadata kurikulum + VMTS). */
     private function identitas(Kurikulum $kurikulum): array
     {
         $prodi = null;
@@ -102,6 +102,9 @@ class BukuKurikulumBuilder
             $universitas = $chain[2] ?? $fakultas ?? $prodi;
         }
 
+        // VMTS: versi yang dipilih kurikulum (kunci ke edisi tertentu).
+        $vmts = $kurikulum->vmts()->first();
+
         return [
             'kurikulum' => [
                 'nama'            => $kurikulum->nama,
@@ -110,9 +113,24 @@ class BukuKurikulumBuilder
                 'status'          => $kurikulum->status,
                 'tanggal_berlaku' => optional($kurikulum->tanggal_berlaku)->format('Y-m-d'),
             ],
-            'prodi'       => $prodi ? ['nama' => $prodi->nama] : null,
+            'prodi' => $prodi ? [
+                'nama'       => $prodi->nama,
+                'jenjang'    => $prodi->jenjang,
+                'gelar'      => $prodi->gelar,
+                'akreditasi' => $prodi->akreditasi,
+            ] : null,
             'fakultas'    => $fakultas ? ['nama' => $fakultas->nama] : null,
-            'universitas' => $universitas ? ['nama' => $universitas->nama] : null,
+            'universitas' => $universitas ? [
+                'nama'            => $universitas->nama,
+                'nilai_institusi' => $universitas->nilai_institusi,
+            ] : null,
+            'vmts' => $vmts ? [
+                'label'    => $vmts->label,
+                'visi'     => $vmts->visi,
+                'misi'     => $vmts->misi ?? [],
+                'tujuan'   => $vmts->tujuan ?? [],
+                'strategi' => $vmts->strategi ?? [],
+            ] : null,
         ];
     }
 

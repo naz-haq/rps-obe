@@ -36,6 +36,11 @@ class Kurikulum extends Model
         return $this->belongsTo(Kurikulum::class, 'mengganti_id');
     }
 
+    public function vmts(): BelongsTo
+    {
+        return $this->belongsTo(ProdiVmts::class, 'vmts_id');
+    }
+
     public function mataKuliah(): HasMany
     {
         return $this->hasMany(MataKuliah::class, 'kurikulum_id');

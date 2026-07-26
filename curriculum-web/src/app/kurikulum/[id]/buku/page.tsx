@@ -6,10 +6,12 @@ import {
   type Kurikulum,
   type BukuKelengkapan,
   type BukuPratinjau,
+  type ProdiVmts,
 } from "@/lib/api";
 import { PageHeader, Card, CardBody, Table, Th, Td, EmptyState } from "@/components/ui";
 import { KurikulumTabs } from "../tabs";
 import { BukuControls } from "./controls";
+import { VmtsManager } from "./vmts-manager";
 
 export default async function BukuKurikulumPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,6 +36,12 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
   const buku = pratinjau?.data ?? null;
   const naratif = pratinjau?.naratif ?? {};
   const cplKolom = buku?.cpl.map((c) => c.kode) ?? [];
+
+  const vmtsVersions = lengkap
+    ? await apiGet<{ data: ProdiVmts[] }>(`/prodi-vmts`, { institusi_id: kurikulum.institusi_id })
+        .then((r) => r.data)
+        .catch(() => [] as ProdiVmts[])
+    : [];
 
   return (
     <div>
@@ -127,14 +135,18 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
               <Info label="Perguruan Tinggi" nilai={buku.identitas.universitas?.nama} />
               <Info label="Fakultas" nilai={buku.identitas.fakultas?.nama} />
               <Info label="Program Studi" nilai={buku.identitas.prodi?.nama} />
-              <Info label="Akreditasi" />
-              <Info label="Jenjang Pendidikan" />
-              <Info label="Gelar Lulusan" />
+              <Info label="Akreditasi" nilai={buku.identitas.prodi?.akreditasi} />
+              <Info label="Jenjang Pendidikan" nilai={buku.identitas.prodi?.jenjang} />
+              <Info label="Gelar Lulusan" nilai={buku.identitas.prodi?.gelar} />
               <Info label="Nama Kurikulum" nilai={buku.identitas.kurikulum.nama} />
               <Info label="Tahun" nilai={buku.identitas.kurikulum.tahun} />
               <Info label="Status" nilai={buku.identitas.kurikulum.status} />
-              <Info label="Visi & Misi" />
+              <Info label="Visi" nilai={buku.identitas.vmts?.visi} />
             </dl>
+            <p className="mt-2 text-xs text-muted">
+              Akreditasi/jenjang/gelar diisi di menu <span className="font-medium">Prodi</span>. Visi & Misi lengkap dikelola
+              di Bab IV di bawah.
+            </p>
           </Bab>
 
           {/* II. Evaluasi Kurikulum & Tracer Study */}
@@ -153,7 +165,33 @@ export default async function BukuKurikulumPage({ params }: { params: Promise<{ 
 
           {/* IV. VMTS */}
           <Bab nomor="IV" judul="Visi, Misi, Tujuan, dan Strategi">
-            <Placeholder teks="Tuliskan Visi, Misi, Tujuan, dan Strategi program studi beserta University Value." />
+            <VmtsManager
+              kurikulumId={id}
+              institusiId={kurikulum.institusi_id}
+              currentVmtsId={kurikulum.vmts_id ?? null}
+              versions={vmtsVersions}
+            />
+            {buku.identitas.vmts ? (
+              <div className="space-y-3">
+                {buku.identitas.vmts.visi && (
+                  <div>
+                    <h4 className="mb-1 text-xs font-semibold text-brand-700">Visi</h4>
+                    <p className="text-sm text-ink">{buku.identitas.vmts.visi}</p>
+                  </div>
+                )}
+                <VmtsList judul="Misi" items={buku.identitas.vmts.misi} />
+                <VmtsList judul="Tujuan" items={buku.identitas.vmts.tujuan} />
+                <VmtsList judul="Strategi" items={buku.identitas.vmts.strategi} />
+                {buku.identitas.universitas?.nilai_institusi && (
+                  <div>
+                    <h4 className="mb-1 text-xs font-semibold text-brand-700">University Value</h4>
+                    <p className="text-sm text-ink">{buku.identitas.universitas.nilai_institusi}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Placeholder teks="Pilih atau buat versi VMTS di atas untuk mengisi bagian ini." />
+            )}
           </Bab>
 
           {/* V. CPL */}
@@ -359,6 +397,20 @@ function Bab({ nomor, judul, children }: { nomor: string; judul: string; childre
 
 function SubJudul({ teks }: { teks: string }) {
   return <h4 className="mb-1.5 mt-4 text-xs font-semibold text-muted first:mt-0">{teks}</h4>;
+}
+
+function VmtsList({ judul, items }: { judul: string; items: string[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <h4 className="mb-1 text-xs font-semibold text-brand-700">{judul}</h4>
+      <ol className="list-inside list-decimal space-y-0.5 text-sm text-ink">
+        {items.map((it, i) => (
+          <li key={i}>{it}</li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function Placeholder({ teks }: { teks: string }) {

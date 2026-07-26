@@ -77,11 +77,7 @@ class BukuKurikulumDocxExporter
 
         // IV. Visi, Misi, Tujuan, dan Strategi
         $this->bab($section, 'IV', 'Visi, Misi, Tujuan, dan Strategi');
-        $this->naratifAtauPlaceholder(
-            $section,
-            $naratif['vmts'] ?? null,
-            'Tuliskan Visi, Misi, Tujuan, dan Strategi program studi beserta University Value.'
-        );
+        $this->addVmts($section, $buku['identitas'] ?? []);
 
         // V. Capaian Pembelajaran Lulusan (CPL)
         $this->bab($section, 'V', 'Capaian Pembelajaran Lulusan (CPL)');
@@ -192,18 +188,19 @@ class BukuKurikulumDocxExporter
     private function addIdentitas(Section $section, array $identitas): void
     {
         $kur = $identitas['kurikulum'] ?? [];
+        $prodi = $identitas['prodi'] ?? [];
         $table = $this->tabel($section);
         $baris = [
             ['Perguruan Tinggi', $identitas['universitas']['nama'] ?? null],
             ['Fakultas', $identitas['fakultas']['nama'] ?? null],
-            ['Program Studi', $identitas['prodi']['nama'] ?? null],
-            ['Akreditasi', null],
-            ['Jenjang Pendidikan', null],
-            ['Gelar Lulusan', null],
+            ['Program Studi', $prodi['nama'] ?? null],
+            ['Akreditasi', $prodi['akreditasi'] ?? null],
+            ['Jenjang Pendidikan', $prodi['jenjang'] ?? null],
+            ['Gelar Lulusan', $prodi['gelar'] ?? null],
             ['Nama Kurikulum', $kur['nama'] ?? null],
             ['Tahun Kurikulum', $kur['tahun'] ?? null],
             ['Status', isset($kur['status']) ? ucfirst((string) $kur['status']) : null],
-            ['Visi & Misi', null],
+            ['Visi', $identitas['vmts']['visi'] ?? null],
         ];
         foreach ($baris as [$label, $nilai]) {
             $table->addRow();
@@ -215,6 +212,51 @@ class BukuKurikulumDocxExporter
             } else {
                 $c2->addText('[Dilengkapi oleh program studi]', ['size' => 10, 'italic' => true, 'color' => self::MUTED], ['spaceAfter' => 0]);
             }
+        }
+    }
+
+    /** Bab IV: VMTS versi terpilih + University Value. */
+    private function addVmts(Section $section, array $identitas): void
+    {
+        $vmts = $identitas['vmts'] ?? null;
+        $nilai = $identitas['universitas']['nilai_institusi'] ?? null;
+
+        if (! $vmts && ! $nilai) {
+            $this->naratifAtauPlaceholder($section, null, 'Pilih/isi VMTS prodi (menu Prodi → VMTS) lalu tautkan ke kurikulum ini.');
+            return;
+        }
+
+        if (! empty($vmts['label'])) {
+            $section->addText('Sumber: ' . $vmts['label'], ['size' => 9, 'italic' => true, 'color' => self::MUTED], ['spaceAfter' => 80]);
+        }
+        if (! empty($vmts['visi'])) {
+            $this->subJudul($section, 'Visi');
+            $this->paragraf($section, (string) $vmts['visi']);
+        }
+        $this->daftarBernomor($section, 'Misi', $vmts['misi'] ?? []);
+        $this->daftarBernomor($section, 'Tujuan', $vmts['tujuan'] ?? []);
+        $this->daftarBernomor($section, 'Strategi', $vmts['strategi'] ?? []);
+
+        if ($nilai) {
+            $this->subJudul($section, 'University Value');
+            $this->paragraf($section, (string) $nilai);
+        }
+    }
+
+    /** @param list<string> $items */
+    private function daftarBernomor(Section $section, string $judul, array $items): void
+    {
+        if ($items === []) {
+            return;
+        }
+        $this->subJudul($section, $judul);
+        $i = 1;
+        foreach ($items as $item) {
+            $item = trim((string) $item);
+            if ($item === '') {
+                continue;
+            }
+            $section->addText(($i++) . '. ' . $item, ['size' => 11, 'color' => self::INK], ['alignment' => Jc::BOTH, 'spaceAfter' => 60]);
         }
     }
 

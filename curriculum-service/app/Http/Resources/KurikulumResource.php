@@ -21,6 +21,7 @@ class KurikulumResource extends JsonResource
             'tanggal_berlaku' => optional($this->tanggal_berlaku)->toDateString(),
             'tanggal_pensiun' => optional($this->tanggal_pensiun)->toDateString(),
             'mengganti_id'    => $this->mengganti_id,
+            'vmts_id'         => $this->vmts_id,
             'mata_kuliah_count' => $this->whenCounted('mataKuliah'),
             'cpl_count'         => $this->whenCounted('cpl'),
             'created_at'      => $this->created_at,

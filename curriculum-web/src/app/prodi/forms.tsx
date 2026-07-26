@@ -74,6 +74,24 @@ function InstitusiFields({
           placeholder="mis. APTFI / IAI"
         />
       </div>
+      {jenis === "prodi" && (
+        <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-gray-50/60 p-3">
+          <Field label="Jenjang" name="jenjang" defaultValue={item?.jenjang ?? ""} placeholder="mis. Sarjana (S1)" />
+          <Field label="Gelar Lulusan" name="gelar" defaultValue={item?.gelar ?? ""} placeholder="mis. S.Farm." />
+          <Field label="Akreditasi" name="akreditasi" defaultValue={item?.akreditasi ?? ""} placeholder="mis. Unggul (SK …/2024)" />
+          <p className="col-span-3 text-xs text-muted">Dipakai pada Bab I Dokumen Kurikulum (KPT 2024). VMTS dikelola terpisah di halaman Buku Kurikulum.</p>
+        </div>
+      )}
+      {jenis === "universitas" && (
+        <div className="rounded-lg border border-border bg-gray-50/60 p-3">
+          <Field
+            label="University Value"
+            name="nilai_institusi"
+            defaultValue={item?.nilai_institusi ?? ""}
+            placeholder="Nilai-nilai institusi (dipakai Bab IV)"
+          />
+        </div>
+      )}
     </div>
   );
 }

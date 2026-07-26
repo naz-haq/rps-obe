@@ -72,6 +72,7 @@ class KurikulumController extends Controller
             'tanggal_berlaku' => ['nullable', 'date'],
             'tanggal_pensiun' => ['nullable', 'date'],
             'mengganti_id'    => ['nullable', 'integer', 'exists:kurikulum,id'],
+            'vmts_id'         => ['nullable', 'integer', 'exists:prodi_vmts,id'],
         ]);
     }
 }

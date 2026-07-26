@@ -14,6 +14,10 @@ function buildBody(formData: FormData) {
     parent_id: jenis === "prodi" && parentRaw ? Number(parentRaw) : null,
     kode: (formData.get("kode") as string) || null,
     asosiasi_profesi: (formData.get("asosiasi_profesi") as string) || null,
+    jenjang: (formData.get("jenjang") as string) || null,
+    gelar: (formData.get("gelar") as string) || null,
+    akreditasi: (formData.get("akreditasi") as string) || null,
+    nilai_institusi: (formData.get("nilai_institusi") as string) || null,
   };
 }
 

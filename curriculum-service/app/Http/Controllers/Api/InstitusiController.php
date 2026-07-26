@@ -25,15 +25,8 @@ class InstitusiController extends Controller
             ])
             ->orderByRaw("FIELD(jenis, 'universitas', 'fakultas', 'prodi')")
             ->orderBy('nama')
-            ->get(['id', 'kode', 'nama', 'jenis', 'parent_id', 'asosiasi_profesi'])
-            ->map(fn(Institusi $i) => [
-                'id' => $i->id,
-                'kode' => $i->kode,
-                'nama' => $i->nama,
-                'jenis' => $i->jenis,
-                'parent_id' => $i->parent_id,
-                'parent_nama' => $i->parent?->nama,
-                'asosiasi_profesi' => $i->asosiasi_profesi,
+            ->get()
+            ->map(fn(Institusi $i) => $this->format($i) + [
                 'dosen_count' => $i->dosen_count,
                 'mata_kuliah_count' => $i->mata_kuliah_count,
             ]);
@@ -105,6 +98,10 @@ class InstitusiController extends Controller
                 Rule::unique('institusi', 'kode')->ignore($ignoreId),
             ],
             'asosiasi_profesi' => ['nullable', 'string', 'max:255'],
+            'jenjang' => ['nullable', 'string', 'max:100'],
+            'gelar' => ['nullable', 'string', 'max:150'],
+            'akreditasi' => ['nullable', 'string', 'max:255'],
+            'nilai_institusi' => ['nullable', 'string'],
         ], [
             'nama.required' => 'Nama prodi/unit wajib diisi.',
             'jenis.in' => 'Jenis harus universitas, fakultas, atau prodi.',
@@ -132,6 +129,10 @@ class InstitusiController extends Controller
             'parent_id' => $institusi->parent_id,
             'parent_nama' => $institusi->parent?->nama,
             'asosiasi_profesi' => $institusi->asosiasi_profesi,
+            'jenjang' => $institusi->jenjang,
+            'gelar' => $institusi->gelar,
+            'akreditasi' => $institusi->akreditasi,
+            'nilai_institusi' => $institusi->nilai_institusi,
             'dosen_count' => 0,
             'mata_kuliah_count' => 0,
         ];

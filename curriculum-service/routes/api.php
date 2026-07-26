@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\MataKuliahController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PemenuhanAcuanController;
 use App\Http\Controllers\Api\PetaKurikulumController;
+use App\Http\Controllers\Api\ProdiVmtsController;
 use App\Http\Controllers\Api\ProfilLulusanController;
 use App\Http\Controllers\Api\PromptTemplateController;
 use App\Http\Controllers\Api\ReferensiController;
@@ -88,6 +89,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('institusi', [InstitusiController::class, 'store']);
         Route::put('institusi/{institusi}', [InstitusiController::class, 'update']);
         Route::delete('institusi/{institusi}', [InstitusiController::class, 'destroy']);
+    });
+
+    // VMTS prodi (berversi) — lookup terbuka utk auth; perubahan izin prodi.manage.
+    Route::get('prodi-vmts', [ProdiVmtsController::class, 'index']);
+    Route::middleware('permission:prodi.manage')->group(function () {
+        Route::post('prodi-vmts', [ProdiVmtsController::class, 'store']);
+        Route::put('prodi-vmts/{prodiVmts}', [ProdiVmtsController::class, 'update']);
+        Route::delete('prodi-vmts/{prodiVmts}', [ProdiVmtsController::class, 'destroy']);
     });
 });
 

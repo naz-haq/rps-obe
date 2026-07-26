@@ -36,6 +36,7 @@ export type Kurikulum = {
   tahun: string;
   status: "draft" | "berlaku" | "arsip";
   tanggal_berlaku?: string | null;
+  vmts_id?: number | null;
   mata_kuliah_count?: number;
   cpl_count?: number;
   created_at?: string;
@@ -51,9 +52,10 @@ export type BukuKelengkapan = {
 export type BukuData = {
   identitas: {
     kurikulum: { nama: string; kode: string | null; tahun: string; status: string; tanggal_berlaku: string | null };
-    prodi: { nama: string } | null;
+    prodi: { nama: string; jenjang: string | null; gelar: string | null; akreditasi: string | null } | null;
     fakultas: { nama: string } | null;
-    universitas: { nama: string } | null;
+    universitas: { nama: string; nilai_institusi: string | null } | null;
+    vmts: { label: string; visi: string | null; misi: string[]; tujuan: string[]; strategi: string[] } | null;
   };
   profil_lulusan: { kode: string; deskripsi: string }[];
   cpl: { kode: string; deskripsi: string; aspek: string | null; level_kkni: string | number | null }[];
@@ -724,8 +726,22 @@ export type InstitusiData = {
   parent_id: number | null;
   parent_nama: string | null;
   asosiasi_profesi: string | null;
+  jenjang: string | null;
+  gelar: string | null;
+  akreditasi: string | null;
+  nilai_institusi: string | null;
   dosen_count: number;
   mata_kuliah_count: number;
+};
+
+export type ProdiVmts = {
+  id: number;
+  institusi_id: number;
+  label: string;
+  visi: string | null;
+  misi: string[];
+  tujuan: string[];
+  strategi: string[];
 };
 
 // ---- Helper fetch ----
