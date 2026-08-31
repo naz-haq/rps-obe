@@ -132,7 +132,9 @@ export function Builder({
 
       {mk && <DetailMkPanel sessionId={session.id} mk={mk} committed={committed} />}
 
-      {!committed && <ImporRpsPanel sessionId={session.id} />}
+      {!committed && session.sumber === "impor_rps_lama" && (
+        <ImporRpsPanel sessionId={session.id} />
+      )}
 
       {/* Tab per tahap + tab akhir Matriks & Diagnostik */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1">

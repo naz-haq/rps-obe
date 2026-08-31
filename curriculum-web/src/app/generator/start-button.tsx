@@ -56,10 +56,10 @@ function StartForm({ close, mataKuliah }: { close: () => void; mataKuliah: MataK
         label="Sumber"
         name="sumber"
         defaultValue="baru"
+        hint="Pilih 'Impor RPS lama' untuk menampilkan panel unggah Excel di dalam sesi."
         options={[
           { value: "baru", label: "Susun baru" },
           { value: "impor_rps_lama", label: "Impor RPS lama" },
-          { value: "copy_tahun_lalu", label: "Salin tahun lalu" },
         ]}
       />
 

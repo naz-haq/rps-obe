@@ -121,6 +121,7 @@ export function SelectField({
   defaultValue,
   required,
   onChange,
+  hint,
 }: {
   label: string;
   name: string;
@@ -128,6 +129,7 @@ export function SelectField({
   defaultValue?: string;
   required?: boolean;
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  hint?: string;
 }) {
   return (
     <label className="block">
@@ -147,6 +149,7 @@ export function SelectField({
           </option>
         ))}
       </select>
+      {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>
   );
 }
