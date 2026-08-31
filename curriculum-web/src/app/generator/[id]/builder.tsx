@@ -4,7 +4,9 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, PageHeader, buttonClass } from "@/components/ui";
-import type { Cpl, GenerateSession, Taksonomi } from "@/lib/api";
+import type { Cpl, GenerateSession, MataKuliah, Taksonomi } from "@/lib/api";
+import { KonteksPanel } from "./konteks-panel";
+import { DetailMkPanel } from "./detail-mk-panel";
 import {
   generateStage,
   acceptStage,
@@ -51,11 +53,13 @@ export function Builder({
   cplList,
   taksonomiList,
   estimasiWaktu = "",
+  mk = null,
 }: {
   session: GenerateSession;
   cplList: Cpl[];
   taksonomiList: Taksonomi[];
   estimasiWaktu?: string;
+  mk?: MataKuliah | null;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<string>("cpmk");
@@ -122,6 +126,10 @@ export function Builder({
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>
       )}
+
+      <KonteksPanel session={session} committed={committed} />
+
+      {mk && <DetailMkPanel sessionId={session.id} mk={mk} committed={committed} />}
 
       {/* Tab per tahap + tab akhir Matriks & Diagnostik */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1">

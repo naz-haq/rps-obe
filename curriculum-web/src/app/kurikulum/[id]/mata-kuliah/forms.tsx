@@ -2,12 +2,11 @@
 
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Modal, Field, SelectField, AiTextArea, SubmitButton } from "@/components/modal";
+import { Modal, Field, SelectField, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import type { MataKuliah, ApiResult } from "@/lib/api";
 import { useActionResult } from "@/lib/use-action-result";
 import { createMataKuliah, updateMataKuliah, deleteMataKuliah } from "./actions";
-import { ReferensiEditor } from "./referensi-editor";
 
 const JENIS_OPTS = [
   { value: "", label: "— Pilih —" },
@@ -189,23 +188,10 @@ function MkFields({ kurikulumId, m, prodiOptions, aturan }: { kurikulumId: numbe
         <Field label="Rumpun" name="rumpun" defaultValue={m?.rumpun ?? ""} placeholder="Farmasi Klinik" />
         <Field label="Prasyarat (kode)" name="prasyarat_kode" defaultValue="" placeholder="FAR100" />
       </div>
-      <AiTextArea
-        label="Deskripsi Singkat"
-        name="deskripsi_singkat"
-        defaultValue={m?.deskripsi_singkat ?? ""}
-        rows={3}
-        placeholder="Ringkasan mata kuliah ..."
-        konteks="Deskripsi Mata Kuliah"
-        konteksFields={[
-          { name: "nama", label: "Nama MK" },
-          { name: "kode_mk", label: "Kode" },
-          { name: "jenis_mk", label: "Jenis" },
-          { name: "sks_teori", label: "SKS Teori" },
-          { name: "sks_praktik", label: "SKS Praktik" },
-          { name: "rumpun", label: "Rumpun" },
-        ]}
-      />
-      <ReferensiEditor mk={m} />
+      <p className="rounded-lg border border-border bg-gray-50/60 px-3 py-2 text-[11px] text-muted">
+        Deskripsi singkat, pustaka/referensi, dan sumber materi (buku/artikel) diisi oleh <b>dosen pengampu</b> di
+        halaman <b>Generator</b> saat menyusun RPS — modul kurikulum cukup sampai struktur di atas.
+      </p>
     </div>
   );
 }

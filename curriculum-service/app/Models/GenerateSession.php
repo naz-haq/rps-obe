@@ -14,6 +14,7 @@ class GenerateSession extends Model
         'draf' => 'array',
         'status_bagian' => 'array',
         'catatan_validasi' => 'array',
+        'konteks_tambahan' => 'array',
     ];
 
     public function institusi(): BelongsTo

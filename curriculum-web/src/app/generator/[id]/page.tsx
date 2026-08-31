@@ -18,8 +18,10 @@ export default async function GeneratorDetailPage({ params }: { params: Promise<
   let cplList: Cpl[] = [];
   let estimasiWaktu = "";
   let mkJenis = "";
+  let mkData: MataKuliah | null = null;
   try {
     const mk = await apiGet<Single<MataKuliah>>(`/mata-kuliah/${session.mk_id}`);
+    mkData = mk.data;
     estimasiWaktu = mk.data.estimasi_waktu?.teks ?? "";
     mkJenis = mk.data.jenis_mk ?? "";
     const kurikulumId = mk.data.kurikulum_id;
@@ -61,7 +63,7 @@ export default async function GeneratorDetailPage({ params }: { params: Promise<
         hasBobotTeori={punya("bobot_teori")}
         hasBobotPraktikum={punya("bobot_praktikum")}
       />
-      <Builder session={session} cplList={cplList} taksonomiList={taksonomiList} estimasiWaktu={estimasiWaktu} />
+      <Builder session={session} cplList={cplList} taksonomiList={taksonomiList} estimasiWaktu={estimasiWaktu} mk={mkData} />
     </div>
   );
 }

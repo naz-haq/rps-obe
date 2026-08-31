@@ -118,7 +118,7 @@ class EmbeddingService
      * Cari chunk paling relevan terhadap query via kosinus in-app. Dibatasi
      * dokumen milik tenant (atau global). Retrieval untuk grounding validator.
      *
-     * @param  array{dokumen_id?:int, min_score?:float, sumber_konten?:bool}  $opts
+     * @param  array{dokumen_id?:int, dokumen_ids?:array<int,int>, min_score?:float, sumber_konten?:bool}  $opts
      * @return array<int,array{chunk:DokumenChunk, score:float}>
      */
     public function search(int $institusiId, string $query, int $topK = 5, array $opts = []): array
@@ -130,6 +130,7 @@ class EmbeddingService
         $chunks = DokumenChunk::query()
             ->whereNotNull('embedding')
             ->when($opts['dokumen_id'] ?? null, fn($q, $id) => $q->where('dokumen_id', $id))
+            ->when($opts['dokumen_ids'] ?? null, fn($q, $ids) => $q->whereIn('dokumen_id', (array) $ids))
             // sumber_konten=true → hanya dokumen KEILMUAN (bukan rujukan format).
             ->when($opts['sumber_konten'] ?? false, fn($q) => $q->whereHas('dokumen', fn($qq) => $qq->where('sumber_konten', true)))
             ->whereHas('dokumen', fn($q) => $q->where(

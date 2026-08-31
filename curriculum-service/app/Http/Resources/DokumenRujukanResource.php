@@ -21,6 +21,7 @@ class DokumenRujukanResource extends JsonResource
             'file_asal'        => $this->file_asal,
             'status_indexing'  => $this->status_indexing,
             'chunk_count'      => $this->whenCounted('chunks'),
+            'mk_tautan_count'  => $this->whenCounted('mataKuliahTautan'),
             'created_at'       => $this->created_at,
         ];
     }

@@ -13,6 +13,7 @@ use App\Models\KomponenPenilaian;
 use App\Models\MataKuliah;
 use App\Models\MkBahanKajian;
 use App\Models\MkCpl;
+use App\Models\MkDokumenRujukan;
 use App\Models\ProfilLulusan;
 use App\Models\Referensi;
 use App\Models\RpsMinggu;
@@ -66,6 +67,7 @@ class RpsGeneratorService
             'status_bagian' => array_fill_keys($pipeline, 'pending'),
             'status'        => 'berjalan',
             'user_id'       => $opts['user_id'] ?? null,
+            'konteks_tambahan' => $opts['konteks_tambahan'] ?? null,
         ]);
     }
 
@@ -906,6 +908,30 @@ class RpsGeneratorService
             . ($kontak > 0 ? "- Total waktu kontak per pekan ~{$kontak} menit; durasi per pertemuan dihitung sistem — JANGAN mengisi menit.\n" : '')
             . '- Pekan evaluasi/ujian: rinci kegiatan ujiannya (boleh lebih sedikit pertemuan bila memang sesi ujian).';
         $bagian[] = "\n" . $this->skopDirective();
+
+        // Rujukan tambahan dosen dari sesi generator yang menghasilkan RPS ini
+        // (BoK membatasi topik; kompetensi/bahan kajian khusus wajib tercermin).
+        $sesiAsal = GenerateSession::query()->where('rps_version_id', $rps->id)->latest('id')->first();
+        $tambahan = $this->konteksTambahanBlok($sesiAsal?->konteks_tambahan, 'pertemuan');
+        if ($tambahan !== '') {
+            $bagian[] = "\n" . $tambahan;
+        }
+
+        // Sumber materi/buku rujukan MK → topik & aktivitas per pertemuan
+        // berjangkar ke pustaka nyata, bukan pengetahuan umum model.
+        $pustaka = $this->pustakaContext($mk);
+        if ($pustaka !== []) {
+            $bagian[] = "\nPUSTAKA/REFERENSI MK (bernomor — bila topik bersumber dari pustaka, sebut [Pustaka: no]; JANGAN mengarang judul):";
+            $bagian[] = json_encode($pustaka, JSON_UNESCAPED_UNICODE);
+        }
+        $kutipan = $this->dokumenRujukanContext((int) $rps->institusi_id, $mk);
+        if ($kutipan !== []) {
+            $bagian[] = "\nKUTIPAN SUMBER MATERI/BUKU RUJUKAN (PENDUKUNG substansi topik & aktivitas; JANGAN meniru format/gaya dokumen):";
+            foreach ($kutipan as $k) {
+                $bagian[] = '- [' . $k['sumber'] . '] ' . $k['teks'];
+            }
+        }
+
         $bagian[] = "\nRENCANA MINGGUAN RPS (BASIS PEMECAHAN — topik pertemuan wajib turunan langsung materi pekan ini, JANGAN menambah topik baru):";
         $bagian[] = json_encode($rows->map(fn($m) => array_filter([
             'minggu_ke'          => $m->minggu_ke,
@@ -997,14 +1023,18 @@ class RpsGeneratorService
 
         $bagian = [];
         $bagian[] = 'DATA MATA KULIAH:';
-        $bagian[] = json_encode([
-            'kode_mk'   => $mk->kode_mk,
-            'nama'      => $mk->nama,
-            'jenis_mk'  => $mk->jenis_mk,
-            'sks'       => $mk->sks,
-            'semester'  => $mk->semester,
-            'deskripsi' => $mk->deskripsi_singkat,
-        ], JSON_UNESCAPED_UNICODE);
+        $bagian[] = json_encode(array_filter([
+            'kode_mk'     => $mk->kode_mk,
+            'nama'        => $mk->nama,
+            'jenis_mk'    => $mk->jenis_mk,
+            'sifat'       => $mk->sifat,
+            'rumpun'      => $mk->rumpun,
+            'sks'         => $mk->sks,
+            'sks_teori'   => $mk->sks_teori,
+            'sks_praktik' => $mk->sks_praktik,
+            'semester'    => $mk->semester,
+            'deskripsi'   => $mk->deskripsi_singkat,
+        ], fn($v) => $v !== null && $v !== ''), JSON_UNESCAPED_UNICODE);
 
         // Jenjang program (dari level KKNI CPL) → lantai taksonomi agar CPMK/Sub-CPMK
         // tidak berada di bawah level yang layak (mis. profesi minimal C4 dominan).
@@ -1013,13 +1043,39 @@ class RpsGeneratorService
             $bagian[] = "\n" . $jenjang;
         }
 
+        // Ranah keterampilan: MK praktikum / ber-SKS praktik menuntut psikomotorik.
+        $ranah = $this->ranahDirective($mk);
+        if ($ranah !== '') {
+            $bagian[] = "\n" . $ranah;
+        }
+
+        // Kemampuan awal: MK prasyarat = titik nol scaffolding, jangan diulang.
+        $prasyarat = $this->prasyaratContext($mk);
+        if ($prasyarat !== []) {
+            $bagian[] = "\nMATA KULIAH PRASYARAT (kemampuan awal mahasiswa — JANGAN mengulang materinya; jadikan titik awal scaffolding):";
+            $bagian[] = json_encode($prasyarat, JSON_UNESCAPED_UNICODE);
+        }
+
         // Pagar skop: cegah AI menambah topik/kompetensi di luar MK & bahan kajian.
         $bagian[] = "\n" . $this->skopDirective();
+
+        // Rujukan tambahan yang dimasukkan dosen saat memulai sesi (otoritatif,
+        // spesifik MK ini): kompetensi khusus, Body of Knowledge, bahan kajian khusus.
+        $tambahan = $this->konteksTambahanBlok($session->konteks_tambahan, (string) $stageCfg['jenis_output']);
+        if ($tambahan !== '') {
+            $bagian[] = "\n" . $tambahan;
+        }
 
         // Tahap 'mingguan': durasi bervariasi per-MK (reguler/blok/profesi) →
         // suntik jumlah pekan & pola evaluasi otoritatif agar AI tidak selalu 16.
         if (($stageCfg['jenis_output'] ?? '') === 'mingguan') {
             $bagian[] = "\n" . $this->rencanaMingguanDirective($mk);
+        }
+
+        // Tahap 'penilaian': kebijakan asesmen otoritatif (bobot 100%, keselarasan
+        // dengan bobot mingguan tersetujui, standar rubrik, ranah praktik/profesi).
+        if (($stageCfg['jenis_output'] ?? '') === 'penilaian') {
+            $bagian[] = "\n" . $this->penilaianDirective($mk, $session);
         }
 
         $cpls = $this->cplContext($mk);
@@ -1043,15 +1099,15 @@ class RpsGeneratorService
 
         $pustaka = $this->pustakaContext($mk);
         if ($pustaka !== []) {
-            $bagian[] = "\nPUSTAKA/REFERENSI MK (HANYA gunakan referensi dari daftar ini, jangan mengarang judul):";
+            $bagian[] = "\nPUSTAKA/REFERENSI MK (bernomor — rujuk PERSIS memakai nomor 'no' pada [Pustaka: ...]; HANYA gunakan referensi dari daftar ini, jangan mengarang judul):";
             $bagian[] = json_encode($pustaka, JSON_UNESCAPED_UNICODE);
         }
 
         // Kutipan dokumen rujukan KEILMUAN (opt-in via toggle sumber_konten).
         // Pendukung substansi — instrumen utama di atas tetap otoritatif.
-        $kutipan = $this->dokumenRujukanContext($session, $mk);
+        $kutipan = $this->dokumenRujukanContext((int) $session->institusi_id, $mk);
         if ($kutipan !== []) {
-            $bagian[] = "\nKUTIPAN DOKUMEN RUJUKAN KEILMUAN (PENDUKUNG — pakai untuk memperkaya/meluruskan substansi; instrumen utama di atas tetap otoritatif; JANGAN meniru format/gaya dokumen):";
+            $bagian[] = "\nKUTIPAN SUMBER MATERI/BUKU RUJUKAN (PENDUKUNG — pakai untuk memperkaya/meluruskan substansi; instrumen utama di atas tetap otoritatif; JANGAN meniru format/gaya dokumen):";
             foreach ($kutipan as $k) {
                 $bagian[] = '- [' . $k['sumber'] . '] ' . $k['teks'];
             }
@@ -1122,6 +1178,103 @@ class RpsGeneratorService
             . "- Seluruh capaian, materi, contoh, dan aktivitas HARUS berada dalam lingkup mata kuliah ini (nama & deskripsi) serta BAHAN KAJIAN MK pada konteks.\n"
             . "- JANGAN menambah topik/kompetensi di luar bahan kajian; bila merinci, rincian tetap turunan langsung bahan kajian tsb.\n"
             . "- JANGAN menciptakan entitas baru (topik, bahan kajian, referensi) dari pengetahuan umum di luar konteks yang diberikan.";
+    }
+
+    /**
+     * Direktif ranah keterampilan: MK praktikum wajib dominan psikomotorik;
+     * MK campuran (ber-SKS praktik) wajib menyertakan capaian psikomotorik
+     * proporsional. Kosong untuk MK teori murni.
+     */
+    private function ranahDirective(MataKuliah $mk): string
+    {
+        $praktik = (int) ($mk->sks_praktik ?? 0);
+        if ($mk->jenis_mk === 'praktikum') {
+            return "RANAH KETERAMPILAN (WAJIB DIPATUHI):\n"
+                . "- MK ini PRAKTIKUM: CPMK/Sub-CPMK WAJIB dominan ranah PSIKOMOTORIK (P2-P4) dengan KKO keterampilan (mendemonstrasikan, mengoperasikan, melakukan, mengukur, merakit, mengkalibrasi); kognitif hanya pendukung.\n"
+                . '- Indikator & asesmen berbasis UNJUK KERJA yang teramati (observasi/laporan/demonstrasi), bukan hafalan.';
+        }
+        if ($praktik > 0) {
+            return "RANAH KETERAMPILAN (WAJIB DIPATUHI):\n"
+                . "- MK ini memuat {$praktik} SKS PRAKTIK di samping teorinya: sertakan CPMK/Sub-CPMK ranah psikomotorik (P2+) untuk komponen praktiknya, proporsional dengan bobot SKS praktik, di samping capaian kognitifnya.";
+        }
+
+        return '';
+    }
+
+    /**
+     * Direktif kebijakan asesmen untuk tahap 'penilaian': total bobot, keselarasan
+     * dengan bobot mingguan yang sudah disetujui, standar rubrik, dan ranah
+     * khusus MK praktik/profesi.
+     */
+    private function penilaianDirective(MataKuliah $mk, GenerateSession $session): string
+    {
+        $baris = ['PARAMETER PENILAIAN (WAJIB DIPATUHI):'];
+        $baris[] = '- Total bobot_persen SEMUA komponen TEPAT 100.';
+
+        // Distribusi bobot mingguan tersetujui → jangkar konsistensi bobot komponen.
+        $mingguan = ($session->draf ?? [])['mingguan']['minggu'] ?? [];
+        $distribusi = [];
+        foreach ((array) $mingguan as $m) {
+            $ke = (int) ($m['minggu_ke'] ?? 0);
+            $bobot = (float) ($m['bobot_penilaian'] ?? 0);
+            if ($ke >= 1 && $bobot > 0) {
+                $distribusi['minggu_' . $ke] = ($distribusi['minggu_' . $ke] ?? 0) + $bobot;
+            }
+        }
+        if ($distribusi !== []) {
+            $baris[] = '- SELARASKAN dengan bobot_penilaian rencana mingguan yang sudah disetujui: komponen yang mengukur Sub-CPMK pekan tertentu harus konsisten dengan bobot pekan tsb. Distribusi bobot mingguan: '
+                . json_encode($distribusi, JSON_UNESCAPED_UNICODE) . '.';
+        }
+
+        $baris[] = '- Rubrik analitik: default 4 level skala (Kurang/Cukup/Baik/Sangat Baik) dengan jumlah bobot kriteria = 100, kecuali konteks menyatakan standar lain.';
+
+        if ($mk->jenis_mk === 'praktikum' || (int) ($mk->sks_praktik ?? 0) > 0) {
+            $baris[] = '- MK ber-praktik: mayoritas bobot pada asesmen UNJUK KERJA (laporan/observasi/demonstrasi/proyek) ber-rubrik, bukan tes tulis.';
+        }
+        if (($mk->pola ?: 'reguler') === 'profesi') {
+            $baris[] = '- MK PROFESI: JANGAN membuat UTS/UAS tulis — gunakan log book, ujian kasus/OSCE, dan penilaian pembimbing/preseptor.';
+        }
+
+        return implode("\n", $baris);
+    }
+
+    /**
+     * Daftar MK prasyarat (kode dipisah koma/titik-koma) sebagai kemampuan awal.
+     * Kode yang tak ditemukan di master tetap disebut agar AI tahu keberadaannya.
+     *
+     * @return array<int,array<string,string>>
+     */
+    private function prasyaratContext(MataKuliah $mk): array
+    {
+        $raw = trim((string) ($mk->prasyarat_kode ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        $kodes = collect(preg_split('/[,;\\/]+/', $raw) ?: [])
+            ->map(fn($k) => trim((string) $k))
+            ->filter()
+            ->unique()
+            ->values();
+        if ($kodes->isEmpty()) {
+            return [];
+        }
+
+        $rows = MataKuliah::query()
+            ->where('institusi_id', $mk->institusi_id)
+            ->whereIn('kode_mk', $kodes)
+            ->get(['kode_mk', 'nama', 'deskripsi_singkat'])
+            ->keyBy('kode_mk');
+
+        return $kodes->map(function ($kode) use ($rows) {
+            $row = $rows->get($kode);
+
+            return array_filter([
+                'kode_mk'   => $kode,
+                'nama'      => $row?->nama,
+                'deskripsi' => $row?->deskripsi_singkat,
+            ], fn($v) => $v !== null && $v !== '');
+        })->all();
     }
 
     /**
@@ -1302,14 +1455,84 @@ class RpsGeneratorService
 
     private function pustakaContext(MataKuliah $mk): array
     {
+        // Bernomor eksplisit agar sitasi [Pustaka: n] keluaran AI presisi
+        // (tidak menebak urutan sendiri).
         $refs = Referensi::query()
             ->where('institusi_id', $mk->institusi_id)
             ->where('kode_mk', $mk->kode_mk)
+            ->orderBy('id')
             ->get(['tipe', 'sitasi']);
-        return $refs->map(fn($r) => [
+        return $refs->values()->map(fn($r, $i) => [
+            'no'     => $i + 1,
             'tipe'   => $r->tipe ?: 'utama',
             'sitasi' => $r->sitasi,
-        ])->values()->all();
+        ])->all();
+    }
+
+    /**
+     * Blok prompt dari rujukan tambahan yang dimasukkan dosen saat memulai sesi:
+     * kompetensi khusus MK, Body of Knowledge, dan bahan kajian khusus MK.
+     * Arahan pemakaian tiap field disesuaikan dengan tahap yang sedang digenerate.
+     * Kosong bila dosen tidak mengisi apa pun.
+     */
+    private function konteksTambahanBlok(mixed $konteks, string $stage): string
+    {
+        if (! is_array($konteks)) {
+            return '';
+        }
+
+        $arahan = [
+            'cpmk' => [
+                'kompetensi_khusus'   => 'WAJIB diturunkan menjadi CPMK — setiap kompetensi di sini terwakili minimal satu CPMK',
+                'bok'                 => 'batas cakupan keilmuan — rumusan CPMK TIDAK BOLEH keluar dari cakupan ini',
+                'bahan_kajian_khusus' => 'substansi wajib saat merumuskan CPMK; gabungkan dengan BAHAN KAJIAN MK kurikulum',
+            ],
+            'sub_cpmk' => [
+                'kompetensi_khusus'   => 'jabarkan menjadi Sub-CPMK yang terukur dengan indikator operasional',
+                'bok'                 => 'batas cakupan keilmuan — Sub-CPMK TIDAK BOLEH keluar dari cakupan ini',
+                'bahan_kajian_khusus' => 'jadikan basis penjabaran Sub-CPMK bersama bahan kajian kurikulum',
+            ],
+            'mingguan' => [
+                'kompetensi_khusus'   => 'aktivitas & indikator mingguan wajib melatih dan mengukur kompetensi ini',
+                'bok'                 => 'peta & batas materi — topik mingguan TIDAK BOLEH keluar dari cakupan ini',
+                'bahan_kajian_khusus' => 'WAJIB terdistribusi pada topik mingguan; gabungkan dengan BAHAN KAJIAN MK kurikulum',
+            ],
+            'penilaian' => [
+                'kompetensi_khusus'   => 'WAJIB ada komponen/teknik penilaian yang secara eksplisit mengukur kompetensi ini',
+                'bok'                 => 'substansi instrumen penilaian (soal/tugas/rubrik) TIDAK BOLEH keluar dari cakupan ini',
+                'bahan_kajian_khusus' => 'pastikan terwakili pada materi yang dinilai',
+            ],
+            'pertemuan' => [
+                'kompetensi_khusus'   => 'aktivitas pertemuan wajib melatih kompetensi ini',
+                'bok'                 => 'topik pertemuan TIDAK BOLEH keluar dari cakupan ini',
+                'bahan_kajian_khusus' => 'pastikan tercermin pada topik pertemuan pekan terkait',
+            ],
+        ];
+
+        $peta = [
+            'kompetensi_khusus'   => 'KOMPETENSI KHUSUS MATA KULIAH',
+            'bok'                 => 'BODY OF KNOWLEDGE / CAKUPAN KEILMUAN MK',
+            'bahan_kajian_khusus' => 'BAHAN KAJIAN KHUSUS MK DARI DOSEN',
+        ];
+        $arah = $arahan[$stage] ?? $arahan['mingguan'];
+
+        $baris = [];
+        foreach ($peta as $kunci => $label) {
+            $isi = trim((string) ($konteks[$kunci] ?? ''));
+            if ($isi !== '') {
+                $baris[] = $label . ' (' . ($arah[$kunci] ?? 'patuhi') . '):';
+                $baris[] = $isi;
+                $baris[] = '';
+            }
+        }
+
+        if ($baris === []) {
+            return '';
+        }
+
+        array_unshift($baris, 'RUJUKAN TAMBAHAN DARI DOSEN (OTORITATIF untuk MK ini — patuhi; bila bertentangan dengan pengetahuan umum, blok ini yang menang):');
+
+        return rtrim(implode("\n", $baris));
     }
 
     /**
@@ -1319,14 +1542,27 @@ class RpsGeneratorService
      *
      * @return array<int,array{sumber:string,teks:string}>
      */
-    private function dokumenRujukanContext(GenerateSession $session, MataKuliah $mk): array
+    private function dokumenRujukanContext(int $institusiId, MataKuliah $mk): array
     {
         if (! config('generator.rag.enabled', true)) {
             return [];
         }
 
+        // Dokumen yang DITAUTKAN ke MK ini = sumber materi utama → retrieval
+        // dibatasi ke sana. Tanpa tautan, fallback ke semua dokumen keilmuan
+        // (sumber_konten) institusi seperti sebelumnya.
+        $tertaut = MkDokumenRujukan::query()
+            ->where('institusi_id', $mk->institusi_id)
+            ->where('kode_mk', $mk->kode_mk)
+            ->pluck('dokumen_rujukan_id')
+            ->all();
+
         $ada = DokumenChunk::whereNotNull('embedding')
-            ->whereHas('dokumen', fn($q) => $q->where('institusi_id', $session->institusi_id)->where('sumber_konten', true))
+            ->when(
+                $tertaut !== [],
+                fn($q) => $q->whereIn('dokumen_id', $tertaut),
+                fn($q) => $q->whereHas('dokumen', fn($qq) => $qq->where('institusi_id', $institusiId)->where('sumber_konten', true)),
+            )
             ->exists();
         if (! $ada) {
             return [];
@@ -1342,11 +1578,17 @@ class RpsGeneratorService
         }
 
         try {
+            $opsi = ['min_score' => (float) config('generator.rag.min_score', 0.5)];
+            if ($tertaut !== []) {
+                $opsi['dokumen_ids'] = $tertaut; // buku pilihan dosen utk MK ini
+            } else {
+                $opsi['sumber_konten'] = true;
+            }
             $hits = $this->embeddings->search(
-                (int) $session->institusi_id,
+                $institusiId,
                 mb_substr($query, 0, 1500),
                 max(1, (int) config('generator.rag.top_k', 4)),
-                ['min_score' => (float) config('generator.rag.min_score', 0.5), 'sumber_konten' => true],
+                $opsi,
             );
         } catch (\Throwable) {
             return []; // retrieval gagal → lanjut tanpa kutipan

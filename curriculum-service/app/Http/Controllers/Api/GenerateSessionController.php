@@ -66,16 +66,46 @@ class GenerateSessionController extends Controller
             'mk_id'   => ['required', 'integer', 'exists:mata_kuliah,id'],
             'sumber'  => ['nullable', Rule::in(['baru', 'impor_rps_lama', 'copy_tahun_lalu'])],
             'user_id' => ['nullable', 'integer'],
+            'kompetensi_khusus'   => ['nullable', 'string', 'max:8000'],
+            'bok'                 => ['nullable', 'string', 'max:8000'],
+            'bahan_kajian_khusus' => ['nullable', 'string', 'max:8000'],
         ]);
+
+        $konteks = array_filter([
+            'kompetensi_khusus'   => trim((string) ($data['kompetensi_khusus'] ?? '')),
+            'bok'                 => trim((string) ($data['bok'] ?? '')),
+            'bahan_kajian_khusus' => trim((string) ($data['bahan_kajian_khusus'] ?? '')),
+        ], fn($v) => $v !== '');
 
         $mk = MataKuliah::findOrFail($data['mk_id']);
         $session = $this->generator->start($mk, [
             'sumber'  => $data['sumber'] ?? 'baru',
             'user_id' => $data['user_id'] ?? null,
+            'konteks_tambahan' => $konteks !== [] ? $konteks : null,
         ]);
 
         return (new GenerateSessionResource($session->load('mataKuliah')))
             ->response()->setStatusCode(201);
+    }
+
+    /** Ubah rujukan tambahan dosen (kompetensi khusus/BoK/bahan kajian khusus) sebelum generate. */
+    public function konteks(Request $request, GenerateSession $generateSession)
+    {
+        $data = $request->validate([
+            'kompetensi_khusus'   => ['nullable', 'string', 'max:8000'],
+            'bok'                 => ['nullable', 'string', 'max:8000'],
+            'bahan_kajian_khusus' => ['nullable', 'string', 'max:8000'],
+        ]);
+
+        $konteks = array_filter([
+            'kompetensi_khusus'   => trim((string) ($data['kompetensi_khusus'] ?? '')),
+            'bok'                 => trim((string) ($data['bok'] ?? '')),
+            'bahan_kajian_khusus' => trim((string) ($data['bahan_kajian_khusus'] ?? '')),
+        ], fn($v) => $v !== '');
+
+        $generateSession->update(['konteks_tambahan' => $konteks !== [] ? $konteks : null]);
+
+        return new GenerateSessionResource($generateSession->load('mataKuliah'));
     }
 
     /** Generate satu tahap (satu panggilan AI + grounding + auto-regen). */

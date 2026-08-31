@@ -25,6 +25,7 @@ const JENIS_LABEL: Record<string, string> = {
   asosiasi: "Asosiasi",
   akreditasi: "Akreditasi",
   template_rps: "Template RPS",
+  buku: "Buku/Artikel",
 };
 const BADAN_JENIS_LABEL: Record<string, string> = {
   asosiasi: "Asosiasi",

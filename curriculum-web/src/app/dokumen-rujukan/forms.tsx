@@ -13,6 +13,7 @@ const JENIS_DOK_OPTS = [
   { value: "asosiasi", label: "Rujukan Asosiasi" },
   { value: "akreditasi", label: "Kriteria Akreditasi" },
   { value: "template_rps", label: "Template RPS" },
+  { value: "buku", label: "Buku/Artikel Keilmuan" },
 ];
 
 const JENIS_BADAN_OPTS = [

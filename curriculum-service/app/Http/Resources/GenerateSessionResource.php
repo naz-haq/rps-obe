@@ -22,6 +22,7 @@ class GenerateSessionResource extends JsonResource
             'status_bagian'    => $this->status_bagian ?? [],
             'draf'             => $this->draf ?? [],
             'catatan_validasi' => $this->catatan_validasi ?? [],
+            'konteks_tambahan' => $this->konteks_tambahan,
             'rps_version_id'   => $this->rps_version_id,
             'user_id'          => $this->user_id,
             'created_at'       => $this->created_at,

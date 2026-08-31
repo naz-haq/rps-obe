@@ -28,7 +28,8 @@ return [
             'group' => 'generator',
             'system' =>
             'Anda Pakar Kurikulum Pendidikan Tinggi & Ahli Desain Instruksional yang menguasai OBE dan SN-Dikti. '
-                . 'Susun 4-5 CPMK (Capaian Pembelajaran Mata Kuliah) sebagai turunan LANGSUNG dari CPL yang diberikan, sesuai jenis mata kuliah. '
+                . 'Susun CPMK (Capaian Pembelajaran Mata Kuliah) sebagai turunan LANGSUNG dari CPL yang diberikan, sesuai jenis mata kuliah. '
+                . 'Jumlah CPMK proporsional dengan bobot MK: umumnya 4-5; MK kecil (1-2 SKS) cukup 2-3; boleh lebih bila diperlukan agar semua CPL tercakup. '
                 . 'Aturan: (1) gunakan Kata Kerja Operasional (KKO) yang TERUKUR mengikuti Taksonomi Bloom Revisi (Anderson & Krathwohl) — '
                 . 'HINDARI kata abstrak tak terukur seperti "memahami/mengetahui/mengerti/mempelajari"; '
                 . '(2) terapkan format ABCD (Audience, Behavior, Condition, Degree) dalam narasi kalimat; '
@@ -37,7 +38,9 @@ return [
                 . '(5) PATUHI blok "JENJANG PROGRAM" pada konteks — level taksonomi CPMK TIDAK BOLEH di bawah lantai jenjang (Sarjana/Profesi menuntut level tinggi); '
                 . '(6) PATUHI blok "BATASAN SKOP" — jangan menyusun capaian di luar lingkup mata kuliah & bahan kajian yang diberikan; '
                 . '(7) cpl_kode WAJIB disalin PERSIS SAMA dengan kode pada daftar "CPL TERKAIT" di konteks (jangan mengubah format, tanda hubung, atau penomoran — contoh pada skema hanya ilustrasi); '
-                . '(8) SETIAP CPL pada daftar "CPL TERKAIT" WAJIB diturunkan menjadi minimal satu CPMK — jangan ada CPL tanpa CPMK (boleh 1 CPMK memetakan >1 CPL, dan jumlah CPMK boleh lebih dari 5 bila perlu agar semua CPL tercakup). '
+                . '(8) SETIAP CPL pada daftar "CPL TERKAIT" WAJIB diturunkan menjadi minimal satu CPMK — jangan ada CPL tanpa CPMK (boleh 1 CPMK memetakan >1 CPL); '
+                . '(9) bila konteks memuat blok "RANAH KETERAMPILAN", PATUHI — MK praktik menuntut CPMK ranah psikomotorik sesuai ketentuan blok tsb; '
+                . '(10) bila konteks memuat blok "MATA KULIAH PRASYARAT", itu kemampuan awal mahasiswa — JANGAN menyusun CPMK yang mengulang capaian prasyarat; bangun di atasnya. '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
             'schema' => '{"cpmk":[{"kode":"CPMK1","deskripsi":"...","cpl_kode":["<kode persis dari CPL TERKAIT>"],"taksonomi_kode":["C4"]}]}',
         ],
@@ -53,6 +56,8 @@ return [
                 . 'Sertakan indikator ketercapaian yang OBSERVABLE (dapat diamati/diukur) dan taksonomi_kode (boleh lebih dari satu bila menggabung ranah). '
                 . 'SETIAP CPMK pada konteks WAJIB diuraikan menjadi minimal satu Sub-CPMK (cpmk_kode merujuk kode CPMK) — jangan ada CPMK tanpa Sub-CPMK. '
                 . 'Level kognitif Sub-CPMK minimal menjangkau dan tidak melampaui target CPMK induk; scaffolding TIDAK boleh membuat mayoritas Sub-CPMK berhenti di C1-C2 — patuhi lantai level pada blok "JENJANG PROGRAM" konteks. '
+                . 'PATUHI blok "RANAH KETERAMPILAN" bila ada — Sub-CPMK MK praktik dominan psikomotorik dengan indikator unjuk kerja teramati. '
+                . 'Blok "MATA KULIAH PRASYARAT" bila ada = kemampuan awal mahasiswa: mulai scaffolding DARI titik itu, jangan mengulang materinya. '
                 . 'PATUHI blok "BATASAN SKOP": semua Sub-CPMK & indikator harus dalam lingkup mata kuliah dan bahan kajian yang diberikan. '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
             'schema' => '{"sub_cpmk":[{"kode":"Sub-CPMK1.1","cpmk_kode":"CPMK1","deskripsi":"...","taksonomi_kode":["C3"],"indikator":["..."]}]}',
@@ -71,7 +76,8 @@ return [
                 . 'bentuk_luring dan bentuk_daring (bentuk pembelajaran), pengalaman_belajar (penugasan mahasiswa), '
                 . 'materi_pustaka, dan bobot_penilaian (%). '
                 . 'FORMAT kriteria_penilaian WAJIB dua baris dipisah karakter newline \\n, contoh: "Kriteria: ketepatan analisis dan kelengkapan argumen.\\nTeknik: tes tertulis uraian." '
-                . 'FORMAT materi_pustaka: pilih SATU/LEBIH item dari daftar BAHAN KAJIAN MK yang paling relevan dengan Sub-CPMK minggu tsb, lalu tulis dalam bentuk "Nama Bahan Kajian — ringkasan materi minggu ini [Pustaka: nomor/urut sitasi dari daftar PUSTAKA/REFERENSI MK]". Contoh: "Farmakokinetika dasar — absorpsi, distribusi, metabolisme [Pustaka: 1,3]". '
+                . 'FORMAT materi_pustaka: pilih SATU/LEBIH item dari daftar BAHAN KAJIAN MK yang paling relevan dengan Sub-CPMK minggu tsb, lalu tulis dalam bentuk "Nama Bahan Kajian — ringkasan materi minggu ini [Pustaka: nomor \'no\' dari daftar PUSTAKA/REFERENSI MK]". Contoh: "Farmakokinetika dasar — absorpsi, distribusi, metabolisme [Pustaka: 1,3]". '
+                . 'Perhatikan pembagian sks_teori vs sks_praktik pada DATA MATA KULIAH: sesi ber-SKS praktik wajib memuat baris berbentuk praktikum/unjuk kerja (bentuk_luring "praktikum/responsi", pengalaman_belajar hands-on), bukan hanya kuliah tatap muka. '
                 . 'JANGAN mengisi estimasi/alokasi waktu — kolom itu dihitung otomatis dari SKS oleh sistem. '
                 . 'Gunakan metode Student-Centered Learning (Small Group Discussion, Case Method, Project-Based Learning, Discovery Learning) — jangan hanya ceramah. '
                 . 'JANGAN mengarang judul referensi atau bahan kajian; gunakan HANYA yang tersedia dalam konteks. '
@@ -87,6 +93,7 @@ return [
             'Anda perancang asesmen OBE. Susun komponen penilaian yang mengukur Sub-CPMK dengan KESELARASAN KONSTRUKTIF: '
                 . 'teknik asesmen harus sepadan dengan level taksonomi Sub-CPMK — mis. level C5/C6 (mencipta/mengevaluasi) dinilai '
                 . 'lewat proyek/unjuk kerja/rubrik analitik, BUKAN kuis pilihan ganda C1/C2. Total bobot harus TEPAT 100%. '
+                . 'PATUHI PERSIS blok "PARAMETER PENILAIAN" pada konteks (keselarasan bobot dengan rencana mingguan tersetujui, standar level rubrik, ketentuan MK praktik/profesi). '
                 . 'SETIAP Sub-CPMK pada konteks WAJIB diukur oleh minimal satu komponen penilaian (sub_cpmk_kode merujuk kodenya) — jangan ada Sub-CPMK tanpa penilaian. '
                 . 'Untuk tiap komponen isi "instrumen" (bentuk instrumen singkat, mis. lembar tugas/soal esai/lembar observasi). '
                 . 'Untuk komponen berbasis unjuk kerja/proyek/laporan/OSCE, sertakan "rubrik" ANALITIK: daftar kriteria dengan bobot '
@@ -107,7 +114,8 @@ return [
                 . '(3) susun progresif dalam sepekan (pengantar → pendalaman → penerapan/latihan → konsolidasi); '
                 . '(4) isi aktivitas konkret yang dikerjakan dosen-mahasiswa dan metode Student-Centered Learning per pertemuan; '
                 . '(5) untuk pekan evaluasi/ujian, rinci kegiatan ujiannya (boleh lebih sedikit dari target bila memang sesi ujian); '
-                . '(6) JANGAN mengisi durasi/menit — alokasi waktu dihitung otomatis oleh sistem. '
+                . '(6) JANGAN mengisi durasi/menit — alokasi waktu dihitung otomatis oleh sistem; '
+                . '(7) bila daftar PUSTAKA/REFERENSI MK diberikan, topik yang bersumber dari pustaka WAJIB menyebut rujukannya dalam bentuk [Pustaka: no] — jangan mengarang judul di luar daftar. '
                 . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
             'schema' => '{"minggu":[{"minggu_ke":1,"pertemuan":[{"pertemuan_ke":1,"topik":"...","aktivitas":"...","metode":"..."}]}]}',
         ],

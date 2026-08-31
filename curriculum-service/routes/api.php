@@ -175,6 +175,7 @@ Route::get('kurikulum/{kurikulum}/buku/docx', [KurikulumBukuController::class, '
 Route::apiResource('generate-sessions', GenerateSessionController::class)
     ->only(['index', 'store', 'show', 'destroy']);
 Route::post('generate-sessions/{generateSession}/generate', [GenerateSessionController::class, 'generate']);
+Route::patch('generate-sessions/{generateSession}/konteks', [GenerateSessionController::class, 'konteks']);
 Route::post('generate-sessions/{generateSession}/accept', [GenerateSessionController::class, 'accept']);
 Route::post('generate-sessions/{generateSession}/reject', [GenerateSessionController::class, 'reject']);
 Route::post('generate-sessions/{generateSession}/pin', [GenerateSessionController::class, 'pin']);
@@ -242,6 +243,10 @@ Route::get('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class,
 Route::patch('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'update']);
 Route::post('dokumen-rujukan/{dokumenRujukan}/reindex', [DokumenRujukanController::class, 'reindex']);
 Route::delete('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'destroy']);
+// Tautan dokumen ↔ mata kuliah (satu dokumen dipakai lintas MK tanpa unggah ulang)
+Route::get('dokumen-rujukan/{dokumenRujukan}/mata-kuliah', [DokumenRujukanController::class, 'mataKuliahIndex']);
+Route::post('dokumen-rujukan/{dokumenRujukan}/mata-kuliah', [DokumenRujukanController::class, 'mataKuliahAttach']);
+Route::delete('dokumen-rujukan/{dokumenRujukan}/mata-kuliah/{kodeMk}', [DokumenRujukanController::class, 'mataKuliahDetach']);
 
 // Modul 0b — Checklist Penyelarasan Acuan
 Route::apiResource('kerangka-acuan', KerangkaAcuanController::class);

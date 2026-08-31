@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiGet, apiPost, apiPut, apiDelete, type ApiResult, type Referensi } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, type ApiResult, type Referensi, type DokumenRujukan } from "@/lib/api";
 
 const DEFAULT_INSTITUSI = 1;
 
@@ -69,6 +69,63 @@ export async function suggestReferensi(input: {
   });
 }
 
+// ---- Tautan dokumen rujukan (buku/artikel) per MK ----
+
+/** Dokumen yang sudah tertaut ke MK ini. */
+export async function listDokumenTautan(kodeMk: string): Promise<DokumenRujukan[]> {
+  try {
+    const res = await apiGet<{ data: DokumenRujukan[] }>("/dokumen-rujukan", {
+      institusi_id: DEFAULT_INSTITUSI,
+      kode_mk: kodeMk,
+      per_page: 100,
+    });
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Cari dokumen yang SUDAH ADA (periksa dulu sebelum unggah). */
+export async function cariDokumen(q: string): Promise<DokumenRujukan[]> {
+  try {
+    const res = await apiGet<{ data: DokumenRujukan[] }>("/dokumen-rujukan", {
+      institusi_id: DEFAULT_INSTITUSI,
+      q,
+      per_page: 20,
+    });
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Tautkan dokumen existing ke MK (idempoten). */
+export async function tautkanDokumen(dokumenId: number, kodeMk: string): Promise<ApiResult<unknown>> {
+  return apiPost(`/dokumen-rujukan/${dokumenId}/mata-kuliah`, { kode_mk: kodeMk });
+}
+
+/** Lepas tautan dokumen dari MK. */
+export async function lepasTautanDokumen(dokumenId: number, kodeMk: string): Promise<ApiResult<unknown>> {
+  return apiDelete(`/dokumen-rujukan/${dokumenId}/mata-kuliah/${encodeURIComponent(kodeMk)}`);
+}
+
+/** Unggah dokumen baru langsung tertaut ke MK; server mendeteksi duplikat via hash. */
+export async function unggahDokumenUntukMk(
+  kodeMk: string,
+  formData: FormData
+): Promise<ApiResult<DokumenRujukan> & { dedup?: boolean }> {
+  const fd = new FormData();
+  fd.set("institusi_id", String(DEFAULT_INSTITUSI));
+  fd.set("kode_mk", kodeMk);
+  fd.set("jenis", (formData.get("jenis") as string) || "buku");
+  fd.set("judul", (formData.get("judul") as string) || "");
+  fd.set("sumber_konten", formData.get("sumber_konten") ? "1" : "0");
+  const file = formData.get("file") as File | null;
+  if (file && file.size > 0) fd.set("file", file);
+  const res = await apiPostForm<DokumenRujukan>("/dokumen-rujukan", fd);
+  return { ...res, dedup: res.ok && res.status === 200 };
+}
+
 export async function createMataKuliah(formData: FormData) {
   const kurikulumId = formData.get("kurikulum_id") as string;
   const institusiId = toInt(formData.get("institusi_id")) ?? DEFAULT_INSTITUSI;
@@ -84,14 +141,17 @@ export async function createMataKuliah(formData: FormData) {
     jumlah_pertemuan: toInt(formData.get("jumlah_pertemuan")),
     sifat: (formData.get("sifat") as string) || null,
     rumpun: (formData.get("rumpun") as string) || null,
-    deskripsi_singkat: (formData.get("deskripsi_singkat") as string) || null,
+    // deskripsi/pustaka milik dosen (diisi di Generator); kirim hanya bila form menyediakan
+    ...(formData.has("deskripsi_singkat")
+      ? { deskripsi_singkat: (formData.get("deskripsi_singkat") as string) || null }
+      : {}),
     sks_teori: toInt(formData.get("sks_teori")),
     sks_praktik: toInt(formData.get("sks_praktik")),
     semester: toInt(formData.get("semester")),
     prasyarat_kode: (formData.get("prasyarat_kode") as string) || null,
   };
   const res = await apiPost("/mata-kuliah", body);
-  if (res.ok && kodeMk) {
+  if (res.ok && kodeMk && formData.has("referensi_json")) {
     await syncReferensi(institusiId, kodeMk, parseReferensi(formData));
   }
   revalidatePath(base(kurikulumId));
@@ -113,14 +173,17 @@ export async function updateMataKuliah(formData: FormData) {
     jumlah_pertemuan: toInt(formData.get("jumlah_pertemuan")),
     sifat: (formData.get("sifat") as string) || null,
     rumpun: (formData.get("rumpun") as string) || null,
-    deskripsi_singkat: (formData.get("deskripsi_singkat") as string) || null,
+    // deskripsi/pustaka milik dosen (diisi di Generator); jangan timpa bila form tak menyediakan
+    ...(formData.has("deskripsi_singkat")
+      ? { deskripsi_singkat: (formData.get("deskripsi_singkat") as string) || null }
+      : {}),
     sks_teori: toInt(formData.get("sks_teori")),
     sks_praktik: toInt(formData.get("sks_praktik")),
     semester: toInt(formData.get("semester")),
     prasyarat_kode: (formData.get("prasyarat_kode") as string) || null,
   };
   const res = await apiPut(`/mata-kuliah/${id}`, body);
-  if (res.ok && kodeMk) {
+  if (res.ok && kodeMk && formData.has("referensi_json")) {
     await syncReferensi(institusiId, kodeMk, parseReferensi(formData));
     // Jika kode MK diubah, pindahkan referensi ke kode baru (sudah dilakukan di
     // atas) lalu bersihkan sisa yatim pada kode lama.

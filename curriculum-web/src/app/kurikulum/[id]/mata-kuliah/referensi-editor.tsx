@@ -35,6 +35,22 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
     };
   }, [mk?.kode_mk, mk?.institusi_id]);
 
+  // Terima kiriman sitasi dari editor dokumen tertaut (tombol "→ Pustaka").
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ sitasi?: string; tipe?: string }>).detail;
+      const sitasi = (detail?.sitasi ?? "").trim();
+      if (!sitasi) return;
+      setRows((rs) =>
+        rs.some((r) => r.sitasi.trim().toLowerCase() === sitasi.toLowerCase())
+          ? rs
+          : [...rs, { tipe: detail?.tipe === "pendukung" ? "pendukung" : "utama", sitasi }]
+      );
+    };
+    window.addEventListener("rps:add-referensi", handler);
+    return () => window.removeEventListener("rps:add-referensi", handler);
+  }, []);
+
   const payload = JSON.stringify(rows.map(({ tipe, sitasi }) => ({ tipe, sitasi })));
 
   const setRow = (i: number, patch: Partial<Row>) =>

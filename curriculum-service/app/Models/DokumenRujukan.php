@@ -30,4 +30,9 @@ class DokumenRujukan extends Model
     {
         return $this->hasMany(DokumenChunk::class, 'dokumen_id');
     }
+
+    public function mataKuliahTautan(): HasMany
+    {
+        return $this->hasMany(MkDokumenRujukan::class, 'dokumen_rujukan_id');
+    }
 }

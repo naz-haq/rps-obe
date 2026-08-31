@@ -178,12 +178,13 @@ export type DokumenRujukan = {
   institusi_id: number;
   badan_rujukan_id: number | null;
   badan_rujukan?: string | null;
-  jenis: "kpt" | "asosiasi" | "akreditasi" | "template_rps";
+  jenis: "kpt" | "asosiasi" | "akreditasi" | "template_rps" | "buku";
   sumber_konten: boolean;
   judul: string | null;
   file_asal: string | null;
   status_indexing: "pending" | "indexed" | "error";
   chunk_count?: number;
+  mk_tautan_count?: number;
   created_at?: string;
 };
 
@@ -310,6 +311,12 @@ export type MatriksMkBahanKajian = {
 export type MatriksPlLink = { profil_lulusan_id: number; cpl_id: number };
 export type MatriksProfilLulusan = { profil_lulusan: ProfilLulusan[]; cpl: Cpl[]; links: MatriksPlLink[] };
 
+export type KonteksTambahan = {
+  kompetensi_khusus?: string;
+  bok?: string;
+  bahan_kajian_khusus?: string;
+};
+
 export type GenerateSession = {  id: number;
   institusi_id: number;
   mk_id: number;
@@ -321,6 +328,7 @@ export type GenerateSession = {  id: number;
   status_bagian: Record<string, string> | null;
   draf: Record<string, unknown> | null;
   catatan_validasi: Record<string, unknown> | null;
+  konteks_tambahan?: KonteksTambahan | null;
   rps_version_id: number | null;
   created_at?: string;
   updated_at?: string;
