@@ -7,6 +7,7 @@ import { Badge, PageHeader, buttonClass } from "@/components/ui";
 import type { Cpl, GenerateSession, MataKuliah, Taksonomi } from "@/lib/api";
 import { KonteksPanel } from "./konteks-panel";
 import { DetailMkPanel } from "./detail-mk-panel";
+import { ImporRpsPanel } from "./impor-rps";
 import {
   generateStage,
   acceptStage,
@@ -130,6 +131,8 @@ export function Builder({
       <KonteksPanel session={session} committed={committed} />
 
       {mk && <DetailMkPanel sessionId={session.id} mk={mk} committed={committed} />}
+
+      {!committed && <ImporRpsPanel sessionId={session.id} />}
 
       {/* Tab per tahap + tab akhir Matriks & Diagnostik */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1">

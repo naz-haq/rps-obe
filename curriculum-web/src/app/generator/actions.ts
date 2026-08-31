@@ -79,6 +79,41 @@ export async function acceptStage(id: number, stage: string, edited?: unknown): 
   return res;
 }
 
+/**
+ * Impor RPS lama: simpan draf per-tahap yang dikirim dari berkas Excel
+ * (di-parse di klien) memakai jalur accept/edited. Hanya tahap ber-isi yang
+ * disimpan; urutan cpmk→penilaian agar kode induk sudah ada saat tahap turunan.
+ */
+export async function imporRpsLama(
+  id: number,
+  payload: {
+    cpmk?: unknown[];
+    sub_cpmk?: unknown[];
+    minggu?: unknown[];
+    komponen?: unknown[];
+  },
+): Promise<ApiResult> {
+  const urut: { stage: string; edited: Record<string, unknown> }[] = [];
+  if (payload.cpmk?.length) urut.push({ stage: "cpmk", edited: { cpmk: payload.cpmk } });
+  if (payload.sub_cpmk?.length) urut.push({ stage: "sub_cpmk", edited: { sub_cpmk: payload.sub_cpmk } });
+  if (payload.minggu?.length) urut.push({ stage: "mingguan", edited: { minggu: payload.minggu } });
+  if (payload.komponen?.length) urut.push({ stage: "penilaian", edited: { komponen: payload.komponen } });
+
+  if (urut.length === 0) {
+    return { ok: false, status: 422, message: "Berkas tidak berisi data yang dapat diimpor." };
+  }
+
+  let last: ApiResult = { ok: true, status: 200 };
+  for (const { stage, edited } of urut) {
+    last = await apiPost(`/generate-sessions/${id}/accept`, { stage, edited });
+    if (!last.ok) {
+      return { ...last, message: `Gagal menyimpan tahap ${stage}: ${last.message ?? "kesalahan"}` };
+    }
+  }
+  revalidatePath(`/generator/${id}`);
+  return last;
+}
+
 export async function rejectStage(id: number, stage: string): Promise<ApiResult> {
   const res = await apiPost(`/generate-sessions/${id}/reject`, { stage });
   revalidatePath(`/generator/${id}`);
