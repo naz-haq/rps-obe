@@ -11,7 +11,9 @@ use App\Models\MkCpl;
 use App\Models\RpsApprovalLog;
 use App\Models\RpsVersion;
 use App\Models\User;
+use App\Services\Ai\AiOutcome;
 use App\Services\Ai\AiService;
+use App\Services\Ai\LlmResult;
 use App\Services\Approval\Exceptions\ApprovalException;
 use App\Services\Approval\RpsApprovalService;
 use App\Services\Generator\Exceptions\GeneratorException;
@@ -806,6 +808,112 @@ class GeneratorLifecycleTest extends TestCase
         $session->update(['catatan_validasi' => ['cpmk' => ['bersih' => true]]]);
 
         return $session->refresh();
+    }
+
+    public function test_generate_mingguan_menyerap_variasi_baris_ujian_model_tanpa_melonggarkan_kontrak(): void
+    {
+        $session = $this->aiStagedSession();
+        // Pola gagal produksi: baris UTS/UAS terpisah menduplikasi pekan belajar,
+        // sub_cpmk_kode string kosong alih-alih null.
+        $output = json_encode(['minggu' => [
+            $this->aiWeek(1, 'Sub-CPMK-1', 'Farmakologi dasar — pengantar reseptor [Pustaka: tidak tersedia dalam konteks]', 30),
+            $this->aiWeek(2, 'Sub-CPMK-2', 'Farmakokinetika — absorpsi dan distribusi [Pustaka: tidak tersedia dalam konteks]', 30),
+            $this->aiWeek(2, '', 'Evaluasi Tengah Semester (UTS) — cakupan Sub-CPMK-1 s.d. Sub-CPMK-2', 20),
+            $this->aiWeek(16, '', 'Evaluasi Akhir Semester (UAS) — seluruh Sub-CPMK', 20),
+        ]], JSON_THROW_ON_ERROR);
+        $generator = $this->mockAiReturning($output, 1);
+
+        $generator->generateStage($session, 'mingguan');
+
+        $rows = $session->fresh()->draf['mingguan']['minggu'];
+        $this->assertSame([1, 2, 8, 16], array_column($rows, 'minggu_ke'));
+        $this->assertSame(['Sub-CPMK-1', 'Sub-CPMK-2', null, null], array_map(fn($r) => $r['sub_cpmk_kode'], $rows));
+        $this->assertStringContainsString('UTS', $rows[2]['materi_pustaka']);
+        $this->assertStringContainsString('UAS', $rows[3]['materi_pustaka']);
+    }
+
+    public function test_kontrak_tetap_menolak_pekan_belajar_tanpa_kode_induk_setelah_retry_koreksi(): void
+    {
+        $session = $this->aiStagedSession();
+        // Pekan belajar (bukan ujian) tanpa kode induk: normalisasi tidak boleh meloloskannya.
+        $bad = json_encode(['minggu' => [
+            $this->aiWeek(1, 'Sub-CPMK-1', 'Farmakologi dasar — pengantar reseptor [Pustaka: tidak tersedia dalam konteks]', 50),
+            $this->aiWeek(2, '', 'Farmakokinetika — absorpsi dan distribusi [Pustaka: tidak tersedia dalam konteks]', 50),
+        ]], JSON_THROW_ON_ERROR);
+        // 1 percobaan awal + auto_revisi_maks(2) retry KOREKSI, semuanya ditolak.
+        $generator = $this->mockAiReturning($bad, 3);
+
+        try {
+            $generator->generateStage($session, 'mingguan');
+            $this->fail('Kontrak meloloskan pekan belajar tanpa kode induk.');
+        } catch (GeneratorException $exception) {
+            $this->assertStringContainsString('kode induk', $exception->getMessage());
+        }
+        $this->assertSame('pending', ($session->fresh()->status_bagian ?? [])['mingguan']);
+    }
+
+    private function aiStagedSession(): GenerateSession
+    {
+        $session = $this->generator->start($this->course, [
+            'user_id' => $this->actor->id,
+            'konteks_tambahan' => ['bok' => 'Farmakologi dasar.'],
+        ]);
+        $session = $this->generator->acceptStage($session, 'cpmk', ['cpmk' => [[
+            'kode' => 'CPMK1',
+            'deskripsi' => 'Menganalisis mekanisme kerja obat.',
+            'cpl_kode' => ['CPL-1'],
+            'taksonomi_kode' => ['C4'],
+        ]]]);
+        $session = $this->generator->acceptStage($session, 'sub_cpmk', ['sub_cpmk' => [
+            [
+                'kode' => 'Sub-CPMK-1',
+                'cpmk_kode' => 'CPMK1',
+                'deskripsi' => 'Menjelaskan interaksi obat-reseptor.',
+                'taksonomi_kode' => ['C2'],
+                'indikator' => ['Ketepatan menjelaskan interaksi obat-reseptor.', 'Kelengkapan contoh interaksi.'],
+            ],
+            [
+                'kode' => 'Sub-CPMK-2',
+                'cpmk_kode' => 'CPMK1',
+                'deskripsi' => 'Menganalisis profil farmakokinetika obat.',
+                'taksonomi_kode' => ['C4'],
+                'indikator' => ['Ketepatan analisis parameter farmakokinetika.', 'Ketepatan interpretasi kurva kadar-waktu.'],
+            ],
+        ]]);
+
+        return $session->refresh();
+    }
+
+    private function aiWeek(int $week, string $kode, string $materi, float $bobot): array
+    {
+        return [
+            'minggu_ke' => $week,
+            'sub_cpmk_kode' => $kode,
+            'indikator' => 'Ketepatan capaian sesuai target pekan.',
+            'kriteria_penilaian' => "Kriteria: ketepatan analisis.\nTeknik: tes tertulis.",
+            'metode_pembelajaran' => 'Diskusi kasus',
+            'bentuk_luring' => 'Tatap muka',
+            'bentuk_daring' => null,
+            'pengalaman_belajar' => 'Menganalisis kasus terkait materi pekan.',
+            'materi_pustaka' => $materi,
+            'bobot_penilaian' => $bobot,
+        ];
+    }
+
+    /** Ganti mock setUp lalu resolve generator baru agar memakai mock ini. */
+    private function mockAiReturning(string $text, int $times): RpsGeneratorService
+    {
+        $outcome = new AiOutcome(new LlmResult(
+            text: $text,
+            inputTokens: 500,
+            outputTokens: 400,
+            modelVersion: 'unit-test-model',
+        ), 0.001);
+        $this->mock(AiService::class, function (MockInterface $mock) use ($outcome, $times): void {
+            $mock->shouldReceive('run')->times($times)->andReturn($outcome);
+        });
+
+        return app(RpsGeneratorService::class);
     }
 
     private function committedSession(string $status = 'draft'): GenerateSession

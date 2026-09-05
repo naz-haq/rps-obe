@@ -372,7 +372,7 @@ return [
     'grounding' => [
         'top_k'            => (int) env('AI_GROUNDING_TOPK', 5),
         'min_score'        => (float) env('AI_GROUNDING_MIN_SCORE', 0.75),
-        'auto_revisi_maks' => (int) env('AI_GROUNDING_AUTO_REVISI', 1),
+        'auto_revisi_maks' => (int) env('AI_GROUNDING_AUTO_REVISI', 2),
     ],
 
     /*

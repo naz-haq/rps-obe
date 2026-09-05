@@ -158,18 +158,19 @@ class RpsGeneratorService
             $outcome = $this->runGenerate($session, $stage, $stageCfg, $mk, $koreksi, $reGenerate);
             try {
                 $data = $this->parseJson($outcome->text(), $stage);
-                // Validate raw types/IDs, never coerce or deduplicate invalid AI data.
-                $this->assertContract($stage, $data, $session, $mk, true);
                 if ($stage === 'mingguan') {
-                    $rowCount = count($data['minggu']);
+                    // Normalisasi lossless ("" -> null, angka-string -> int) lalu
+                    // penempatan UTS/UAS deterministik SEBELUM kontrak: variasi posisi
+                    // baris ujian antar-model diserap sistem, bukan jadi kegagalan.
+                    $data = $this->normalisasiMingguan($data);
+                    $rowCount = is_array($data['minggu'] ?? null) ? count($data['minggu']) : 0;
                     $data = $this->terapkanEvaluasiMingguan($mk, $data, $session->draf['penilaian'] ?? null);
-                    if (count($data['minggu']) < $rowCount) {
+                    if (is_array($data['minggu'] ?? null) && count($data['minggu']) < $rowCount) {
                         throw new GeneratorException('Penempatan evaluasi akan menghapus baris. Kembalikan satu baris per pekan reguler dengan UTS/UAS pada slot yang benar.');
                     }
-                    // Placement can move/remove an exam-labelled row: coverage must
-                    // still hold on the final persisted result, even on the last try.
-                    $this->assertContract($stage, $data, $session, $mk, true);
                 }
+                // Kontrak penuh tetap ditegakkan pada hasil final yang akan disimpan.
+                $this->assertContract($stage, $data, $session, $mk, true);
             } catch (GeneratorException $e) {
                 if ($percobaan >= $maks) throw $e;
                 $koreksi[] = $e->getMessage();
@@ -988,6 +989,36 @@ class RpsGeneratorService
         $stageData['minggu'] = array_values($semua);
 
         return $this->assignItemIds('mingguan', $stageData);
+    }
+
+    /**
+     * Normalisasi format lossless keluaran AI tahap mingguan — hanya bentuk,
+     * bukan substansi: sub_cpmk_kode kosong/"null"/"-" jadi null, minggu_ke
+     * angka-string jadi integer. Nilai tak sah lain dibiarkan agar kontrak menolak.
+     */
+    private function normalisasiMingguan(array $data): array
+    {
+        $rows = $data['minggu'] ?? null;
+        if (! is_array($rows)) {
+            return $data;
+        }
+        foreach ($rows as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $kode = $row['sub_cpmk_kode'] ?? null;
+            if (is_string($kode)) {
+                $kode = trim($kode);
+                $rows[$i]['sub_cpmk_kode'] = ($kode === '' || $kode === '-' || strcasecmp($kode, 'null') === 0) ? null : $kode;
+            }
+            $minggu = $row['minggu_ke'] ?? null;
+            if (is_string($minggu) && preg_match('/^\d+$/', trim($minggu))) {
+                $rows[$i]['minggu_ke'] = (int) trim($minggu);
+            }
+        }
+        $data['minggu'] = $rows;
+
+        return $data;
     }
 
     /** Baris evaluasi (UTS/UAS) baku; teks materi memicu band kuning di UI/PDF/DOCX. */
