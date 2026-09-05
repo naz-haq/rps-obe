@@ -28,9 +28,7 @@ class RpsApprovalController extends Controller
 
         $query->where('status', $request->string('status')->toString() ?: 'review');
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('kode_mk')) {
             $query->where('kode_mk', $request->string('kode_mk'));
         }

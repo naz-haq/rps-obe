@@ -50,9 +50,7 @@ class OnboardingController extends Controller
     {
         $query = ColumnMapping::query();
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('jenis')) {
             $query->where('jenis_file', $request->string('jenis'));
         }

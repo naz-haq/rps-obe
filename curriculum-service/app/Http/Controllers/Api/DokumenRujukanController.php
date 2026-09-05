@@ -24,9 +24,7 @@ class DokumenRujukanController extends Controller
     {
         $query = DokumenRujukan::query()->with('badanRujukan')->withCount(['chunks', 'mataKuliahTautan']);
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('kode_mk')) {
             $query->whereHas('mataKuliahTautan', fn($q) => $q->where('kode_mk', $request->string('kode_mk')));
         }

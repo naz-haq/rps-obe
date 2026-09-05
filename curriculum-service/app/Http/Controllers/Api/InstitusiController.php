@@ -18,7 +18,7 @@ class InstitusiController extends Controller
     public function index(Request $request): JsonResponse
     {
         $data = Institusi::query()
-            ->when($request->user()?->institusi_id, fn($query, $institusiId) => $query->whereKey($institusiId))
+            ->when($request->attributes->get('tenant_institusi_ids'), fn($query, $ids) => $query->whereKey($ids))
             ->with('parent:id,nama')
             ->withCount([
                 'mataKuliah',

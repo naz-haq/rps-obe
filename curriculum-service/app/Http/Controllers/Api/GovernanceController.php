@@ -31,7 +31,7 @@ class GovernanceController extends Controller
 
         $hari = $request->integer('hari', 30);
         $sejak = now()->subDays($hari)->startOfDay();
-        $institusiId = $request->filled('institusi_id') ? $request->integer('institusi_id') : null;
+        $institusiId = $request->filled('institusi_id') ? $request->integer('institusi_id') : $request->user()?->institusi_id;
 
         $interaksi = AiInteraksi::query()
             ->when($institusiId, fn($q) => $q->where('institusi_id', $institusiId))
@@ -92,7 +92,7 @@ class GovernanceController extends Controller
 
         $hari = $request->integer('hari', 30);
         $sejak = now()->subDays($hari)->startOfDay();
-        $institusiId = $request->filled('institusi_id') ? $request->integer('institusi_id') : null;
+        $institusiId = $request->filled('institusi_id') ? $request->integer('institusi_id') : $request->user()?->institusi_id;
 
         $base = fn() => AiInteraksi::query()
             ->when($institusiId, fn($q) => $q->where('institusi_id', $institusiId))
@@ -155,9 +155,7 @@ class GovernanceController extends Controller
     {
         $query = AuditLog::query();
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('entity')) {
             $query->where('entity', $request->string('entity'));
         }
@@ -181,9 +179,7 @@ class GovernanceController extends Controller
     {
         $query = Notifikasi::query();
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->integer('user_id'));
         }

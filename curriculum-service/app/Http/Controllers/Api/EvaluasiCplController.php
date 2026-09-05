@@ -49,9 +49,7 @@ class EvaluasiCplController extends Controller
             ->with('cpl:id,kode,deskripsi')
             ->withCount('tindakLanjut');
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('cpl_id')) {
             $query->where('cpl_id', $request->integer('cpl_id'));
         }

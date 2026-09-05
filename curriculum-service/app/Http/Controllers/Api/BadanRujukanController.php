@@ -16,10 +16,7 @@ class BadanRujukanController extends Controller
     {
         $query = BadanRujukan::query()->withCount('dokumen');
 
-        if ($request->filled('institusi_id')) {
-            $iid = $request->integer('institusi_id');
-            $query->where(fn($q) => $q->where('institusi_id', $iid)->orWhereNull('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request, sertakanGlobal: true);
         if ($request->filled('jenis')) {
             $query->where('jenis', $request->string('jenis'));
         }

@@ -17,26 +17,34 @@ class EnforceTenantContext
             return $next($request);
         }
 
-        if ($request->filled('institusi_id') && $request->integer('institusi_id') !== (int) $institusiId) {
+        // Cakupan tenant = institusi user + seluruh unit turunannya (fakultas melihat prodi anak).
+        $allowed = Institusi::idsDalamSubtree((int) $institusiId);
+
+        if ($request->filled('institusi_id') && ! in_array($request->integer('institusi_id'), $allowed, true)) {
             abort(403, 'Anda tidak memiliki akses ke institusi tersebut.');
         }
 
         foreach ($request->route()?->parameters() ?? [] as $parameter) {
-            if ($parameter instanceof Institusi && (int) $parameter->getKey() !== (int) $institusiId) {
+            if ($parameter instanceof Institusi && ! in_array((int) $parameter->getKey(), $allowed, true)) {
                 abort(403, 'Anda tidak memiliki akses ke institusi tersebut.');
             }
 
             if (
                 $parameter instanceof Model
                 && $parameter->getAttribute('institusi_id') !== null
-                && (int) $parameter->getAttribute('institusi_id') !== (int) $institusiId
+                && ! in_array((int) $parameter->getAttribute('institusi_id'), $allowed, true)
             ) {
                 abort(403, 'Anda tidak memiliki akses ke data institusi tersebut.');
             }
         }
 
-        $request->merge(['institusi_id' => (int) $institusiId]);
-        $request->query->set('institusi_id', (int) $institusiId);
+        // Daftar tanpa filter eksplisit dibatasi whereIn cakupan ini oleh applyTenantScope().
+        $request->attributes->set('tenant_institusi_ids', $allowed);
+
+        // Penulisan tanpa institusi_id eksplisit default ke institusi user sendiri.
+        if (! $request->isMethod('GET') && ! $request->isMethod('HEAD') && ! $request->filled('institusi_id')) {
+            $request->merge(['institusi_id' => (int) $institusiId]);
+        }
 
         return $next($request);
     }

@@ -20,9 +20,7 @@ class MataKuliahController extends Controller
         if ($request->filled('kurikulum_id')) {
             $query->where('kurikulum_id', $request->integer('kurikulum_id'));
         }
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('jenis_mk')) {
             $query->where('jenis_mk', $request->string('jenis_mk'));
         }

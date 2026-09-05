@@ -21,9 +21,7 @@ class BahanKajianController extends Controller
         if ($request->filled('kurikulum_id')) {
             $query->where('kurikulum_id', $request->integer('kurikulum_id'));
         }
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(fn($w) => $w->where('nama', 'like', "%{$q}%")->orWhere('deskripsi', 'like', "%{$q}%"));

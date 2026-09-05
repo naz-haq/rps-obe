@@ -33,9 +33,7 @@ class UserController extends Controller
         if ($role = $request->query('role')) {
             $query->whereHas('roles', fn($r) => $r->where('name', $role));
         }
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->query('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('is_active')) {
             $query->where('is_active', filter_var($request->query('is_active'), FILTER_VALIDATE_BOOL));
         }

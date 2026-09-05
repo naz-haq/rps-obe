@@ -17,9 +17,7 @@ class ProdiVmtsController extends Controller
     public function index(Request $request)
     {
         $query = ProdiVmts::query()->orderByDesc('id');
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
 
         return response()->json(['data' => $query->get()->map(fn($v) => $this->format($v))]);
     }

@@ -21,6 +21,22 @@ class Institusi extends Model
         return $this->hasMany(self::class, 'parent_id');
     }
 
+    /** ID institusi ini beserta seluruh unit turunannya (fakultas → prodi). */
+    public static function idsDalamSubtree(int $rootId): array
+    {
+        $anakPerInduk = self::query()->select('id', 'parent_id')->get()->groupBy('parent_id');
+        $ids = [$rootId];
+        $tumpukan = [$rootId];
+        while ($tumpukan !== []) {
+            foreach ($anakPerInduk->get(array_pop($tumpukan), collect()) as $anak) {
+                $ids[] = (int) $anak->id;
+                $tumpukan[] = (int) $anak->id;
+            }
+        }
+
+        return $ids;
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'institusi_id');

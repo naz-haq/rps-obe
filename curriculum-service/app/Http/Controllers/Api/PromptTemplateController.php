@@ -195,12 +195,13 @@ class PromptTemplateController extends Controller
     private function tenantId(Request $request): ?int
     {
         $authenticatedTenant = $request->user()?->institusi_id;
+        $allowed = $request->attributes->get('tenant_institusi_ids');
         abort_if($authenticatedTenant !== null && $request->filled('institusi_id')
-            && $request->integer('institusi_id') !== (int) $authenticatedTenant, 403);
+            && ! in_array($request->integer('institusi_id'), (array) $allowed, true), 403);
         $request->validate(['institusi_id' => ['nullable', 'integer', 'exists:institusi,id']]);
 
-        return $authenticatedTenant !== null ? (int) $authenticatedTenant
-            : ($request->filled('institusi_id') ? $request->integer('institusi_id') : null);
+        return $request->filled('institusi_id') ? $request->integer('institusi_id')
+            : ($authenticatedTenant !== null ? (int) $authenticatedTenant : null);
     }
 
     private function authorizeTemplate(Request $request, PromptTemplate $template): void

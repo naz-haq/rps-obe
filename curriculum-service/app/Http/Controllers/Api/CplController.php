@@ -21,9 +21,7 @@ class CplController extends Controller
         if ($request->filled('kurikulum_id')) {
             $query->where('kurikulum_id', $request->integer('kurikulum_id'));
         }
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('aspek')) {
             $query->where('aspek', $request->string('aspek'));
         }

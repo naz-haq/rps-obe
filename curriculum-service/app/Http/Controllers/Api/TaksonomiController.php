@@ -25,11 +25,8 @@ class TaksonomiController extends Controller
     {
         $query = Taksonomi::query();
 
-        // Global (null) + milik tenant bila institusi_id dikirim.
-        if ($request->filled('institusi_id')) {
-            $id = $request->integer('institusi_id');
-            $query->where(fn($w) => $w->whereNull('institusi_id')->orWhere('institusi_id', $id));
-        }
+        // Global (null) selalu ikut; sisanya dibatasi cakupan tenant.
+        $this->applyTenantScope($query, $request, sertakanGlobal: true);
         if ($request->filled('domain')) {
             $query->where('domain', $request->string('domain'));
         }

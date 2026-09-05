@@ -25,9 +25,7 @@ class ValidasiOverlapController extends Controller
         $query = ValidasiOverlap::query()
             ->with(['keterampilan.bahanKajian']);
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }

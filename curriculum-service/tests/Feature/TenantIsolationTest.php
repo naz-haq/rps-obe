@@ -93,6 +93,33 @@ class TenantIsolationTest extends TestCase
             ->assertJsonCount(2, 'data');
     }
 
+    public function test_fakultas_user_sees_descendant_prodi_data(): void
+    {
+        $fakultas = Institusi::create(['kode' => 'FAK', 'nama' => 'Fakultas', 'jenis' => 'fakultas']);
+        $prodi = Institusi::create(['kode' => 'PRODI', 'nama' => 'Prodi Anak', 'jenis' => 'prodi', 'parent_id' => $fakultas->id]);
+        $lain = Institusi::create(['kode' => 'LAIN', 'nama' => 'Prodi Lain', 'jenis' => 'prodi']);
+        $sesiProdi = GenerateSession::create(['institusi_id' => $prodi->id]);
+        GenerateSession::create(['institusi_id' => $lain->id]);
+        Sanctum::actingAs(User::factory()->create(['institusi_id' => $fakultas->id]));
+
+        $this->getJson('/api/v1/generate-sessions')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $sesiProdi->id);
+
+        $this->getJson("/api/v1/generate-sessions?institusi_id={$prodi->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->getJson("/api/v1/generate-sessions/{$sesiProdi->id}")->assertOk();
+
+        $this->getJson("/api/v1/generate-sessions?institusi_id={$lain->id}")->assertForbidden();
+
+        $this->getJson('/api/v1/institusi')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
     /** @return array{Institusi, Institusi} */
     private function institutions(): array
     {

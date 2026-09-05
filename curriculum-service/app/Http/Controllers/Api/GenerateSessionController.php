@@ -29,9 +29,7 @@ class GenerateSessionController extends Controller
     {
         $query = GenerateSession::query()->with('mataKuliah');
 
-        if ($request->filled('institusi_id')) {
-            $query->where('institusi_id', $request->integer('institusi_id'));
-        }
+        $this->applyTenantScope($query, $request);
         if ($request->filled('mk_id')) {
             $query->where('mk_id', $request->integer('mk_id'));
         }
@@ -82,8 +80,8 @@ class GenerateSessionController extends Controller
         ], fn($v) => $v !== '');
 
         $mk = MataKuliah::findOrFail($data['mk_id']);
-        $institusiId = $request->user()?->institusi_id;
-        if ($institusiId !== null && (int) $mk->institusi_id !== (int) $institusiId) {
+        $allowed = $request->attributes->get('tenant_institusi_ids');
+        if (is_array($allowed) && ! in_array((int) $mk->institusi_id, $allowed, true)) {
             abort(403, 'Anda tidak memiliki akses ke mata kuliah tersebut.');
         }
 
