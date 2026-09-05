@@ -40,13 +40,24 @@ class AiPricingTest extends TestCase
         $this->assertTrue($s->priceKnown('gpt-5-4'), 'model katalog berbayar');
         $this->assertTrue($s->priceKnown('nvidia::nvidia/nemotron-3-super-120b-a12b'), 'live provider gratis');
         $this->assertTrue($s->priceKnown('openai::gpt-5.6-luna'), 'live berbayar tapi ada di katalog harga');
+        $this->assertTrue($s->priceKnown('deepseek::deepseek-chat'), 'live deepseek terdaftar eksplisit');
+    }
+
+    public function test_fallback_harga_per_provider_untuk_live_tak_terdaftar(): void
+    {
+        $s = $this->svc();
+        // openai & deepseek punya provider_defaults → model live apa pun lolos
+        // dengan harga konservatif (bukan 0).
+        $this->assertTrue($s->priceKnown('openai::model-belum-terdaftar-xyz'));
+        $this->assertTrue($s->priceKnown('deepseek::deepseek-model-baru'));
     }
 
     public function test_harga_tak_dikenal_untuk_live_berbayar_tanpa_katalog(): void
     {
         $s = $this->svc();
-        $this->assertFalse($s->priceKnown('openai::model-belum-terdaftar-xyz'));
+        // gemini/anthropic TIDAK punya provider_defaults → tetap ditolak.
         $this->assertFalse($s->priceKnown('gemini::gemini-x-pro-unlisted'));
+        $this->assertFalse($s->priceKnown('anthropic::claude-x-unlisted'));
     }
 
     public function test_model_tak_dikenal_harga_tak_diketahui(): void
@@ -97,13 +108,14 @@ class AiPricingTest extends TestCase
 
     public function test_live_paid_model_without_catalog_price_is_blocked_before_provider_call(): void
     {
-        config()->set('ai.providers.openai.api_key', 'test-key');
+        // gemini tak punya provider_defaults → wajib terblokir sebelum panggil provider.
+        config()->set('ai.providers.gemini.api_key', 'test-key');
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Harga model');
 
         $this->svc()->run('generate', 'system', 'prompt', [
-            'model' => 'openai::model-belum-terdaftar-xyz',
+            'model' => 'gemini::model-belum-terdaftar-xyz',
         ]);
     }
 

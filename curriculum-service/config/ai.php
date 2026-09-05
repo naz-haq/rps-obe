@@ -234,13 +234,30 @@ return [
     'pricing_catalog' => [
         'currency'     => 'USD',
         'effective_at' => env('AI_PRICING_EFFECTIVE_AT', '2026-09-05'),
-        'source'       => 'OpenAI API Pricing (developers.openai.com/api/docs/pricing)',
+        'source'       => 'OpenAI API Pricing (developers.openai.com/api/docs/pricing); DeepSeek Pricing (api-docs.deepseek.com/quick_start/pricing)',
         'models' => [
             'openai::gpt-5.6-luna'             => ['input' => 0.20, 'cache_read' => 0.02, 'output' => 1.20],
             'openai::gpt-5.6-terra'            => ['input' => 2.00, 'cache_read' => 0.20, 'output' => 12.00],
             'openai::gpt-5.6-sol'              => ['input' => 4.00, 'cache_read' => 0.40, 'output' => 20.00],
+            // Selaras dgn harga entri katalog 'gpt-5-4'/'gpt-5-4-mini' di atas.
+            'openai::gpt-5.4'                  => ['input' => 2.50, 'cache_read' => 0.25, 'output' => 15.00],
+            'openai::gpt-5.4-mini'             => ['input' => 0.75, 'cache_read' => 0.075, 'output' => 4.50],
             'openai::text-embedding-3-small'   => ['input' => 0.02, 'output' => 0.0],
             'openai::text-embedding-3-large'   => ['input' => 0.13, 'output' => 0.0],
+            // Selaras dgn entri katalog 'deepseek-chat'/'deepseek-reasoner' di atas.
+            'deepseek::deepseek-chat'          => ['input' => 0.27, 'cache_read' => 0.07, 'output' => 1.10],
+            'deepseek::deepseek-reasoner'      => ['input' => 0.55, 'cache_read' => 0.14, 'output' => 2.19],
+        ],
+
+        /*
+        | Harga FALLBACK per-provider untuk model live yang belum punya entri
+        | eksplisit di atas: dipakai tarif TERTINGGI provider tsb (konservatif,
+        | biaya tercatat lebih besar dari nyata — bukan 0). Provider berbayar
+        | tanpa fallback tetap ditolak guard katalog harga.
+        */
+        'provider_defaults' => [
+            'openai'   => ['input' => 4.00, 'cache_read' => 0.40, 'output' => 20.00],
+            'deepseek' => ['input' => 0.55, 'cache_read' => 0.14, 'output' => 2.19],
         ],
     ],
 

@@ -348,26 +348,28 @@ class AiService
 
     /**
      * Harga katalog untuk model LIVE (USD/1M token), atau null bila tak dikenal.
-     * Cocokkan "provider::model-id" lalu "model-id" telanjang.
+     * Cocokkan "provider::model-id", "model-id" telanjang, lalu harga fallback
+     * per-provider (tarif konservatif utk model yang belum terdaftar eksplisit).
      *
      * @return array{input:float,output:float,cache_read:float,cache_write:float}|null
      */
     private function livePricing(string $provider, string $apiModel): ?array
     {
         $catalog = (array) config('ai.pricing_catalog.models', []);
-        foreach (["$provider::$apiModel", $apiModel] as $key) {
-            if (isset($catalog[$key]) && is_array($catalog[$key])) {
-                $p = $catalog[$key];
-                return [
-                    'input'       => (float) ($p['input'] ?? 0),
-                    'output'      => (float) ($p['output'] ?? 0),
-                    'cache_read'  => (float) ($p['cache_read'] ?? 0),
-                    'cache_write' => (float) ($p['cache_write'] ?? 0),
-                ];
-            }
+        $p = $catalog["$provider::$apiModel"]
+            ?? $catalog[$apiModel]
+            ?? config("ai.pricing_catalog.provider_defaults.$provider");
+
+        if (! is_array($p)) {
+            return null;
         }
 
-        return null;
+        return [
+            'input'       => (float) ($p['input'] ?? 0),
+            'output'      => (float) ($p['output'] ?? 0),
+            'cache_read'  => (float) ($p['cache_read'] ?? 0),
+            'cache_write' => (float) ($p['cache_write'] ?? 0),
+        ];
     }
 
     /**
