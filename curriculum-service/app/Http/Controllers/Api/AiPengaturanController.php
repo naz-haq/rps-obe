@@ -154,6 +154,15 @@ class AiPengaturanController extends Controller
                     "model_override.$task" => "Provider '{$provider}' tidak punya API key aktif; model '{$modelKey}' belum bisa dipakai.",
                 ]);
             }
+
+            // Tolak model BERBAYAR berharga tak dikenal (§4.3): biaya akan tercatat
+            // 0 secara keliru. Provider gratis (mock/nvidia/github) tetap boleh.
+            if (! $this->ai->priceKnown($modelKey)) {
+                throw ValidationException::withMessages([
+                    "model_override.$task" => "Harga model '{$modelKey}' belum dikenal. Tambahkan ke katalog harga (config ai.pricing_catalog) sebelum mengaktifkannya agar biaya tidak tercatat nol.",
+                ]);
+            }
+
             $bersih[$task] = $modelKey;
         }
 

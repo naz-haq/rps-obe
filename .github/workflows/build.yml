@@ -10,7 +10,68 @@ env:
   OWNER: naz-haq
 
 jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, pdo_sqlite, intl, bcmath, gd
+          coverage: none
+
+      - name: Composer install
+        working-directory: ./curriculum-service
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Siapkan environment uji
+        working-directory: ./curriculum-service
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
+      - name: PHPUnit
+        working-directory: ./curriculum-service
+        run: vendor/bin/phpunit
+
+      - name: Composer audit (kerentanan)
+        working-directory: ./curriculum-service
+        run: composer audit --locked
+
+  frontend-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: curriculum-web/package-lock.json
+
+      - name: Install
+        working-directory: ./curriculum-web
+        run: npm ci
+
+      - name: Lint
+        working-directory: ./curriculum-web
+        run: npm run lint
+
+      - name: Build
+        working-directory: ./curriculum-web
+        run: npm run build
+
+      - name: Audit produksi (kerentanan)
+        working-directory: ./curriculum-web
+        run: npm audit --omit=dev --audit-level=high
+
   build:
+    needs: [backend-test, frontend-quality]
     runs-on: ubuntu-latest
     permissions:
       contents: read

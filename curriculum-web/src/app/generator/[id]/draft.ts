@@ -1,13 +1,20 @@
 // Bentuk data draf per-tahap yang dipakai builder, self-check, & matriks.
 
-export type CpmkItem = {
+/** Meta internal per item (candidate patch): id stabil, sematan, penanda tinjau. */
+export type ItemMeta = {
+  _id?: string;
+  _pin?: boolean;
+  _needs_review?: boolean;
+};
+
+export type CpmkItem = ItemMeta & {
   kode: string;
   deskripsi: string;
   cpl_kode?: string[];
   taksonomi_kode?: string[];
 };
 
-export type SubCpmkItem = {
+export type SubCpmkItem = ItemMeta & {
   kode: string;
   cpmk_kode?: string;
   deskripsi: string;
@@ -15,7 +22,7 @@ export type SubCpmkItem = {
   indikator?: string[];
 };
 
-export type MingguItem = {
+export type MingguItem = ItemMeta & {
   minggu_ke: number;
   sub_cpmk_kode?: string;
   indikator?: string;
@@ -41,7 +48,7 @@ export type RubrikItem = {
   kriteria?: RubrikKriteriaItem[];
 };
 
-export type KomponenItem = {
+export type KomponenItem = ItemMeta & {
   nama: string;
   jenis?: string;
   instrumen?: string;

@@ -179,6 +179,9 @@ Route::patch('generate-sessions/{generateSession}/konteks', [GenerateSessionCont
 Route::post('generate-sessions/{generateSession}/accept', [GenerateSessionController::class, 'accept']);
 Route::post('generate-sessions/{generateSession}/reject', [GenerateSessionController::class, 'reject']);
 Route::post('generate-sessions/{generateSession}/pin', [GenerateSessionController::class, 'pin']);
+Route::post('generate-sessions/{generateSession}/item-candidate', [GenerateSessionController::class, 'itemCandidate']);
+Route::post('generate-sessions/{generateSession}/item-apply', [GenerateSessionController::class, 'itemApply']);
+Route::patch('generate-sessions/{generateSession}/item-pin', [GenerateSessionController::class, 'itemPin']);
 Route::post('generate-sessions/{generateSession}/commit', [GenerateSessionController::class, 'commit']);
 
 Route::get('rps-versions', [RpsVersionController::class, 'index']);

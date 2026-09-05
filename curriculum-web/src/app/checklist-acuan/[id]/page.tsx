@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiGet, type Single, type ChecklistDetail, type BadanRujukan, type Paginated, type ButirKategori } from "@/lib/api";
+import { apiGet, type Single, type ChecklistDetail, type ButirKategori } from "@/lib/api";
 import { PageHeader, Card, Stat, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { CreateButirButton, EditButirButton, DeleteButirButton, StatusControl } from "../forms";
 
@@ -25,9 +25,6 @@ export default async function ChecklistDetailPage({ params }: { params: Promise<
   } catch {
     notFound();
   }
-
-  const badanRes = await apiGet<Paginated<BadanRujukan>>("/badan-rujukan", { institusi_id: DEFAULT_INSTITUSI, per_page: 100 }).catch(() => null);
-  const badanList = badanRes?.data ?? [];
 
   const { kerangka, butir, ringkasan } = detail;
   const kerangkaId = kerangka.id;

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField, TextAreaField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import type { TindakLanjut } from "@/lib/api";
 import {
   analisisEvaluasi,
@@ -66,6 +67,7 @@ export function AnalisisAiButton({ id, angkatan }: { id: number; angkatan?: stri
 export function FinalisasiButton({ id }: { id: number }) {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -73,7 +75,7 @@ export function FinalisasiButton({ id }: { id: number }) {
       disabled={pending}
       className={buttonClass("secondary")}
       onClick={async () => {
-        if (!confirm("Finalisasi evaluasi ini? Setelah final, evaluasi menjadi bukti resmi.")) return;
+        if (!(await confirm({ title: "Finalisasi evaluasi", message: "Setelah final, evaluasi menjadi bukti resmi dan tidak dapat diubah. Lanjutkan finalisasi?", confirmLabel: "Finalisasi" }))) return;
         setPending(true);
         const r = await finalisasiEvaluasi(id);
         setPending(false);
@@ -192,6 +194,7 @@ function TindakLanjutForm({ evaluasiId, item, close }: { evaluasiId: number; ite
 export function HapusTindakLanjut({ id, evaluasiId }: { id: number; evaluasiId: number }) {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -199,7 +202,7 @@ export function HapusTindakLanjut({ id, evaluasiId }: { id: number; evaluasiId: 
       disabled={pending}
       className={buttonClass("danger", "sm")}
       onClick={async () => {
-        if (!confirm("Hapus tindak lanjut ini?")) return;
+        if (!(await confirm({ title: "Hapus tindak lanjut", message: "Hapus tindak lanjut ini?", confirmLabel: "Hapus", tone: "danger" }))) return;
         setPending(true);
         const r = await hapusTindakLanjut(id, evaluasiId);
         setPending(false);

@@ -199,6 +199,33 @@ return [
     ],
 
     /*
+    | Provider yang biayanya SAH bernilai 0 (trial/BYOK gratis). Untuk model LIVE
+    | provider ini, harga 0 = benar (billing_status 'free'). Provider berbayar di
+    | luar daftar ini yang memakai model LIVE tanpa harga katalog → 'unknown'
+    | (biaya tak dapat dipercaya, JANGAN dianggap gratis) — lihat §4.3 audit.
+    */
+    'free_providers' => array_filter(array_map('trim', explode(',', env('AI_FREE_PROVIDERS', 'mock,nvidia,github')))),
+
+    /*
+    | Katalog harga BERVERSI untuk model LIVE (provider::model-id) — USD / 1M token.
+    | Model katalog 'models' di atas sudah punya harga sendiri; blok ini melengkapi
+    | model live berbayar (mis. OpenAI) agar tak tercatat 0. Sumber & tanggal wajib
+    | disinkronkan berkala. Kunci = "provider::model-id" ATAU "model-id" telanjang.
+    */
+    'pricing_catalog' => [
+        'currency'     => 'USD',
+        'effective_at' => env('AI_PRICING_EFFECTIVE_AT', '2026-09-05'),
+        'source'       => 'OpenAI API Pricing (developers.openai.com/api/docs/pricing)',
+        'models' => [
+            'openai::gpt-5.6-luna'             => ['input' => 0.20, 'cache_read' => 0.02, 'output' => 1.20],
+            'openai::gpt-5.6-terra'            => ['input' => 2.00, 'cache_read' => 0.20, 'output' => 12.00],
+            'openai::gpt-5.6-sol'              => ['input' => 4.00, 'cache_read' => 0.40, 'output' => 20.00],
+            'openai::text-embedding-3-small'   => ['input' => 0.02, 'output' => 0.0],
+            'openai::text-embedding-3-large'   => ['input' => 0.13, 'output' => 0.0],
+        ],
+    ],
+
+    /*
     | Routing per-tugas (Blueprint 7.6). 'cross_provider_of' menandai tugas
     | yang WAJIB memakai provider BERBEDA dari tugas rujukan — dipakai validator
     | anti-halusinasi agar tidak "memvalidasi diri sendiri" (generator).
@@ -313,5 +340,5 @@ return [
     | Jika kredensial provider tidak tersedia (tak ada BYOK & tak ada env key),
     | pakai driver mock (khusus dev). Set false di produksi agar gagal jelas.
     */
-    'fallback_to_mock' => (bool) env('AI_FALLBACK_MOCK', true),
+    'fallback_to_mock' => (bool) env('AI_FALLBACK_MOCK', false),
 ];

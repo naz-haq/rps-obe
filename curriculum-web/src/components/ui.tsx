@@ -158,6 +158,53 @@ export function Td({ children, className = "", colSpan }: { children?: ReactNode
   );
 }
 
+// ---- BulletCell ----
+/** Pisah teks jadi item: per baris; bila satu baris, coba penomoran/butir/";". */
+function splitItems(value?: string | null): string[] {
+  if (!value) return [];
+  const raw = String(value);
+  let parts = raw.split(/\r?\n/);
+  if (parts.length === 1) {
+    if (/(?:^|\s)\d+[.)]\s+/.test(raw) || raw.includes("•")) {
+      parts = raw.split(/\s*(?:•|\d+[.)])\s*/);
+    } else if (raw.includes(";")) {
+      parts = raw.split(/\s*;\s*/);
+    }
+  }
+  return parts.map((s) => s.replace(/^\s*(?:\d+[.)]|[-–•*])\s*/, "").trim()).filter(Boolean);
+}
+
+/** Render teks multi-item sebagai daftar berbutir/bernomor; satu item → teks biasa. */
+export function BulletCell({
+  value,
+  ordered = false,
+  className = "",
+  emptyText = "—",
+}: {
+  value?: string | null;
+  ordered?: boolean;
+  className?: string;
+  emptyText?: string;
+}) {
+  const items = splitItems(value);
+  if (items.length === 0) return <span className={className}>{emptyText}</span>;
+  if (items.length === 1) return <span className={className}>{items[0]}</span>;
+  const listCls = `space-y-0.5 pl-4 list-outside ${ordered ? "list-decimal" : "list-disc"} ${className}`;
+  return ordered ? (
+    <ol className={listCls}>
+      {items.map((it, i) => (
+        <li key={i}>{it}</li>
+      ))}
+    </ol>
+  ) : (
+    <ul className={listCls}>
+      {items.map((it, i) => (
+        <li key={i}>{it}</li>
+      ))}
+    </ul>
+  );
+}
+
 // ---- SortableTh (server-rendered link toggling ?sort=&dir=) ----
 export function SortableTh({
   label,

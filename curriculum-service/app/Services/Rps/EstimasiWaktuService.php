@@ -81,6 +81,24 @@ class EstimasiWaktuService
         return is_numeric($v) && (int) $v > 0 ? (int) $v : self::MINGGU_EFEKTIF_DEFAULT;
     }
 
+    /**
+     * Pekan UTS & UAS dari konfigurasi aturan 'jumlah_minggu' (minggu_uts/minggu_uas),
+     * diklem ke rentang 1..$jumlahMinggu. Fallback: UTS ~tengah, UAS pekan terakhir.
+     *
+     * @return array{uts:int,uas:int}
+     */
+    public function pekanEvaluasi(?int $institusiId, int $jumlahMinggu): array
+    {
+        $nilai = $this->nilaiAturan($institusiId, 'jumlah_minggu');
+        $uts   = (int) ($nilai['minggu_uts'] ?? 0);
+        $uas   = (int) ($nilai['minggu_uas'] ?? 0);
+
+        $uts = $uts >= 1 && $uts <= $jumlahMinggu ? $uts : (int) max(1, round($jumlahMinggu / 2));
+        $uas = $uas >= 1 && $uas <= $jumlahMinggu ? $uas : $jumlahMinggu;
+
+        return ['uts' => $uts, 'uas' => $uas];
+    }
+
     /** Durasi satu sesi/pertemuan dalam menit (default 50). */
     public function durasiSesi(?int $institusiId): int
     {

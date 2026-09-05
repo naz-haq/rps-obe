@@ -13,7 +13,7 @@ FROM php:8.4-fpm-bookworm AS runtime
 
 # Ekstensi yang dibutuhkan Laravel + phpword (zip/gd) + smalot/pdfparser (mbstring).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx supervisor \
+    nginx supervisor curl \
     libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libonig-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql mbstring bcmath zip intl gd opcache pcntl \

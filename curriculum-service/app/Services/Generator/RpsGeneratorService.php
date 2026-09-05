@@ -28,8 +28,10 @@ use App\Services\Ai\EmbeddingService;
 use App\Services\Ai\GroundingValidator;
 use App\Services\Ai\PromptRepository;
 use App\Services\Generator\Exceptions\GeneratorException;
+use App\Services\Generator\Exceptions\RevisiConflictException;
 use App\Services\Rps\EstimasiWaktuService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Orkestrator generate RPS BERTAHAP (Blueprint 7.4).
@@ -50,6 +52,14 @@ class RpsGeneratorService
         private EstimasiWaktuService $estimasi,
         private EmbeddingService $embeddings,
     ) {}
+
+    /** Kunci array item di dalam draf per tahap. */
+    private const ITEM_KEY = [
+        'cpmk'      => 'cpmk',
+        'sub_cpmk'  => 'sub_cpmk',
+        'mingguan'  => 'minggu',
+        'penilaian' => 'komponen',
+    ];
 
     /**
      * Mulai sesi penyusunan untuk satu mata kuliah.
@@ -142,7 +152,7 @@ class RpsGeneratorService
         }
 
         $draf = $session->draf ?? [];
-        $draf[$stage] = $data;
+        $draf[$stage] = $this->assignItemIds($stage, $data);
         $status = $session->status_bagian ?? [];
         $status[$stage] = 'draft';
 
@@ -308,7 +318,7 @@ class RpsGeneratorService
         if ($edited !== null) {
             // Penyimpanan manual/suntingan: diperbolehkan meski tahap belum
             // pernah di-generate AI (pengguna mengisi sendiri kolom).
-            $draf[$stage] = $edited;
+            $draf[$stage] = $this->assignItemIds($stage, $edited);
             $status[$stage] = 'edited';
         } else {
             if (($status[$stage] ?? 'pending') === 'pending') {
@@ -363,6 +373,305 @@ class RpsGeneratorService
         $session->update(['status_bagian' => $status]);
 
         return $session->refresh();
+    }
+
+    // ---------------------------------------------------------------------
+    // Regenerasi / perbaikan PER ITEM (candidate patch — audit §7)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Susun USULAN perbaikan untuk SATU item (tanpa menyentuh draf). AI hanya
+     * memperbaiki item terpilih; item lain tetap. Balikan = kandidat berisi
+     * before/after + biaya, untuk ditinjau (diff) lalu diterapkan terpisah.
+     *
+     * @param array{action?:string,instruction?:string} $opts
+     */
+    public function regenerateItem(GenerateSession $session, string $stage, string $itemId, array $opts = []): array
+    {
+        $stageCfg = $this->stageConfig($stage);
+        $mk = $session->mataKuliah;
+        if (! $mk) {
+            throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
+        }
+
+        $this->backfillItemIds($session);
+        [,, $item] = $this->locateItem($session, $stage, $itemId);
+
+        if (($item['_pin'] ?? false) === true) {
+            throw new GeneratorException('Item ini disematkan (pin). Lepas sematan sebelum meminta perbaikan AI.');
+        }
+
+        [$system, $prompt] = $this->buildItemPrompt($session, $stage, $stageCfg, $mk, $item, $opts);
+
+        $outcome = $this->ai->run('generate', $system, $prompt, [
+            'institusi_id' => $session->institusi_id,
+            'user_id'      => $session->user_id,
+            'entity_type'  => 'GenerateSession',
+            'entity_id'    => $session->id,
+            'mode'         => "revisi_item:{$stage}",
+            'max_tokens'   => $stageCfg['max_tokens'] ?? null,
+            'no_cache'     => true,
+        ]);
+
+        if ($outcome->failed()) {
+            throw new GeneratorException('Panggilan AI gagal: ' . ($outcome->result->error ?? 'tidak diketahui'));
+        }
+
+        $data = $this->parseJson($outcome->text(), $stage);
+        $key = self::ITEM_KEY[$stage];
+        $baru = $this->ekstrakItemTunggal($data, $key);
+        if (! is_array($baru)) {
+            throw new GeneratorException('AI tidak mengembalikan item yang valid.');
+        }
+
+        $after = $this->normalisasiItemBaru($stage, $item, $baru);
+
+        return [
+            'stage'       => $stage,
+            'item_id'     => $itemId,
+            'before'      => $this->tanpaMeta($item),
+            'after'       => $after,
+            'base_revisi' => (int) ($session->revisi ?? 0),
+            'usage'       => [
+                'model'         => $outcome->interaksi?->model,
+                'provider'      => $outcome->interaksi?->provider,
+                'estimated_usd' => round($outcome->biaya, 6),
+            ],
+        ];
+    }
+
+    /**
+     * Terapkan usulan satu item ke draf (optimistic locking). Item lain tetap.
+     * Menaikkan revisi & menandai item hilir yang terpengaruh "perlu tinjau".
+     */
+    public function applyItem(GenerateSession $session, string $stage, string $itemId, array $after, int $baseRevisi): GenerateSession
+    {
+        $this->stageConfig($stage);
+        $this->backfillItemIds($session);
+
+        if ((int) ($session->revisi ?? 0) !== $baseRevisi) {
+            throw new RevisiConflictException('Draf sudah berubah sejak usulan dibuat. Tinjau ulang perbedaan terbaru sebelum menerapkan.');
+        }
+
+        [$key, $index, $item] = $this->locateItem($session, $stage, $itemId);
+        if (($item['_pin'] ?? false) === true) {
+            throw new GeneratorException('Item disematkan (pin) — lepas sematan sebelum menerapkan perubahan.');
+        }
+
+        $after = $this->tanpaMeta($after);
+        $after['_id'] = $item['_id'];
+        if (isset($item['_pin'])) {
+            $after['_pin'] = $item['_pin'];
+        }
+
+        $draf = $session->draf ?? [];
+        $draf[$stage][$key][$index] = $after;
+        $draf = $this->tandaiHilirPerluTinjau($draf, $stage, $after);
+
+        $status = $session->status_bagian ?? [];
+        if (($status[$stage] ?? 'pending') === 'pending') {
+            $status[$stage] = 'edited';
+        }
+
+        $session->update([
+            'draf'          => $draf,
+            'status_bagian' => $status,
+            'revisi'        => (int) ($session->revisi ?? 0) + 1,
+        ]);
+
+        return $session->refresh();
+    }
+
+    /** Sematkan/lepas sematan satu item (item tersemat tak diubah AI/apply). */
+    public function setItemPin(GenerateSession $session, string $stage, string $itemId, bool $pinned): GenerateSession
+    {
+        $this->stageConfig($stage);
+        $this->backfillItemIds($session);
+        [$key, $index] = $this->locateItem($session, $stage, $itemId);
+
+        $draf = $session->draf ?? [];
+        if ($pinned) {
+            $draf[$stage][$key][$index]['_pin'] = true;
+        } else {
+            unset($draf[$stage][$key][$index]['_pin']);
+        }
+        $session->update(['draf' => $draf]);
+
+        return $session->refresh();
+    }
+
+    /** Assign _id stabil ke tiap item tahap yang belum punya (non-destruktif). */
+    private function assignItemIds(string $stage, array $data): array
+    {
+        $key = self::ITEM_KEY[$stage] ?? null;
+        if ($key === null || ! isset($data[$key]) || ! is_array($data[$key])) {
+            return $data;
+        }
+        foreach ($data[$key] as $i => $item) {
+            if (is_array($item) && empty($item['_id'])) {
+                $data[$key][$i]['_id'] = (string) Str::ulid();
+            }
+        }
+
+        return $data;
+    }
+
+    /** Pastikan seluruh item pada draf punya _id; simpan bila ada yang ditambah. */
+    private function backfillItemIds(GenerateSession $session): void
+    {
+        $draf = $session->draf ?? [];
+        $before = json_encode($draf);
+        foreach (array_keys(self::ITEM_KEY) as $stage) {
+            if (isset($draf[$stage]) && is_array($draf[$stage])) {
+                $draf[$stage] = $this->assignItemIds($stage, $draf[$stage]);
+            }
+        }
+        if (json_encode($draf) !== $before) {
+            $session->update(['draf' => $draf]);
+            $session->refresh();
+        }
+    }
+
+    /**
+     * Temukan item berdasarkan _id. Balikan [key, index, item].
+     *
+     * @return array{0:string,1:int,2:array}
+     */
+    private function locateItem(GenerateSession $session, string $stage, string $itemId): array
+    {
+        $key = self::ITEM_KEY[$stage] ?? null;
+        if ($key === null) {
+            throw new GeneratorException("Tahap '{$stage}' tak mendukung perbaikan per item.");
+        }
+        foreach (($session->draf[$stage][$key] ?? []) as $i => $item) {
+            if (is_array($item) && ($item['_id'] ?? null) === $itemId) {
+                return [$key, $i, $item];
+            }
+        }
+        throw new GeneratorException('Item tidak ditemukan pada tahap ini.');
+    }
+
+    /** Buang kunci meta internal (_id/_pin/_needs_review) untuk pratinjau diff. */
+    private function tanpaMeta(array $item): array
+    {
+        unset($item['_id'], $item['_pin'], $item['_needs_review']);
+
+        return $item;
+    }
+
+    /**
+     * Ekstrak SATU item dari keluaran AI, toleran terhadap variasi bentuk:
+     * {"key":[item]}, {"key":item}, atau item telanjang {"kode":...}.
+     */
+    private function ekstrakItemTunggal(array $data, string $key): ?array
+    {
+        $node = $data[$key] ?? null;
+        if (is_array($node)) {
+            if (array_is_list($node)) {
+                return isset($node[0]) && is_array($node[0]) ? $node[0] : null;
+            }
+            return $node; // objek langsung di bawah key
+        }
+        // Item telanjang di level atas (tanpa pembungkus key).
+        foreach (['kode', 'minggu_ke', 'nama', 'deskripsi', 'sub_cpmk_kode'] as $petunjuk) {
+            if (array_key_exists($petunjuk, $data)) {
+                return $data;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Susun item baru dari keluaran AI: pertahankan kunci identitas item lama
+     * (kode/minggu_ke/keterunutan), timpa sisanya dari AI.
+     */
+    private function normalisasiItemBaru(string $stage, array $lama, array $baru): array
+    {
+        $baru = $this->tanpaMeta($baru);
+        foreach (['kode', 'cpmk_kode', 'minggu_ke', 'sub_cpmk_kode'] as $idKey) {
+            if (array_key_exists($idKey, $lama)) {
+                $baru[$idKey] = $lama[$idKey];
+            }
+        }
+
+        return $baru;
+    }
+
+    /**
+     * Tandai item hilir yang bergantung pada item yang baru diubah agar ditinjau
+     * (TIDAK diubah otomatis) — dependency graph CPMK→Sub-CPMK→mingguan/penilaian.
+     */
+    private function tandaiHilirPerluTinjau(array $draf, string $stage, array $item): array
+    {
+        $tandai = function (array $items, callable $cocok): array {
+            foreach ($items as $i => $it) {
+                if (is_array($it) && $cocok($it)) {
+                    $items[$i]['_needs_review'] = true;
+                }
+            }
+            return $items;
+        };
+
+        if ($stage === 'cpmk') {
+            $kode = $item['kode'] ?? null;
+            if ($kode !== null && isset($draf['sub_cpmk']['sub_cpmk'])) {
+                $draf['sub_cpmk']['sub_cpmk'] = $tandai($draf['sub_cpmk']['sub_cpmk'], fn($it) => ($it['cpmk_kode'] ?? null) === $kode);
+            }
+        } elseif ($stage === 'sub_cpmk') {
+            $kode = $item['kode'] ?? null;
+            if ($kode !== null) {
+                foreach (['mingguan' => 'minggu', 'penilaian' => 'komponen'] as $st => $k) {
+                    if (isset($draf[$st][$k])) {
+                        $draf[$st][$k] = $tandai($draf[$st][$k], fn($it) => ($it['sub_cpmk_kode'] ?? null) === $kode);
+                    }
+                }
+            }
+        }
+
+        return $draf;
+    }
+
+    /**
+     * Prompt perbaikan SATU item: konteks tahap penuh + arahan fokus item +
+     * isi item saat ini + instruksi/aksi pengguna. Minta AI balik HANYA item itu.
+     *
+     * @param array{action?:string,instruction?:string} $opts
+     * @return array{0:string,1:string}
+     */
+    private function buildItemPrompt(GenerateSession $session, string $stage, array $stageCfg, MataKuliah $mk, array $item, array $opts): array
+    {
+        [$system, $base] = $this->buildPrompt($session, $stage, $stageCfg, $mk);
+
+        $aksiTeks = [
+            'perbaiki_redaksi'    => 'Perbaiki kejelasan & keterukuran redaksi tanpa mengubah makna dan pemetaan.',
+            'buat_alternatif'     => 'Tawarkan rumusan alternatif yang lebih kuat namun setara maknanya.',
+            'naikkan_taksonomi'   => 'Naikkan level kognitif (taksonomi) satu tingkat bila layak; sesuaikan kata kerja operasionalnya.',
+            'periksa_konsistensi' => 'Perbaiki konsistensi dengan CPL/CPMK induk & bahan kajian; luruskan bila menyimpang.',
+            'perkaya'             => 'Perkaya substansi agar lebih bernilai (indikator lebih tajam/terukur) tanpa keluar dari skop.',
+        ];
+        $aksi = $opts['action'] ?? null;
+        $instruksi = trim((string) ($opts['instruction'] ?? ''));
+
+        $key = self::ITEM_KEY[$stage];
+        $arahan = [
+            "\n===================",
+            'MODE PERBAIKAN SATU ITEM (WAJIB DIPATUHI, UTAMAKAN ARAHAN INI):',
+            '- ABAIKAN perintah membuat banyak item di atas. Fokus HANYA memperbaiki SATU item di bawah.',
+            "- Kembalikan HANYA JSON {\"{$key}\": [ <satu item hasil perbaikan> ]} — TEPAT satu item.",
+            '- PERTAHANKAN nilai kunci identitas (kode/minggu_ke) & keterunutan (cpl_kode/cpmk_kode/sub_cpmk_kode) apa adanya.',
+            '- Jangan menyentuh item lain; jaga konsistensi dengan konteks (CPL/CPMK/bahan kajian) di atas.',
+        ];
+        if ($aksi && isset($aksiTeks[$aksi])) {
+            $arahan[] = '- Jenis perbaikan: ' . $aksiTeks[$aksi];
+        }
+        if ($instruksi !== '') {
+            $arahan[] = '- Instruksi tambahan dari dosen: ' . $instruksi;
+        }
+        $arahan[] = 'ITEM SAAT INI:';
+        $arahan[] = json_encode($this->tanpaMeta($item), JSON_UNESCAPED_UNICODE);
+
+        return [$system, $base . "\n" . implode("\n", $arahan)];
     }
 
     public function readyToCommit(GenerateSession $session): bool
@@ -1092,8 +1401,14 @@ class RpsGeneratorService
 
         $bk = $this->bahanKajianContext($mk);
         if ($bk !== []) {
-            $bagian[] = "\nBAHAN KAJIAN MK (WAJIB dijadikan basis materi_pustaka tiap minggu, dipilih sesuai Sub-CPMK; "
-                . "field \"cpl\" tiap bahan kajian menandai CPL yang ditopangnya — pilih bahan kajian yang CPL-nya SELARAS dengan CPL induk Sub-CPMK pekan tsb):";
+            $arahBk = match ((string) ($stageCfg['jenis_output'] ?? '')) {
+                'cpmk'     => 'SETIAP bahan kajian di bawah WAJIB tercermin pada minimal satu CPMK — jangan ada bahan kajian yang tidak terpetakan',
+                'sub_cpmk' => 'jabarkan bahan kajian di bawah menjadi Sub-CPMK; setiap bahan kajian terwakili minimal satu Sub-CPMK',
+                'mingguan' => 'WAJIB dijadikan basis materi_pustaka tiap minggu, dipilih sesuai Sub-CPMK',
+                default    => 'jadikan acuan substansi capaian',
+            };
+            $bagian[] = "\nBAHAN KAJIAN MK ({$arahBk}; "
+                . "field \"cpl\" tiap bahan kajian menandai CPL yang ditopangnya — pilih/selaraskan dengan CPL induk):";
             $bagian[] = json_encode($bk, JSON_UNESCAPED_UNICODE);
         }
 
@@ -1293,7 +1608,10 @@ class RpsGeneratorService
         $evaluasi = match ($pola) {
             'blok'    => "Ini mata kuliah BLOK berdurasi {$n} pekan. Letakkan evaluasi/ujian AKHIR BLOK pada pekan terakhir; JANGAN memaksakan UTS di tengah semester.",
             'profesi' => "Ini mata kuliah PRAKTEK PROFESI/klinik berdurasi {$n} pekan. Penilaian berbasis KINERJA (log book, ujian kasus/OSCE, penilaian pembimbing/preseptor) — BUKAN UTS/UAS tulis. Tiap pekan berisi aktivitas/rotasi/stase klinik yang relevan.",
-            default   => "Sertakan UTS pada sekitar pekan tengah dan UAS pada pekan terakhir.",
+            default   => (function () use ($mk, $n) {
+                $p = $this->estimasi->pekanEvaluasi($mk->institusi_id, $n);
+                return "Letakkan UTS pada pekan ke-{$p['uts']} dan UAS pada pekan ke-{$p['uas']} SESUAI konfigurasi aturan program studi; JANGAN menaruhnya di pekan lain.";
+            })(),
         };
 
         $beban = $sesi > 0

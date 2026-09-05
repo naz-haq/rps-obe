@@ -113,13 +113,14 @@ export default async function DashboardPage() {
 }
 
 async function ProfilBadge() {
+  let profil: string | null = null;
   try {
     const res = await apiGet<{ data: { profil_aktif: string } }>("/ai/pengaturan");
-    const p = res.data.profil_aktif;
-    return <span className="capitalize">{p}</span>;
+    profil = res.data.profil_aktif;
   } catch {
-    return <span className="text-muted">—</span>;
+    profil = null;
   }
+  return profil ? <span className="capitalize">{profil}</span> : <span className="text-muted">—</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {

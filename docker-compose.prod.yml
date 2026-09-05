@@ -24,6 +24,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_DB:-1g}
     networks: [internal]
 
   api:
@@ -70,6 +74,18 @@ services:
       AI_GROUNDING_MIN_SCORE: ${AI_GROUNDING_MIN_SCORE:-0.4}
     volumes:
       - api-storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8100/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_API:-1g}
+        reservations:
+          memory: ${MEM_RESERVE_API:-256m}
     networks: [internal]
 
   web:
@@ -90,6 +106,18 @@ services:
       # menonaktifkan; isi keduanya untuk mengaktifkan verifikasi.
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3010/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_WEB:-1g}
+        reservations:
+          memory: ${MEM_RESERVE_WEB:-256m}
     networks: [internal]
 
   # Cloudflare Tunnel: akses publik https://SITE_ADDRESS tanpa buka port / TLS sendiri.

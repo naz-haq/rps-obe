@@ -79,6 +79,11 @@ class AiService
         $cached = $cacheKey ? Cache::get($cacheKey) : null;
         $fromCache = is_array($cached);
 
+        // Identitas yang DIMINTA (sebelum kemungkinan fallback runtime ke mock).
+        $requestedProvider = $cred['provider'];
+        $requestedModel = $cred['model'] ?? ($cred['model_array']['model'] ?? null);
+        $fallbackReason = null;
+
         if ($fromCache) {
             $result = $this->resultFromCache($cached);
         } else {
@@ -89,7 +94,9 @@ class AiService
             // aktif, ulangi lewat MockDriver agar alur (CPMK/Sub-CPMK/matriks/RPS)
             // tetap selesai tanpa biaya saat pengembangan. Beda dengan fallback
             // kredensial di resolveCredentials() yang hanya menangani ketiadaan key.
+            // Default produksi: nonaktif (kegagalan tampil sebagai kegagalan) — §4.4.
             if ($result->failed() && $cred['provider'] !== 'mock' && config('ai.fallback_to_mock')) {
+                $fallbackReason = 'provider gagal → mock: ' . mb_strimwidth((string) $result->error, 0, 200, '…');
                 $cred = $this->mockCredentials();
                 $driver = $this->drivers->make('mock');
                 $result = $driver->run($cred['model_array'], $system, $prompt, $params);
@@ -111,9 +118,36 @@ class AiService
             $context['mode'] = ($context['mode'] ?? $task) . ' (cache)';
         }
 
-        $interaksi = $this->log($task, $cred, $result, $biaya, $context);
+        $meta = [
+            'requested_provider' => $requestedProvider,
+            'requested_model'    => $requestedModel,
+            'fallback_reason'    => $fallbackReason,
+            'billing_status'     => $this->classifyBilling($fromCache, $cred['provider'], $modelCfg['price_known'] ?? true),
+        ];
+
+        $interaksi = $this->log($task, $cred, $result, $biaya, $context, $meta);
 
         return new AiOutcome($result, $biaya, $interaksi);
+    }
+
+    /**
+     * Keandalan biaya satu panggilan: cache/mock = tak ada biaya nyata; provider
+     * gratis = 'free' (0 benar); harga tak dikenal pada provider berbayar =
+     * 'unknown' (jangan dianggap gratis); selain itu 'known'.
+     */
+    private function classifyBilling(bool $fromCache, string $effectiveProvider, bool $priceKnown): string
+    {
+        if ($fromCache) {
+            return 'cache';
+        }
+        if ($effectiveProvider === 'mock') {
+            return 'mock';
+        }
+        if ($this->isFreeProvider($effectiveProvider)) {
+            return 'free';
+        }
+
+        return $priceKnown ? 'known' : 'unknown';
     }
 
     /**
@@ -235,14 +269,67 @@ class AiService
                 $apiModel = substr($apiModel, strlen('models/'));
             }
 
+            // Harga model LIVE: dari katalog berversi bila ada; jika tidak, harga 0
+            // hanya SAH untuk provider gratis (mock/nvidia/github) — selain itu
+            // billing_status='unknown' agar biaya tak dianggap gratis (§4.3).
+            $live = $this->livePricing($provider, $apiModel);
+
             return [
-                'provider' => $provider,
-                'model'    => $apiModel,
-                'pricing'  => ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+                'provider'    => $provider,
+                'model'       => $apiModel,
+                'pricing'     => $live ?? ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0],
+                'price_known' => $live !== null || $this->isFreeProvider($provider),
             ];
         }
 
-        return config("ai.models.$modelRef");
+        $cfg = config("ai.models.$modelRef");
+        if (is_array($cfg)) {
+            $cfg['price_known'] = true; // model katalog selalu punya harga eksplisit
+        }
+
+        return $cfg;
+    }
+
+    /** Provider yang biayanya sah 0 (trial/BYOK gratis). */
+    public function isFreeProvider(string $provider): bool
+    {
+        return in_array($provider, (array) config('ai.free_providers', ['mock']), true);
+    }
+
+    /**
+     * Apakah harga model (katalog atau live) diketahui? Model LIVE dari provider
+     * BERBAYAR tanpa entri katalog harga → false (jangan diaktifkan; biaya akan
+     * tercatat 0 secara keliru). Model tak dikenal → false.
+     */
+    public function priceKnown(string $modelRef): bool
+    {
+        $cfg = $this->modelCfgFor($modelRef);
+
+        return $cfg === null ? false : (bool) ($cfg['price_known'] ?? true);
+    }
+
+    /**
+     * Harga katalog untuk model LIVE (USD/1M token), atau null bila tak dikenal.
+     * Cocokkan "provider::model-id" lalu "model-id" telanjang.
+     *
+     * @return array{input:float,output:float,cache_read:float,cache_write:float}|null
+     */
+    private function livePricing(string $provider, string $apiModel): ?array
+    {
+        $catalog = (array) config('ai.pricing_catalog.models', []);
+        foreach (["$provider::$apiModel", $apiModel] as $key) {
+            if (isset($catalog[$key]) && is_array($catalog[$key])) {
+                $p = $catalog[$key];
+                return [
+                    'input'       => (float) ($p['input'] ?? 0),
+                    'output'      => (float) ($p['output'] ?? 0),
+                    'cache_read'  => (float) ($p['cache_read'] ?? 0),
+                    'cache_write' => (float) ($p['cache_write'] ?? 0),
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -583,7 +670,7 @@ class AiService
         }
     }
 
-    private function log(string $task, array $cred, LlmResult $result, float $biaya, array $context): AiInteraksi
+    private function log(string $task, array $cred, LlmResult $result, float $biaya, array $context, array $meta = []): AiInteraksi
     {
         return AiInteraksi::create([
             'institusi_id' => $context['institusi_id'] ?? null,
@@ -593,11 +680,15 @@ class AiService
             'mode'         => $context['mode'] ?? $task,
             'provider'     => $cred['provider'],
             'model'        => $cred['model'],
+            'requested_provider' => $meta['requested_provider'] ?? null,
+            'requested_model'    => $meta['requested_model'] ?? null,
+            'fallback_reason'    => $meta['fallback_reason'] ?? null,
             'prompt'       => $context['log_prompt'] ?? null,
             'response'     => $result->failed() ? null : $result->text,
             'tokens_in'    => $result->inputTokens + $result->cacheReadTokens,
             'tokens_out'   => $result->outputTokens,
             'biaya'        => round($biaya, 6),
+            'billing_status' => $meta['billing_status'] ?? null,
             'status'       => $result->failed() ? 'gagal' : 'sukses',
         ]);
     }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge, PageHeader, buttonClass } from "@/components/ui";
+import { Badge, PageHeader, buttonClass, BulletCell } from "@/components/ui";
 import type { Cpl, GenerateSession, MataKuliah, Taksonomi } from "@/lib/api";
 import { KonteksPanel } from "./konteks-panel";
 import { DetailMkPanel } from "./detail-mk-panel";
@@ -31,6 +31,10 @@ import { CpmkEditor, SubCpmkEditor, MingguEditor, KomponenEditor } from "./stage
 import { SelfCheck } from "./self-check";
 import { CplCpmkMatrix } from "./matrix";
 import { FloatingAiChat } from "./floating-ai";
+import { ItemRefine } from "./item-refine";
+import { QualityStrip, stageSummary, stageCount, stageReviewCount } from "./quality";
+import { GeneratorWorkspace } from "./workspace";
+import { useConfirm } from "@/components/confirm";
 
 const STAGES = [
   { key: "cpmk", label: "CPMK", desc: "Capaian Pembelajaran Mata Kuliah" },
@@ -49,6 +53,49 @@ const STATUS_TONE: Record<string, "ok" | "neutral" | "warn" | "brand" | "danger"
   perlu_review: "danger",
 };
 
+/** Agregasi grounding dari catatan_validasi tiap tahap. */
+function groundingStat(catatan: Record<string, unknown>): { ada: boolean; dilewati: boolean; klaim: number; ditolak: number } {
+  const entries = Object.values(catatan);
+  let dilewati = false;
+  let klaim = 0;
+  let ditolak = 0;
+  for (const v of entries) {
+    const c = v as { dilewati?: string | null; jumlah_klaim?: number; jumlah_ditolak?: number };
+    if (c.dilewati) dilewati = true;
+    klaim += c.jumlah_klaim ?? 0;
+    ditolak += c.jumlah_ditolak ?? 0;
+  }
+  return { ada: entries.length > 0, dilewati, klaim, ditolak };
+}
+
+/** Status grounding ringkas dari catatan_validasi tiap tahap. */
+function GroundingBanner({ catatan }: { catatan: Record<string, unknown> }) {
+  const { ada, dilewati, klaim, ditolak } = groundingStat(catatan);
+  if (!ada) return null;
+  if (dilewati && klaim === 0) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+        <span>
+          <b>Grounding dilewati</b> — belum ada Dokumen Keilmuan. Capaian bersumber dari pengetahuan model, belum terverifikasi ke sumber ilmiah.
+        </span>
+        <Link href="/dokumen-rujukan" className="shrink-0 font-medium text-amber-900 underline">Kelola Dokumen Rujukan →</Link>
+      </div>
+    );
+  }
+  if (ditolak > 0) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+        <b>{ditolak}</b> dari {klaim} klaim belum didukung sumber keilmuan — tinjau kembali item yang ditandai.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+      <b>Grounding aktif</b> — {klaim} klaim terverifikasi ke Dokumen Keilmuan.
+    </div>
+  );
+}
+
 export function Builder({
   session,
   cplList,
@@ -63,6 +110,7 @@ export function Builder({
   mk?: MataKuliah | null;
 }) {
   const router = useRouter();
+  const { confirm } = useConfirm();
   const [tab, setTab] = useState<string>("cpmk");
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
@@ -70,9 +118,24 @@ export function Builder({
 
   const draf = (session.draf ?? {}) as Draf;
   const bagian = (session.status_bagian ?? {}) as Record<string, string>;
+  const catatan = (session.catatan_validasi ?? {}) as Record<string, unknown>;
   const isLocked = (s: string) => LOCKED.includes(bagian[s] ?? "");
   const allLocked = STAGES.every((s) => isLocked(s.key));
   const committed = session.status === "committed" || !!session.rps_version_id;
+
+  // Commit dengan peringatan lunak bila capaian belum tergrounding ke sumber.
+  const commit = async () => {
+    const g = groundingStat(catatan);
+    if (g.dilewati && g.klaim === 0) {
+      const ok = await confirm({
+        title: "Capaian belum tergrounding",
+        message: "Belum ada Dokumen Keilmuan, sehingga capaian belum terverifikasi ke sumber ilmiah. Tetap commit RPS?",
+        confirmLabel: "Tetap commit",
+      });
+      if (!ok) return;
+    }
+    act(null, () => commitSession(session.id));
+  };
 
   const act = (
     tag: string | null,
@@ -110,7 +173,7 @@ export function Builder({
               <button
                 type="button"
                 disabled={!allLocked || pending}
-                onClick={() => act(null, () => commitSession(session.id))}
+                onClick={commit}
                 className={buttonClass("primary", "sm")}
                 title={allLocked ? "Commit ke RPS resmi" : "Kunci keempat tahap dulu"}
               >
@@ -136,6 +199,12 @@ export function Builder({
         <ImporRpsPanel sessionId={session.id} />
       )}
 
+      {/* Ringkasan mutu draf */}
+      <QualityStrip draf={draf} />
+
+      {/* Status grounding (verifikasi ke sumber keilmuan) */}
+      <GroundingBanner catatan={catatan} />
+
       {/* Tab per tahap + tab akhir Matriks & Diagnostik */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1">
         {STAGES.map((s, idx) => {
@@ -143,6 +212,8 @@ export function Builder({
           const locked = isLocked(s.key);
           const generated = !!(draf as Record<string, unknown>)[s.key];
           const active = tab === s.key;
+          const jml = stageCount(draf, s.key);
+          const tinjau = stageReviewCount(draf, s.key);
           return (
             <button
               key={s.key}
@@ -164,6 +235,12 @@ export function Builder({
                 {locked ? "✓" : idx + 1}
               </span>
               {s.label}
+              {jml > 0 && <span className="text-[10px] font-normal text-muted">{jml}</span>}
+              {tinjau > 0 && (
+                <span className="grid h-4 min-w-4 place-items-center rounded-full bg-amber-100 px-1 text-[9px] font-bold text-amber-700" title={`${tinjau} item perlu ditinjau`}>
+                  {tinjau}
+                </span>
+              )}
               {st && <Badge tone={STATUS_TONE[st] ?? "neutral"}>{st}</Badge>}
             </button>
           );
@@ -188,6 +265,8 @@ export function Builder({
           cplList={cplList}
           taksonomiList={taksonomiList}
           estimasiWaktu={estimasiWaktu}
+          sessionId={session.id}
+          revisi={session.revisi ?? 0}
           status={bagian[activeStage.key] ?? ""}
           locked={isLocked(activeStage.key)}
           prevLocked={activeIndex === 0 || isLocked(STAGES[activeIndex - 1].key)}
@@ -226,6 +305,8 @@ function StageCard({
   cplList,
   taksonomiList,
   estimasiWaktu,
+  sessionId,
+  revisi,
   status,
   locked,
   prevLocked,
@@ -243,6 +324,8 @@ function StageCard({
   cplList: Cpl[];
   taksonomiList: Taksonomi[];
   estimasiWaktu: string;
+  sessionId: number;
+  revisi: number;
   status: string;
   locked: boolean;
   prevLocked: boolean;
@@ -275,7 +358,7 @@ function StageCard({
           </span>
           <div>
             <h3 className="text-sm font-semibold">{stage.label}</h3>
-            <p className="text-xs text-muted">{stage.desc}</p>
+            <p className="text-xs text-muted">{stageSummary(draf, stage.key, stage.desc)}</p>
           </div>
         </div>
         {status && <Badge tone={STATUS_TONE[status] ?? "neutral"}>{status}</Badge>}
@@ -307,6 +390,8 @@ function StageCard({
               cplList={cplList}
               taksonomiList={taksonomiList}
               estimasiWaktu={estimasiWaktu}
+              sessionId={sessionId}
+              revisi={revisi}
               locked={locked}
               committed={committed}
               pending={pending}
@@ -331,6 +416,8 @@ function StageBody({
   cplList,
   taksonomiList,
   estimasiWaktu,
+  sessionId,
+  revisi,
   locked,
   committed,
   pending,
@@ -346,6 +433,8 @@ function StageBody({
   cplList: Cpl[];
   taksonomiList: Taksonomi[];
   estimasiWaktu: string;
+  sessionId: number;
+  revisi: number;
   locked: boolean;
   committed: boolean;
   pending: boolean;
@@ -363,11 +452,13 @@ function StageBody({
   const [komponen, setKomponen] = useState<KomponenItem[]>(() => getKomponen(draf));
   // Tahap terkunci tetap bisa disunting ulang selama sesi BELUM di-commit.
   const [editing, setEditing] = useState(false);
-  const editable = !locked || editing;
-
   const generated = !!(draf as Record<string, unknown>)[stage];
+  // Tampilkan editor hanya saat tahap masih kosong ATAU pengguna memilih Edit.
+  // Begitu ada isi (draft/accepted/edited/pinned) → tampilan preview (LockedView)
+  // agar tombol perbaikan per item muncul tanpa harus menyetujui dulu.
+  const editable = !generated || editing;
 
-  const issues = editable ? validateStage(stage, { cpmk, sub, minggu, komponen }) : [];
+  const issues = validateStage(stage, { cpmk, sub, minggu, komponen });
   const valid = issues.length === 0;
 
   const cpmkMap = new Map(getCpmk(draf).map((c) => [c.kode, c.deskripsi]));
@@ -425,11 +516,13 @@ function StageBody({
             />
           )}
         </>
+      ) : committed ? (
+        <LockedView stage={stage} draf={draf} estimasiWaktu={estimasiWaktu} sessionId={sessionId} revisi={revisi} committed={committed} />
       ) : (
-        <LockedView stage={stage} draf={draf} estimasiWaktu={estimasiWaktu} />
+        <GeneratorWorkspace stage={stage} draf={draf} sessionId={sessionId} revisi={revisi} />
       )}
 
-      {editable && !committed && issues.length > 0 && (
+      {!committed && issues.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="mb-1 flex items-center gap-1.5 font-semibold">
             <span aria-hidden>⚠️</span> Belum bisa disimpan — lengkapi dulu:
@@ -455,58 +548,56 @@ function StageBody({
               >
                 Simpan &amp; Setujui
               </button>
-              {editing ? (
+              {status !== "pinned" && (
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => setEditing(false)}
-                  className={buttonClass("ghost", "sm")}
+                  onClick={onGenerate}
+                  className={buttonClass("secondary", "sm")}
+                  title={generated ? "Buat ulang seluruh tahap dengan AI" : "Isi otomatis dengan AI"}
                 >
+                  {busy === stage && pending ? "Memproses…" : generated ? "Regenerasi AI" : "Generate AI"}
+                </button>
+              )}
+              {editing && (
+                <button type="button" disabled={pending} onClick={() => setEditing(false)} className={buttonClass("ghost", "sm")}>
                   Batal
                 </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={onGenerate}
-                    className={buttonClass("secondary", "sm")}
-                  >
-                    {busy === stage && pending
-                      ? "Memproses…"
-                      : generated
-                        ? "Regenerasi AI"
-                        : "Generate AI"}
-                  </button>
-                  {generated && (
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={onReject}
-                      className={buttonClass("danger", "sm")}
-                    >
-                      Tolak
-                    </button>
-                  )}
-                </>
               )}
             </>
           ) : (
             <>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => setEditing(true)}
-                className={buttonClass("secondary", "sm")}
-              >
-                Edit
+              {!locked && (
+                <button
+                  type="button"
+                  disabled={pending || !valid}
+                  onClick={() => onAccept(editedPayload())}
+                  className={buttonClass("primary", "sm")}
+                  title={valid ? "Simpan & kunci tahap ini" : "Lengkapi isian yang masih kosong dulu"}
+                >
+                  Simpan &amp; Setujui
+                </button>
+              )}
+              {status !== "pinned" && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={onGenerate}
+                  className={buttonClass("secondary", "sm")}
+                  title="Buat ulang SELURUH tahap dengan AI (menimpa semua item)"
+                >
+                  {busy === stage && pending ? "Memproses…" : "Regenerasi AI (semua)"}
+                </button>
+              )}
+              <button type="button" disabled={pending} onClick={() => setEditing(true)} className={buttonClass("secondary", "sm")}>
+                Edit manual
               </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={onPin}
-                className={buttonClass("ghost", "sm")}
-              >
+              {generated && (
+                <button type="button" disabled={pending} onClick={onReject} className={buttonClass("danger", "sm")}>
+                  Tolak
+                </button>
+              )}
+              <button type="button" disabled={pending} onClick={onPin} className={buttonClass("ghost", "sm")}>
                 {status === "pinned" ? "Tersemat" : "Sematkan"}
               </button>
             </>
@@ -517,7 +608,21 @@ function StageBody({
   );
 }
 
-function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf; estimasiWaktu: string }) {
+function LockedView({
+  stage,
+  draf,
+  estimasiWaktu,
+  sessionId,
+  revisi,
+  committed,
+}: {
+  stage: string;
+  draf: Draf;
+  estimasiWaktu: string;
+  sessionId: number;
+  revisi: number;
+  committed: boolean;
+}) {
   const cpmkMap = new Map(getCpmk(draf).map((c) => [c.kode, c]));
   const subMap = new Map(getSubCpmk(draf).map((s) => [s.kode, s]));
 
@@ -536,6 +641,9 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
               ))}
             </div>
             <p className="mt-1 text-sm">{c.deskripsi}</p>
+            {!committed && (
+              <ItemRefine sessionId={sessionId} stage="cpmk" itemId={c._id} pinned={c._pin} needsReview={c._needs_review} baseRevisi={revisi} />
+            )}
           </li>
         ))}
       </ul>
@@ -560,6 +668,9 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
                   <li key={j}>{ind}</li>
                 ))}
               </ul>
+            )}
+            {!committed && (
+              <ItemRefine sessionId={sessionId} stage="sub_cpmk" itemId={s._id} pinned={s._pin} needsReview={s._needs_review} baseRevisi={revisi} />
             )}
           </li>
         ))}
@@ -604,7 +715,8 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
                 );
               }
               return (
-                <tr key={i} className="align-top">
+                <Fragment key={i}>
+                <tr className="align-top">
                   <td className="px-2 py-1.5 font-medium tabular-nums">{m.minggu_ke}</td>
                   <td className="px-2 py-1.5">
                     {m.sub_cpmk_kode ? (
@@ -622,7 +734,7 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
                       <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5 text-muted">{m.indikator ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-muted"><BulletCell value={m.indikator} /></td>
                   <td className="px-2 py-1.5 whitespace-pre-line text-muted">{m.kriteria_penilaian ?? "—"}</td>
                   <td className="px-2 py-1.5 text-muted">
                     {m.bentuk_luring ? <div>{m.bentuk_luring}</div> : <span>—</span>}
@@ -638,6 +750,14 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
                     {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
                   </td>
                 </tr>
+                {!committed && m._id && (
+                  <tr>
+                    <td colSpan={8} className="px-2 pb-2">
+                      <ItemRefine sessionId={sessionId} stage="mingguan" itemId={m._id} pinned={m._pin} needsReview={m._needs_review} baseRevisi={revisi} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -696,6 +816,9 @@ function LockedView({ stage, draf, estimasiWaktu }: { stage: string; draf: Draf;
                     </tbody>
                   </table>
                 </div>
+              )}
+              {!committed && (
+                <ItemRefine sessionId={sessionId} stage="penilaian" itemId={k._id} pinned={k._pin} needsReview={k._needs_review} baseRevisi={revisi} />
               )}
             </li>
           );

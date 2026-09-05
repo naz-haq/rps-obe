@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Modal, Field, TextAreaField, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import type { TemplateRps, ApiResult } from "@/lib/api";
 import { useActionResult } from "@/lib/use-action-result";
 import { uploadTemplate, activateTemplate, updateTemplate, deleteTemplate } from "./actions";
@@ -121,16 +122,18 @@ function EditForm({ template, close }: { template: TemplateRps; close: () => voi
 export function DeleteTemplateButton({ template }: { template: TemplateRps }) {
   const [state, action] = useActionState<State, FormData>(async (_p, fd) => deleteTemplate(fd), null);
   useActionResult(state, { refresh: false, successMessage: "Template dihapus." });
+  const { confirm } = useConfirm();
   return (
-    <form
-      action={action}
-      className="inline"
-      onSubmit={(e) => {
-        if (!confirm(`Hapus template "${template.nama}"?`)) e.preventDefault();
-      }}
-    >
+    <form action={action} className="inline">
       <input type="hidden" name="id" value={template.id} />
-      <button type="submit" className={buttonClass("danger", "sm")}>
+      <button
+        type="button"
+        className={buttonClass("danger", "sm")}
+        onClick={async (e) => {
+          const form = e.currentTarget.form;
+          if (await confirm({ title: "Hapus template", message: `Hapus template "${template.nama}"?`, confirmLabel: "Hapus", tone: "danger" })) form?.requestSubmit();
+        }}
+      >
         Hapus
       </button>
     </form>

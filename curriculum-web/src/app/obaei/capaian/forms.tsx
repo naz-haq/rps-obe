@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal, Field } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import type { CapaianMahasiswa } from "@/lib/api";
 import { simpanCapaian, hapusCapaian } from "./actions";
 
@@ -117,6 +118,7 @@ function CapaianForm({ capaian, close }: { capaian?: CapaianMahasiswa; close: ()
 export function HapusCapaian({ id }: { id: number }) {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -124,7 +126,7 @@ export function HapusCapaian({ id }: { id: number }) {
       disabled={pending}
       className={buttonClass("danger", "sm")}
       onClick={async () => {
-        if (!confirm("Hapus data capaian ini?")) return;
+        if (!(await confirm({ title: "Hapus capaian", message: "Hapus data capaian ini?", confirmLabel: "Hapus", tone: "danger" }))) return;
         setPending(true);
         const r = await hapusCapaian(id);
         setPending(false);

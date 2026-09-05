@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import { buatEvaluasi, hapusEvaluasi } from "./actions";
 
 type CplOpt = { value: string; label: string };
@@ -62,6 +63,7 @@ function EvaluasiForm({ cplOptions, close }: { cplOptions: CplOpt[]; close: () =
 export function HapusEvaluasi({ id }: { id: number }) {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -69,7 +71,7 @@ export function HapusEvaluasi({ id }: { id: number }) {
       disabled={pending}
       className={buttonClass("danger", "sm")}
       onClick={async () => {
-        if (!confirm("Hapus evaluasi ini beserta tindak lanjutnya?")) return;
+        if (!(await confirm({ title: "Hapus evaluasi", message: "Hapus evaluasi ini beserta seluruh tindak lanjutnya?", confirmLabel: "Hapus", tone: "danger" }))) return;
         setPending(true);
         const r = await hapusEvaluasi(id);
         setPending(false);

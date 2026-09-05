@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiPost, apiPatch, apiDelete, type ApiResult } from "@/lib/api";
+import { apiPost, apiPatch, apiDelete, type ApiResult, type ItemCandidate } from "@/lib/api";
 
 const DEFAULT_INSTITUSI = 1;
 
@@ -157,6 +157,53 @@ export async function runAudit(
   const res = await apiPost<AuditHasil>(`/generate-sessions/${id}/audit`, {});
   if (!res.ok) return { ok: false, message: res.message };
   return { ok: true, data: res.data };
+}
+
+/** Usulan perbaikan SATU item (candidate patch) — tak menyentuh draf. */
+export async function regenerateItem(
+  id: number,
+  stage: string,
+  itemId: string,
+  opts: { action?: string; instruction?: string } = {},
+): Promise<{ ok: boolean; message?: string; candidate?: ItemCandidate }> {
+  const res = await apiPost<ItemCandidate>(`/generate-sessions/${id}/item-candidate`, {
+    stage,
+    item_id: itemId,
+    action: opts.action ?? null,
+    instruction: opts.instruction ?? null,
+  });
+  if (!res.ok) return { ok: false, message: res.message };
+  return { ok: true, candidate: res.data };
+}
+
+/** Terapkan usulan satu item (optimistic locking; konflik → status 409). */
+export async function applyItem(
+  id: number,
+  stage: string,
+  itemId: string,
+  after: Record<string, unknown>,
+  baseRevisi: number,
+): Promise<ApiResult> {
+  const res = await apiPost(`/generate-sessions/${id}/item-apply`, {
+    stage,
+    item_id: itemId,
+    after,
+    base_revisi: baseRevisi,
+  });
+  revalidatePath(`/generator/${id}`);
+  return res;
+}
+
+/** Sematkan/lepas sematan satu item. */
+export async function pinItem(
+  id: number,
+  stage: string,
+  itemId: string,
+  pinned: boolean,
+): Promise<ApiResult> {
+  const res = await apiPatch(`/generate-sessions/${id}/item-pin`, { stage, item_id: itemId, pinned });
+  revalidatePath(`/generator/${id}`);
+  return res;
 }
 
 export type ChatMessage = { sender: "user" | "ai"; text: string };

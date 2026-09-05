@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import type { ProdiVmts } from "@/lib/api";
 import { saveProdiVmts, deleteProdiVmts } from "./vmts-actions";
 
@@ -24,6 +25,7 @@ export function ManageVmtsButton({ institusiId, versions }: { institusiId: numbe
 
 function VmtsPanel({ institusiId, versions }: { institusiId: number; versions: ProdiVmts[] }) {
   const router = useRouter();
+  const { confirm } = useConfirm();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<ProdiVmts | "new" | null>(versions.length === 0 ? "new" : null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -71,8 +73,8 @@ function VmtsPanel({ institusiId, versions }: { institusiId: number; versions: P
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => {
-                    if (confirm(`Hapus versi "${v.label}"?`)) run(() => deleteProdiVmts(v.id));
+                  onClick={async () => {
+                    if (await confirm({ title: "Hapus versi VMTS", message: `Hapus versi "${v.label}"?`, confirmLabel: "Hapus", tone: "danger" })) run(() => deleteProdiVmts(v.id));
                   }}
                   className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 hover:bg-red-100"
                 >

@@ -49,6 +49,20 @@ class GovernanceController extends Controller
             ->where('status', 'unread')
             ->count();
 
+        // Keandalan biaya (§4.3): pisahkan per billing_status agar biaya "unknown"
+        // (model berbayar tanpa harga katalog) tak dianggap sama dengan biaya pasti.
+        $perBilling = (clone $interaksi)
+            ->selectRaw('COALESCE(billing_status, \'n/a\') AS billing_status, COUNT(*) AS jumlah, SUM(biaya) AS biaya')
+            ->groupBy('billing_status')
+            ->get()
+            ->map(fn($r) => [
+                'status' => (string) $r->billing_status,
+                'jumlah' => (int) $r->jumlah,
+                'biaya'  => round((float) $r->biaya, 6),
+            ])
+            ->all();
+        $interaksiHargaTakDikenal = (clone $interaksi)->where('billing_status', 'unknown')->count();
+
         return response()->json([
             'data' => [
                 'periode_hari'    => $hari,
@@ -60,6 +74,8 @@ class GovernanceController extends Controller
                 'tokens_out'      => (int) (clone $interaksi)->sum('tokens_out'),
                 'tokens_total'    => (int) ((clone $interaksi)->sum('tokens_in') + (clone $interaksi)->sum('tokens_out')),
                 'total_biaya'     => round((float) (clone $interaksi)->sum('biaya'), 6),
+                'per_billing'     => $perBilling,
+                'interaksi_harga_tak_dikenal' => $interaksiHargaTakDikenal,
                 'total_audit'     => (clone $audit)->count(),
                 'notifikasi_unread' => $notifikasiUnread,
             ],

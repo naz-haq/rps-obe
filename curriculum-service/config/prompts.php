@@ -75,6 +75,7 @@ return [
                 . 'indikator penilaian, kriteria_penilaian, metode_pembelajaran, '
                 . 'bentuk_luring dan bentuk_daring (bentuk pembelajaran), pengalaman_belajar (penugasan mahasiswa), '
                 . 'materi_pustaka, dan bobot_penilaian (%). '
+                . 'FORMAT indikator: bila lebih dari satu indikator, tulis SETIAP indikator pada baris terpisah dipisah karakter newline \\n — JANGAN menggabungkan menjadi satu paragraf bersambung. '
                 . 'FORMAT kriteria_penilaian WAJIB dua baris dipisah karakter newline \\n, contoh: "Kriteria: ketepatan analisis dan kelengkapan argumen.\\nTeknik: tes tertulis uraian." '
                 . 'FORMAT materi_pustaka: pilih SATU/LEBIH item dari daftar BAHAN KAJIAN MK yang paling relevan dengan Sub-CPMK minggu tsb, lalu tulis dalam bentuk "Nama Bahan Kajian — ringkasan materi minggu ini [Pustaka: nomor \'no\' dari daftar PUSTAKA/REFERENSI MK]". Contoh: "Farmakokinetika dasar — absorpsi, distribusi, metabolisme [Pustaka: 1,3]". '
                 . 'Perhatikan pembagian sks_teori vs sks_praktik pada DATA MATA KULIAH: sesi ber-SKS praktik wajib memuat baris berbentuk praktikum/unjuk kerja (bentuk_luring "praktikum/responsi", pengalaman_belajar hands-on), bukan hanya kuliah tatap muka. '

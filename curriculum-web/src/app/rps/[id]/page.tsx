@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiGet, BACKEND_PROXY, type Single, type RpsDetail, type RpsTraceability, type RpsApprovalLog } from "@/lib/api";
 import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
-import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
+import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState, BulletCell } from "@/components/ui";
 import { ApprovalActions } from "./approval";
 
 const AKSI_LABEL: Record<string, string> = {
@@ -281,7 +281,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                       "—"
                     )}
                   </Td>
-                  <Td className="max-w-[14rem] text-muted">{m.indikator ?? "—"}</Td>
+                  <Td className="max-w-[14rem] text-muted"><BulletCell value={m.indikator} /></Td>
                   <Td className="max-w-[16rem] whitespace-pre-line text-muted">{m.kriteria_penilaian ?? "—"}</Td>
                   <Td className="max-w-[14rem] text-muted">
                     {m.bentuk_luring ? <div>{m.bentuk_luring}</div> : <span>—</span>}

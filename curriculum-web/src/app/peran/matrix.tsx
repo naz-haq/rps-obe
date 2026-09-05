@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { buttonClass } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import type { RbacGroup, RoleData } from "@/lib/api";
 import { createRole, deleteRole, saveRolePermissions } from "./actions";
 
@@ -30,6 +31,7 @@ function sameSet(a: Set<string>, b: Set<string>): boolean {
 
 export function RoleMatrix({ roles, groups }: { roles: RoleData[]; groups: RbacGroup[] }) {
   const router = useRouter();
+  const { confirm, prompt } = useConfirm();
   const [current, setCurrent] = useState<PermMap>(() => fromRoles(roles));
   const [saved, setSaved] = useState<PermMap>(() => fromRoles(roles));
   const [pending, startTransition] = useTransition();
@@ -81,8 +83,8 @@ export function RoleMatrix({ roles, groups }: { roles: RoleData[]; groups: RbacG
     setErr(null);
   }
 
-  function tambahPeran() {
-    const nama = window.prompt("Nama peran baru (mis. Reviewer Eksternal):");
+  async function tambahPeran() {
+    const nama = await prompt({ title: "Peran baru", message: "Masukkan nama peran baru:", placeholder: "mis. Reviewer Eksternal", confirmLabel: "Tambah" });
     if (!nama?.trim()) return;
     startTransition(async () => {
       const res = await createRole(nama.trim());
@@ -91,12 +93,12 @@ export function RoleMatrix({ roles, groups }: { roles: RoleData[]; groups: RbacG
     });
   }
 
-  function hapusPeran(role: RoleData) {
+  async function hapusPeran(role: RoleData) {
     if (role.users_count > 0) {
       setErr(`Peran "${role.label}" masih dipakai ${role.users_count} pengguna.`);
       return;
     }
-    if (!window.confirm(`Hapus peran "${role.label}"?`)) return;
+    if (!(await confirm({ title: "Hapus peran", message: `Hapus peran "${role.label}"?`, confirmLabel: "Hapus", tone: "danger" }))) return;
     startTransition(async () => {
       const res = await deleteRole(role.id);
       if (res.ok) router.refresh();

@@ -9,6 +9,7 @@ use App\Http\Resources\RpsVersionResource;
 use App\Models\GenerateSession;
 use App\Models\MataKuliah;
 use App\Services\Generator\Exceptions\GeneratorException;
+use App\Services\Generator\Exceptions\RevisiConflictException;
 use App\Services\Generator\RpsGeneratorService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -162,6 +163,67 @@ class GenerateSessionController extends Controller
                 'rps'     => new RpsVersionResource($rps),
             ],
         ], 201);
+    }
+
+    /** Usulan perbaikan SATU item (candidate patch) — tanpa menyentuh draf. */
+    public function itemCandidate(Request $request, GenerateSession $generateSession)
+    {
+        $data = $request->validate([
+            'stage'       => ['required', 'string', Rule::in(config('generator.pipeline'))],
+            'item_id'     => ['required', 'string'],
+            'action'      => ['nullable', 'string', Rule::in(['perbaiki_redaksi', 'buat_alternatif', 'naikkan_taksonomi', 'periksa_konsistensi', 'perkaya'])],
+            'instruction' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $candidate = $this->generator->regenerateItem($generateSession, $data['stage'], $data['item_id'], [
+                'action'      => $data['action'] ?? null,
+                'instruction' => $data['instruction'] ?? null,
+            ]);
+        } catch (GeneratorException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['data' => $candidate]);
+    }
+
+    /** Terapkan usulan satu item (optimistic locking; konflik revisi -> 409). */
+    public function itemApply(Request $request, GenerateSession $generateSession)
+    {
+        $data = $request->validate([
+            'stage'       => ['required', 'string', Rule::in(config('generator.pipeline'))],
+            'item_id'     => ['required', 'string'],
+            'after'       => ['required', 'array'],
+            'base_revisi' => ['required', 'integer'],
+        ]);
+
+        try {
+            $this->generator->applyItem($generateSession, $data['stage'], $data['item_id'], $data['after'], (int) $data['base_revisi']);
+        } catch (RevisiConflictException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        } catch (GeneratorException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new GenerateSessionResource($generateSession->fresh()->load('mataKuliah'));
+    }
+
+    /** Sematkan/lepas sematan satu item. */
+    public function itemPin(Request $request, GenerateSession $generateSession)
+    {
+        $data = $request->validate([
+            'stage'   => ['required', 'string', Rule::in(config('generator.pipeline'))],
+            'item_id' => ['required', 'string'],
+            'pinned'  => ['required', 'boolean'],
+        ]);
+
+        try {
+            $this->generator->setItemPin($generateSession, $data['stage'], $data['item_id'], (bool) $data['pinned']);
+        } catch (GeneratorException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new GenerateSessionResource($generateSession->fresh()->load('mataKuliah'));
     }
 
     /** Jalankan aksi generator, petakan GeneratorException -> 422. */

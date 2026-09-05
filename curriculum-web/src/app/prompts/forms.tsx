@@ -2,9 +2,10 @@
 
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
-import { Modal, Field, SelectField, TextAreaField, SubmitButton } from "@/components/modal";
+import { Modal, SelectField, TextAreaField, SubmitButton } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import type { PromptSlot, ApiResult } from "@/lib/api";
 import { useActionResult } from "@/lib/use-action-result";
 import { createOverride, updateOverride, deleteOverride } from "./actions";
@@ -128,6 +129,7 @@ function EditOverrideForm({ slot, close }: { slot: PromptSlot; close: () => void
 export function ResetOverrideButton({ id }: { id: number }) {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   return (
     <form
       action={async (fd) => {
@@ -142,10 +144,11 @@ export function ResetOverrideButton({ id }: { id: number }) {
     >
       <input type="hidden" name="id" value={id} />
       <button
-        type="submit"
+        type="button"
         className={buttonClass("danger", "sm")}
-        onClick={(e) => {
-          if (!confirm("Hapus override dan kembali ke prompt default?")) e.preventDefault();
+        onClick={async (e) => {
+          const form = e.currentTarget.form;
+          if (await confirm({ title: "Kembalikan default", message: "Hapus override dan kembali ke prompt default?", confirmLabel: "Kembalikan", tone: "danger" })) form?.requestSubmit();
         }}
       >
         Kembalikan default

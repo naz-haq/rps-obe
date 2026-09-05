@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal, Field, SelectField } from "@/components/modal";
 import { buttonClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
+import { useConfirm } from "@/components/confirm";
 import type { TargetCpl } from "@/lib/api";
 import { simpanTarget, hapusTarget } from "./actions";
 
@@ -104,6 +105,7 @@ function TargetForm({
 export function HapusTarget({ id }: { id: number }) {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [pending, setPending] = useState(false);
   return (
     <button
@@ -111,7 +113,7 @@ export function HapusTarget({ id }: { id: number }) {
       disabled={pending}
       className={buttonClass("danger", "sm")}
       onClick={async () => {
-        if (!confirm("Hapus target CPL ini?")) return;
+        if (!(await confirm({ title: "Hapus target CPL", message: "Hapus target CPL ini?", confirmLabel: "Hapus", tone: "danger" }))) return;
         setPending(true);
         const r = await hapusTarget(id);
         setPending(false);

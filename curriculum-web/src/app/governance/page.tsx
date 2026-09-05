@@ -118,6 +118,44 @@ export default async function GovernanceDashboardPage({ searchParams }: { search
 
           <Card className="mt-4">
             <CardBody>
+              <h3 className="mb-1 text-sm font-semibold text-ink">Keandalan Biaya</h3>
+              <p className="mb-3 text-xs text-muted">
+                Biaya &quot;tak dikenal&quot; = model berbayar tanpa harga katalog — jangan dianggap gratis.
+              </p>
+              {(r.per_billing ?? []).length === 0 ? (
+                <p className="text-sm text-muted">Belum ada data.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {r.per_billing!.map((b) => {
+                    const label =
+                      { known: "Harga pasti", free: "Gratis (trial/BYOK)", unknown: "Harga tak dikenal", mock: "Mock", cache: "Cache" }[
+                        b.status
+                      ] ?? b.status;
+                    const cls =
+                      b.status === "known"
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                        : b.status === "unknown"
+                          ? "bg-amber-50 text-amber-700 ring-amber-200"
+                          : "bg-gray-50 text-gray-600 ring-gray-200";
+                    return (
+                      <span key={b.status} className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ring-1 ${cls}`}>
+                        {label}: {b.jumlah}× · {usd(b.biaya)}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {(r.interaksi_harga_tak_dikenal ?? 0) > 0 && (
+                <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  ⚠ {r.interaksi_harga_tak_dikenal} interaksi memakai model berharga tak dikenal — biaya tercatat mungkin bukan
+                  nol sebenarnya. Tambahkan harganya ke katalog (config <code>ai.pricing_catalog</code>).
+                </p>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card className="mt-4">
+            <CardBody>
               <h3 className="mb-3 text-sm font-semibold text-ink">Tren Harian</h3>
               {(p?.per_hari ?? []).length === 0 ? (
                 <p className="text-sm text-muted">Belum ada data.</p>

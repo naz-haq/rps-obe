@@ -330,8 +330,19 @@ export type GenerateSession = {  id: number;
   catatan_validasi: Record<string, unknown> | null;
   konteks_tambahan?: KonteksTambahan | null;
   rps_version_id: number | null;
+  revisi?: number;
   created_at?: string;
   updated_at?: string;
+};
+
+/** Usulan perbaikan satu item (candidate patch) — belum diterapkan ke draf. */
+export type ItemCandidate = {
+  stage: string;
+  item_id: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  base_revisi: number;
+  usage: { model?: string | null; provider?: string | null; estimated_usd?: number };
 };
 
 export type RpsVersion = {
@@ -452,6 +463,8 @@ export type GovRingkasan = {
   tokens_out: number;
   tokens_total: number;
   total_biaya: number;
+  per_billing?: { status: string; jumlah: number; biaya: number }[];
+  interaksi_harga_tak_dikenal?: number;
   total_audit: number;
   notifikasi_unread: number;
 };
