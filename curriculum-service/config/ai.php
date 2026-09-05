@@ -292,8 +292,12 @@ return [
     | naikkan bila prompt besar (mis. 'mingguan') butuh waktu lebih.
     */
     'http' => [
-        'timeout'      => (int) env('AI_HTTP_TIMEOUT', 90),
+        // 90 dtk terbukti kurang di produksi utk model reasoning (gpt-5.6*) pada
+        // tahap besar — ai_interaksi mencatat gagal in=0/out=0 (timeout murni).
+        'timeout'      => (int) env('AI_HTTP_TIMEOUT', 180),
         'max_attempts' => (int) env('AI_HTTP_MAX_ATTEMPTS', 2),
+        // Effort reasoning utk model gpt-5.x via chat completions (minimal|low|medium|high).
+        'reasoning_effort' => env('AI_REASONING_EFFORT', 'low'),
     ],
 
     /*

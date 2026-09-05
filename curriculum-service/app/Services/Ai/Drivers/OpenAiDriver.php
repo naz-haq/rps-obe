@@ -46,6 +46,13 @@ class OpenAiDriver implements Driver
         $payload[$reasoningOpenAi ? 'max_completion_tokens' : 'max_tokens'] = $params['max_tokens'];
         if ($reasoningOpenAi) {
             unset($payload['temperature']);
+            // Model reasoning gpt-5.x default effort 'medium' → token reasoning
+            // internal ikut memakan max_completion_tokens. Pada keluaran besar
+            // (tahap 'penilaian'/'mingguan') SELURUH anggaran bisa habis untuk
+            // reasoning sehingga konten balik kosong dgn out=max (bukti prod:
+            // ai_interaksi out=6000 persis, status gagal). Tekan ke 'low' agar
+            // anggaran token dipakai untuk JSON nyata sekaligus memangkas latensi.
+            $payload['reasoning_effort'] = config('ai.http.reasoning_effort', 'low');
         }
 
         // Gemini 2.5 mengaktifkan "thinking" secara default; token reasoning

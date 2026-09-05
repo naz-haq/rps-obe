@@ -63,14 +63,16 @@ return [
             'context_from' => ['cpmk', 'sub_cpmk'],
             // Keluaran terbesar (rencana pekanan) — beri anggaran token lebih besar
             // agar JSON tidak terpotong / balik kosong.
-            'max_tokens'   => (int) env('GENERATOR_MAX_TOKENS_MINGGUAN', 8000),
+            'max_tokens'   => (int) env('GENERATOR_MAX_TOKENS_MINGGUAN', 12000),
         ],
 
         'penilaian' => [
             'label'        => 'Komponen Penilaian + Rubrik',
             'jenis_output' => 'penilaian',
             'context_from' => ['cpmk', 'sub_cpmk', 'mingguan'],
-            'max_tokens'   => (int) env('GENERATOR_MAX_TOKENS_PENILAIAN', 6000),
+            // Bukti produksi: 6000 kerap terpotong (rubrik banyak + token
+            // reasoning ikut dihitung) → gagal 'out=6000 persis'. Naikkan.
+            'max_tokens'   => (int) env('GENERATOR_MAX_TOKENS_PENILAIAN', 10000),
         ],
 
     ],
