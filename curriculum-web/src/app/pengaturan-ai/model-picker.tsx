@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, buttonClass } from "@/components/ui";
+import { SearchableSelect, type SearchableOption } from "@/components/modal";
 import type { AiLiveModels, AiPengaturan } from "@/lib/api";
 import { fetchLiveModels, setModelOverride } from "./actions";
 
@@ -199,51 +200,41 @@ export function ModelPicker({ cfg }: { cfg: AiPengaturan }) {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <select
+                    <SearchableSelect
+                      size="sm"
                       value={pick[t.key] ?? ""}
-                      onChange={(e) => setPick((p) => ({ ...p, [t.key]: e.target.value }))}
-                      className={`w-full rounded-lg border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-brand-400 ${
-                        konf ? "border-rose-300" : "border-border"
-                      }`}
-                    >
-                      <option value="">
-                        Ikuti profil{profilMap[t.key] ? ` (${profilMap[t.key]})` : ""}
-                      </option>
-                      {/* Nilai live tersimpan tapi daftar live belum termuat: tetap tampilkan. */}
-                      {pick[t.key]?.includes("::") &&
+                      onChange={(v) => setPick((p) => ({ ...p, [t.key]: v }))}
+                      placeholder={`Ikuti profil${profilMap[t.key] ? ` (${profilMap[t.key]})` : ""}`}
+                      displayValue={pick[t.key]?.replace("::", " · ")}
+                      className={konf ? "rounded-lg ring-1 ring-rose-300" : ""}
+                      options={[
+                        // Nilai live tersimpan tapi daftar live belum termuat: tetap tampilkan.
+                        ...(pick[t.key]?.includes("::") &&
                         !liveProviders.some((p) =>
                           (live[p] ?? []).some((id) => `${p}::${id}` === pick[t.key]),
-                        ) && (
-                          <option value={pick[t.key]}>{pick[t.key].replace("::", " · ")}</option>
-                        )}
-                      {catFiltered.length > 0 && (
-                        <optgroup label="Katalog (ada API key)">
-                          {catFiltered.map((m) => (
-                            <option key={m.key} value={m.key}>
-                              {m.key} · {m.provider}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {liveFiltered.map(([p, ids]) => (
-                        <optgroup key={p} label={`Live · ${p} (${ids.length})`}>
-                          {ids.map((id) => (
-                            <option key={`${p}::${id}`} value={`${p}::${id}`}>
-                              {id} · {p}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                      {modelTakTersedia.length > 0 && (
-                        <optgroup label="Tanpa API key (tak bisa dipilih)">
-                          {modelTakTersedia.map((m) => (
-                            <option key={m.key} value={m.key} disabled>
-                              {m.key} · {m.provider} (tanpa key)
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                        )
+                          ? [{ value: pick[t.key], label: pick[t.key].replace("::", " · "), group: "Tersimpan" }]
+                          : []),
+                        ...catFiltered.map((m) => ({
+                          value: m.key,
+                          label: `${m.key} · ${m.provider}`,
+                          group: "Katalog (ada API key)",
+                        })),
+                        ...liveFiltered.flatMap(([p, ids]) =>
+                          ids.map((id) => ({
+                            value: `${p}::${id}`,
+                            label: `${id} · ${p}`,
+                            group: `Live · ${p} (${ids.length})`,
+                          })),
+                        ),
+                        ...modelTakTersedia.map((m) => ({
+                          value: m.key,
+                          label: `${m.key} · ${m.provider} (tanpa key)`,
+                          group: "Tanpa API key (tak bisa dipilih)",
+                          disabled: true,
+                        })),
+                      ] satisfies SearchableOption[]}
+                    />
                     {konf && <p className="mt-1 text-[11px] text-rose-600">{konf}</p>}
                   </td>
                 </tr>

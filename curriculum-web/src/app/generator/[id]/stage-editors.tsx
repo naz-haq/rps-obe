@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { buttonClass } from "@/components/ui";
+import { SearchableSelect } from "@/components/modal";
 import { useToast } from "@/components/toast";
 import type { Taksonomi } from "@/lib/api";
 import {
@@ -197,28 +198,25 @@ function TaksonomiPicker({
         })}
       </div>
       {available.length > 0 && (
-        <select
-          className={`${inputCls} mt-1`}
+        <SearchableSelect
+          className="mt-1"
+          size="sm"
           value=""
-          onChange={(e) => {
-            if (e.target.value) onChange([...selected, e.target.value]);
+          placeholder="+ Tambah level…"
+          allowClear={false}
+          onChange={(v) => {
+            if (v) onChange([...selected, v]);
           }}
-        >
-          <option value="">+ Tambah level…</option>
-          {Object.entries(groups).map(([k, items]) => {
-            const avail = items.filter((t) => !selected.includes(t.kode));
-            if (avail.length === 0) return null;
-            return (
-              <optgroup key={k} label={KERANGKA_LABEL[k] ?? k}>
-                {avail.map((t) => (
-                  <option key={t.id} value={t.kode}>
-                    {t.kode} — {t.nama}
-                  </option>
-                ))}
-              </optgroup>
-            );
-          })}
-        </select>
+          options={Object.entries(groups).flatMap(([k, items]) =>
+            items
+              .filter((t) => !selected.includes(t.kode))
+              .map((t) => ({
+                value: t.kode,
+                label: `${t.kode} — ${t.nama}`,
+                group: KERANGKA_LABEL[k] ?? k,
+              })),
+          )}
+        />
       )}
     </div>
   );
@@ -283,21 +281,20 @@ function CplPicker({
         })}
       </div>
       {available.length > 0 && (
-        <select
-          className={`${inputCls} mt-1.5`}
+        <SearchableSelect
+          className="mt-1.5"
+          size="sm"
           value=""
-          onChange={(e) => {
-            if (e.target.value) onChange([...selected, e.target.value]);
+          placeholder="— Pilih CPL —"
+          allowClear={false}
+          onChange={(v) => {
+            if (v) onChange([...selected, v]);
           }}
-        >
-          <option value="">— Pilih CPL —</option>
-          {available.map((o) => (
-            <option key={o.kode} value={o.kode}>
-              {o.kode}
-              {o.deskripsi ? ` — ${o.deskripsi.slice(0, 60)}` : ""}
-            </option>
-          ))}
-        </select>
+          options={available.map((o) => ({
+            value: o.kode,
+            label: `${o.kode}${o.deskripsi ? ` — ${o.deskripsi.slice(0, 60)}` : ""}`,
+          }))}
+        />
       )}
       {invalid.map((bad) => (
         <p key={bad} className="mt-1 text-[11px] text-rose-600">
@@ -471,21 +468,14 @@ export function SubCpmkEditor({
             <label>
               <span className={labelCls}>CPMK Induk</span>
               {cpmkList.length > 0 ? (
-                <select
-                  className={inputCls}
+                <SearchableSelect
+                  size="sm"
                   value={s.cpmk_kode ?? ""}
-                  onChange={(e) => set(i, { cpmk_kode: e.target.value })}
-                >
-                  <option value="">— Pilih CPMK —</option>
-                  {cpmkList.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                  {s.cpmk_kode && !cpmkList.includes(s.cpmk_kode) && (
-                    <option value={s.cpmk_kode}>⚠ {s.cpmk_kode} (tak dikenal)</option>
-                  )}
-                </select>
+                  placeholder="— Pilih CPMK —"
+                  displayValue={s.cpmk_kode ? `⚠ ${s.cpmk_kode} (tak dikenal)` : undefined}
+                  onChange={(v) => set(i, { cpmk_kode: v })}
+                  options={cpmkList.map((k) => ({ value: k, label: k }))}
+                />
               ) : (
                 <input
                   className={inputCls}
@@ -559,15 +549,17 @@ function SubCpmkSelect({
     return <input className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} />;
   }
   return (
-    <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">— Pilih Sub-CPMK —</option>
-      {options.map((k) => (
-        <option key={k.kode} value={k.kode}>
-          {k.kode}{k.deskripsi ? ` — ${k.deskripsi}` : ""}
-        </option>
-      ))}
-      {value && !options.some((o) => o.kode === value) && <option value={value}>⚠ {value} (tak dikenal)</option>}
-    </select>
+    <SearchableSelect
+      size="sm"
+      value={value}
+      placeholder="— Pilih Sub-CPMK —"
+      displayValue={value && !options.some((o) => o.kode === value) ? `⚠ ${value} (tak dikenal)` : undefined}
+      onChange={onChange}
+      options={options.map((k) => ({
+        value: k.kode,
+        label: `${k.kode}${k.deskripsi ? ` — ${k.deskripsi}` : ""}`,
+      }))}
+    />
   );
 }
 

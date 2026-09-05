@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, buttonClass } from "@/components/ui";
+import { SearchableSelect } from "@/components/modal";
 import type { AiPengaturan } from "@/lib/api";
 import { setEmbeddingModel } from "./actions";
 
@@ -33,21 +34,20 @@ export function EmbeddingPicker({ cfg }: { cfg: AiPengaturan }) {
       <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-[280px] flex-1 text-xs font-medium text-ink">
           Model embedding
-          <select
+          <SearchableSelect
+            className="mt-1.5"
             value={selected}
-            onChange={(event) => {
-              setSelected(event.target.value);
+            allowClear={false}
+            onChange={(v) => {
+              setSelected(v);
               setMessage(null);
             }}
-            className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-400"
-          >
-            {cfg.embedding_models.map((model) => (
-              <option key={model.key} value={model.key} disabled={!model.tersedia}>
-                {model.model} · {model.provider} · {model.dimensions.toLocaleString("id-ID")} dimensi
-                {!model.tersedia ? " (tanpa API key)" : ""}
-              </option>
-            ))}
-          </select>
+            options={cfg.embedding_models.map((model) => ({
+              value: model.key,
+              label: `${model.model} · ${model.provider} · ${model.dimensions.toLocaleString("id-ID")} dimensi${!model.tersedia ? " (tanpa API key)" : ""}`,
+              disabled: !model.tersedia,
+            }))}
+          />
         </label>
         <button
           type="button"
