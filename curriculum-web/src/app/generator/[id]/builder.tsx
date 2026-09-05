@@ -200,7 +200,7 @@ export function Builder({
       )}
 
       {/* Ringkasan mutu draf */}
-      <QualityStrip draf={draf} />
+      <QualityStrip draf={draf} catatan={catatan} />
 
       {/* Status grounding (verifikasi ke sumber keilmuan) */}
       <GroundingBanner catatan={catatan} />

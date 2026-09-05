@@ -53,7 +53,7 @@ function allItems(draf: Draf): AnyItem[] {
 type Tone = "good" | "warn" | "muted";
 
 /** Deret metrik mutu ringkas di atas tab tahap. */
-export function QualityStrip({ draf }: { draf: Draf }) {
+export function QualityStrip({ draf, catatan = {} }: { draf: Draf; catatan?: Record<string, unknown> }) {
   const cpmk = getCpmk(draf);
   const sub = getSubCpmk(draf);
   const minggu = getMinggu(draf);
@@ -61,16 +61,30 @@ export function QualityStrip({ draf }: { draf: Draf }) {
 
   const terisi = [cpmk.length, sub.length, minggu.length, komponen.length].filter((n) => n > 0).length;
   const kelengkapan = Math.round((terisi / 4) * 100);
-  const cpmkOk = cpmk.filter((c) => (c.cpl_kode ?? []).length > 0).length;
-  const subOk = sub.filter((s) => !!s.cpmk_kode).length;
+  // Keterlacakan gabungan: CPMK ber-CPL + Sub-CPMK ber-CPMK.
+  const lacakOk = cpmk.filter((c) => (c.cpl_kode ?? []).length > 0).length + sub.filter((s) => !!s.cpmk_kode).length;
+  const lacakTotal = cpmk.length + sub.length;
   const semua = allItems(draf);
   const perluTinjau = semua.filter((i) => i._needs_review).length;
   const tersemat = semua.filter((i) => i._pin).length;
 
+  // Grounding dari catatan_validasi tiap tahap (klaim terverifikasi).
+  let gKlaim = 0;
+  let gDitolak = 0;
+  let gDilewati = false;
+  for (const v of Object.values(catatan)) {
+    const c = v as { dilewati?: string | null; jumlah_klaim?: number; jumlah_ditolak?: number };
+    if (c.dilewati) gDilewati = true;
+    gKlaim += c.jumlah_klaim ?? 0;
+    gDitolak += c.jumlah_ditolak ?? 0;
+  }
+  const groundingVal = gKlaim > 0 ? `${gKlaim - gDitolak}/${gKlaim}` : gDilewati ? "dilewati" : "—";
+  const groundingTone: Tone = gKlaim > 0 ? (gDitolak === 0 ? "good" : "warn") : gDilewati ? "warn" : "muted";
+
   const metrics: { label: string; value: string; tone: Tone }[] = [
     { label: "Kelengkapan", value: `${kelengkapan}%`, tone: kelengkapan >= 100 ? "good" : kelengkapan >= 50 ? "warn" : "muted" },
-    { label: "CPMK ber-CPL", value: cpmk.length ? `${cpmkOk}/${cpmk.length}` : "—", tone: cpmk.length > 0 && cpmkOk === cpmk.length ? "good" : "warn" },
-    { label: "Sub-CPMK tertaut", value: sub.length ? `${subOk}/${sub.length}` : "—", tone: sub.length > 0 && subOk === sub.length ? "good" : "warn" },
+    { label: "Keterlacakan", value: lacakTotal > 0 ? `${lacakOk}/${lacakTotal}` : "—", tone: lacakTotal > 0 && lacakOk === lacakTotal ? "good" : "warn" },
+    { label: "Grounding", value: groundingVal, tone: groundingTone },
     { label: "Perlu ditinjau", value: String(perluTinjau), tone: perluTinjau > 0 ? "warn" : "good" },
     { label: "Tersemat", value: String(tersemat), tone: "muted" },
   ];

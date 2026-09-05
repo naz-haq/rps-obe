@@ -1,8 +1,8 @@
 "use client";
 
-// Ruang kerja generator sesuai prototipe (§8): daftar item dengan checkbox
-// multi-pilih + toolbar aksi massal + panel AI kontekstual di kanan (diff, impact,
-// terapkan selektif). Menggantikan pratinjau read-only untuk tahap ber-item.
+// Ruang kerja generator sesuai prototipe (§8): tabel item berkolom
+// (KODE/RUMUSAN/PEMETAAN/SUMBER/AKSI) + toolbar aksi massal + panel AI kontekstual
+// di kanan (diff, terapkan selektif) + footer ringkasan. Warna mengikuti token app.
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { buttonClass } from "@/components/ui";
@@ -28,17 +28,12 @@ const LABEL: Record<string, string> = {
   jenis: "Jenis", instrumen: "Instrumen", bobot_persen: "Bobot (%)", minggu_ke: "Minggu",
 };
 
-type Badge = { text: string; tone: "blue" | "amber" | "neutral" };
-type Row = { id: string; code: string; statement: string; badges: Badge[]; source: string; pinned: boolean; needsReview: boolean };
+const STAGE_TITLE: Record<string, string> = {
+  cpmk: "CPMK", sub_cpmk: "Sub-CPMK", mingguan: "Rencana Mingguan", penilaian: "Penilaian",
+};
 
-function sourceLabel(src?: string): string {
-  switch (src) {
-    case "ai_edited": return "AI + disunting";
-    case "ai": return "AI";
-    case "manual": return "Manual";
-    default: return "—";
-  }
-}
+type Badge = { text: string; tone: "blue" | "amber" | "neutral" };
+type Row = { id: string; code: string; statement: string; badges: Badge[]; pinned: boolean; needsReview: boolean };
 
 function rowsFor(stage: string, draf: Draf): Row[] {
   if (stage === "cpmk") {
@@ -48,17 +43,17 @@ function rowsFor(stage: string, draf: Draf): Row[] {
         ...(c.cpl_kode ?? []).map((x): Badge => ({ text: x, tone: "blue" })),
         ...(c.taksonomi_kode ?? []).map((x): Badge => ({ text: x, tone: "amber" })),
       ],
-      source: sourceLabel(), pinned: !!c._pin, needsReview: !!c._needs_review,
+      pinned: !!c._pin, needsReview: !!c._needs_review,
     }));
   }
   if (stage === "sub_cpmk") {
     return getSubCpmk(draf).filter((s) => s._id).map((s) => ({
       id: s._id!, code: s.kode, statement: s.deskripsi,
       badges: [
-        ...(s.cpmk_kode ? [{ text: `← ${s.cpmk_kode}`, tone: "neutral" as const }] : []),
+        ...(s.cpmk_kode ? [{ text: s.cpmk_kode, tone: "blue" as const }] : []),
         ...(s.taksonomi_kode ?? []).map((x): Badge => ({ text: x, tone: "amber" })),
       ],
-      source: sourceLabel(), pinned: !!s._pin, needsReview: !!s._needs_review,
+      pinned: !!s._pin, needsReview: !!s._needs_review,
     }));
   }
   if (stage === "mingguan") {
@@ -69,7 +64,7 @@ function rowsFor(stage: string, draf: Draf): Row[] {
         ...(m.sub_cpmk_kode ? [{ text: m.sub_cpmk_kode, tone: "blue" as const }] : []),
         ...(m.bobot_penilaian != null ? [{ text: `${m.bobot_penilaian}%`, tone: "neutral" as const }] : []),
       ],
-      source: sourceLabel(), pinned: !!m._pin, needsReview: !!m._needs_review,
+      pinned: !!m._pin, needsReview: !!m._needs_review,
     }));
   }
   return getKomponen(draf).filter((k) => k._id).map((k) => ({
@@ -79,7 +74,7 @@ function rowsFor(stage: string, draf: Draf): Row[] {
       ...(k.sub_cpmk_kode ? [{ text: k.sub_cpmk_kode, tone: "blue" as const }] : []),
       ...(k.bobot_persen != null ? [{ text: `${k.bobot_persen}%`, tone: "neutral" as const }] : []),
     ],
-    source: sourceLabel(), pinned: !!k._pin, needsReview: !!k._needs_review,
+    pinned: !!k._pin, needsReview: !!k._needs_review,
   }));
 }
 
@@ -134,7 +129,9 @@ export function GeneratorWorkspace({
   const router = useRouter();
   const toast = useToast();
 
+  const activeRow = rows.find((r) => r.id === active) ?? null;
   const allChecked = rows.length > 0 && selected.size === rows.length;
+  const pinnedCount = rows.filter((r) => r.pinned).length;
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -146,7 +143,7 @@ export function GeneratorWorkspace({
   const toggleAll = () => setSelected(allChecked ? new Set() : new Set(rows.map((r) => r.id)));
 
   const openAi = (id: string) => {
-    setActive((cur) => (cur === id ? null : id));
+    setActive(id);
     setCand(null);
   };
 
@@ -178,11 +175,8 @@ export function GeneratorWorkspace({
   const setPin = (id: string, pinned: boolean) =>
     start(async () => {
       const r = await pinItem(sessionId, stage, id, pinned);
-      if (!r.ok) {
-        toast({ type: "error", message: r.message ?? "Gagal mengubah sematan." });
-        return;
-      }
-      router.refresh();
+      if (!r.ok) toast({ type: "error", message: r.message ?? "Gagal mengubah sematan." });
+      else router.refresh();
     });
 
   const bulkPin = (pinned: boolean) =>
@@ -194,130 +188,173 @@ export function GeneratorWorkspace({
       router.refresh();
     });
 
+  const bantuAi = () => {
+    const first = rows.find((r) => selected.has(r.id) && !r.pinned) ?? rows.find((r) => !r.pinned);
+    if (first) openAi(first.id);
+  };
+
   return (
-    <div className="rounded-xl border border-border bg-surface">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted">
-            <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allChecked} onChange={toggleAll} />
-            {selected.size > 0 ? `${selected.size} dipilih` : "Pilih semua"}
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" disabled={pending || selected.size === 0} onClick={() => bulkPin(true)} className={buttonClass("ghost", "sm")}>
-              📌 Sematkan
-            </button>
-            <button type="button" disabled={pending || selected.size === 0} onClick={() => bulkPin(false)} className={buttonClass("ghost", "sm")}>
-              Lepas sematan
-            </button>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      {/* Panel kiri: tabel item */}
+      <section className="overflow-hidden rounded-xl border border-border bg-surface">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">{STAGE_TITLE[stage] ?? stage}</h3>
+            <p className="text-xs text-muted">Pilih satu atau beberapa butir untuk tindakan AI.</p>
           </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" disabled={pending || selected.size === 0} onClick={() => bulkPin(true)} className={buttonClass("ghost", "sm")}>📌 Sematkan</button>
+            <button type="button" disabled={pending || rows.length === 0} onClick={bantuAi} className={buttonClass("secondary", "sm")}>✨ Bantu dengan AI</button>
+          </div>
+        </header>
+
+        {/* Kepala tabel */}
+        <div className="hidden grid-cols-[28px_84px_minmax(0,1fr)_150px_120px_84px] gap-2 border-b border-border bg-gray-50/60 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted md:grid">
+          <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allChecked} onChange={toggleAll} aria-label="Pilih semua" />
+          <span>Kode</span>
+          <span>Rumusan Capaian</span>
+          <span>Pemetaan</span>
+          <span>Sumber</span>
+          <span className="text-right">Aksi</span>
         </div>
-        <ul className="divide-y divide-border">
-          {rows.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">Belum ada item.</li>}
+
+        <ul>
+          {rows.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted">Belum ada item.</li>}
           {rows.map((r) => {
             const isActive = r.id === active;
             return (
               <Fragment key={r.id}>
-              <li
-                className={`flex items-start gap-3 px-3 py-2.5 ${isActive ? "bg-brand-50/40" : selected.has(r.id) ? "bg-brand-50/20" : ""}`}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 accent-brand-600"
-                  checked={selected.has(r.id)}
-                  onChange={() => toggle(r.id)}
-                  aria-label={`Pilih ${r.code}`}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-xs font-bold text-brand-700">{r.code}</span>
+                <li
+                  className={`grid grid-cols-[28px_1fr_auto] gap-2 border-b border-border px-4 py-3 md:grid-cols-[28px_84px_minmax(0,1fr)_150px_120px_84px] md:items-start ${
+                    isActive ? "bg-brand-50/40" : selected.has(r.id) ? "bg-brand-50/20" : ""
+                  }`}
+                >
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Pilih ${r.code}`} />
+                  <span className="font-mono text-xs font-bold text-brand-700 md:pt-0.5">{r.code}</span>
+                  <p className="col-span-2 text-sm text-ink md:col-span-1">{r.statement}</p>
+                  <div className="col-start-2 flex flex-wrap gap-1 md:col-start-auto">
                     {r.badges.map((b, i) => (
-                      <span key={i} className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ${badgeCls[b.tone]}`}>{b.text}</span>
+                      <span key={i} className={`h-fit rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ${badgeCls[b.tone]}`}>{b.text}</span>
                     ))}
-                    {r.pinned && <span className="text-[10px] text-brand-600">📌</span>}
-                    {r.needsReview && (
-                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">perlu tinjau</span>
+                  </div>
+                  <div className="col-start-2 text-[11px] md:col-start-auto md:pt-0.5">
+                    {r.needsReview ? (
+                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-700">Perlu ditinjau</span>
+                    ) : r.pinned ? (
+                      <span className="text-brand-600">📌 Tersemat</span>
+                    ) : (
+                      <span className="text-muted">AI</span>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-ink">{r.statement}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => setPin(r.id, !r.pinned)}
-                    className={`grid h-7 w-7 place-items-center rounded-md text-xs ${r.pinned ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`}
-                    title={r.pinned ? "Lepas sematan" : "Sematkan"}
-                  >
-                    📌
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending || r.pinned}
-                    onClick={() => openAi(r.id)}
-                    className={`grid h-7 w-7 place-items-center rounded-md text-xs ${isActive ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`}
-                    title={r.pinned ? "Lepas sematan dulu" : "Perbaiki dengan AI"}
-                  >
-                    ✨
-                  </button>
-                </div>
-              </li>
-              {isActive && (
-                <li className="bg-brand-50/10 px-3 pb-3">
-                  <div className="rounded-lg border border-brand-200 bg-surface p-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      {ACTIONS.map((a) => (
-                        <button
-                          key={a.v}
-                          type="button"
-                          onClick={() => setAction(a.v)}
-                          className={`rounded-md border px-2 py-1 text-[11px] font-medium ${action === a.v ? "border-brand-400 bg-brand-100 text-brand-800" : "border-border bg-surface text-gray-600 hover:bg-gray-50"}`}
-                        >
-                          {a.l}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      value={instruction}
-                      onChange={(e) => setInstruction(e.target.value)}
-                      placeholder="Instruksi tambahan (opsional)…"
-                      rows={2}
-                      className="mt-2 w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-brand-400"
-                    />
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <button type="button" disabled={pending} onClick={buatUsulan} className={buttonClass("primary", "sm")}>
-                        {pending && !cand ? "Menyusun…" : "Buat usulan"}
-                      </button>
-                      <button type="button" disabled={pending} onClick={() => { setActive(null); setCand(null); }} className={buttonClass("ghost", "sm")}>
-                        Tutup
-                      </button>
-                      <span className="text-[10px] text-muted">Usulan tidak langsung mengubah draf.</span>
-                    </div>
-                    {cand && (
-                      <div className="mt-3 border-t border-border pt-3">
-                        <p className="mb-1.5 text-[11px] font-semibold text-ink">Pratinjau perubahan</p>
-                        <DiffView before={cand.before} after={cand.after} />
-                        {cand.base_revisi !== revisi && (
-                          <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">Draf berubah sejak usulan dibuat. Buat usulan ulang.</p>
-                        )}
-                        <div className="mt-2 flex items-center gap-2">
-                          <button type="button" disabled={pending || cand.base_revisi !== revisi} onClick={terapkan} className={buttonClass("primary", "sm")}>
-                            Terapkan
-                          </button>
-                          <button type="button" disabled={pending} onClick={() => setCand(null)} className={buttonClass("ghost", "sm")}>
-                            Tolak
-                          </button>
-                          {cand.usage?.estimated_usd != null && (
-                            <span className="text-[10px] text-muted">{cand.usage.model ?? "AI"} · ~${cand.usage.estimated_usd}</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                  <div className="col-start-3 row-start-1 flex items-center justify-end gap-1 md:col-start-auto md:row-start-auto">
+                    <button type="button" disabled={pending} onClick={() => setPin(r.id, !r.pinned)} className={`grid h-7 w-7 place-items-center rounded-md text-xs ${r.pinned ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`} title={r.pinned ? "Lepas sematan" : "Sematkan"}>📌</button>
+                    <button type="button" disabled={pending || r.pinned} onClick={() => openAi(r.id)} className={`grid h-7 w-7 place-items-center rounded-md text-xs ${isActive ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`} title={r.pinned ? "Lepas sematan dulu" : "Perbaiki dengan AI"}>✨</button>
                   </div>
                 </li>
-              )}
+                {/* Panel inline hanya pada layar sempit (di layar lebar pakai panel kanan) */}
+                {isActive && (
+                  <li className="border-b border-border bg-brand-50/10 px-4 py-3 xl:hidden">
+                    <AiPanelBody {...{ activeRow: r, action, setAction, instruction, setInstruction, pending, cand, buatUsulan, terapkan, setCand, revisi, close: () => { setActive(null); setCand(null); } }} />
+                  </li>
+                )}
               </Fragment>
             );
           })}
         </ul>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-soft px-4 py-2.5 text-xs text-muted">
+          <span>
+            {rows.length} butir{pinnedCount > 0 ? ` · ${pinnedCount} disematkan` : ""}
+            {selected.size > 0 ? ` · ${selected.size} dipilih` : ""}
+          </span>
+        </footer>
+      </section>
+
+      {/* Panel kanan: Asisten AI (layar lebar) */}
+      <aside className="sticky top-4 hidden h-fit rounded-xl border border-border bg-surface xl:block">
+        <header className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div>
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">✨ Asisten AI</h3>
+            <p className="text-[11px] text-muted">Usulan tidak akan mengganti draf otomatis.</p>
+          </div>
+        </header>
+        <div className="p-4">
+          {!activeRow ? (
+            <p className="text-xs text-muted">Klik ikon ✨ pada sebuah item untuk meminta usulan perbaikan AI.</p>
+          ) : (
+            <AiPanelBody {...{ activeRow, action, setAction, instruction, setInstruction, pending, cand, buatUsulan, terapkan, setCand, revisi, close: () => { setActive(null); setCand(null); } }} />
+          )}
+        </div>
+      </aside>
     </div>
+  );
+}
+
+function AiPanelBody({
+  activeRow, action, setAction, instruction, setInstruction, pending, cand, buatUsulan, terapkan, setCand, revisi, close,
+}: {
+  activeRow: Row;
+  action: string;
+  setAction: (v: string) => void;
+  instruction: string;
+  setInstruction: (v: string) => void;
+  pending: boolean;
+  cand: ItemCandidate | null;
+  buatUsulan: () => void;
+  terapkan: () => void;
+  setCand: (c: ItemCandidate | null) => void;
+  revisi: number;
+  close: () => void;
+}) {
+  return (
+    <>
+      <div className="rounded-lg border border-brand-200 bg-brand-50/50 px-2.5 py-2 text-xs">
+        <span className="font-semibold text-brand-800">{activeRow.code} dipilih</span>
+        <p className="mt-0.5 text-muted">{activeRow.statement}</p>
+      </div>
+      <label className="mt-3 block text-[11px] font-semibold text-ink">Instruksi</label>
+      <textarea
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+        placeholder="mis. Naikkan keterukuran rumusan tanpa mengubah makna."
+        rows={2}
+        className="mt-1 w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-brand-400"
+      />
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
+        {ACTIONS.map((a) => (
+          <button
+            key={a.v}
+            type="button"
+            onClick={() => setAction(a.v)}
+            className={`rounded-md border px-2 py-1.5 text-left text-[11px] font-medium ${action === a.v ? "border-brand-400 bg-brand-100 text-brand-800" : "border-border bg-surface text-gray-600 hover:bg-gray-50"}`}
+          >
+            {a.l}
+          </button>
+        ))}
+      </div>
+      <button type="button" disabled={pending} onClick={buatUsulan} className={`mt-3 w-full ${buttonClass("primary", "sm")}`}>
+        {pending && !cand ? "Menyusun…" : "✨ Buat usulan"}
+      </button>
+      <p className="mt-2 text-[10px] text-muted">
+        {cand?.usage?.estimated_usd != null
+          ? `${cand.usage.model ?? "AI"} · ~$${cand.usage.estimated_usd}`
+          : "Perkiraan biaya muncul setelah usulan dibuat."}
+      </p>
+
+      {cand && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="mb-1.5 text-[11px] font-semibold text-ink">Pratinjau perubahan</p>
+          <DiffView before={cand.before} after={cand.after} />
+          {cand.base_revisi !== revisi && (
+            <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">Draf berubah sejak usulan dibuat. Buat usulan ulang.</p>
+          )}
+          <div className="mt-2 flex items-center gap-2">
+            <button type="button" disabled={pending || cand.base_revisi !== revisi} onClick={terapkan} className={buttonClass("primary", "sm")}>Terapkan usulan</button>
+            <button type="button" disabled={pending} onClick={() => setCand(null)} className={buttonClass("ghost", "sm")}>Tolak</button>
+          </div>
+        </div>
+      )}
+      <button type="button" onClick={close} className="mt-2 text-[11px] text-muted underline">Tutup panel</button>
+    </>
   );
 }
