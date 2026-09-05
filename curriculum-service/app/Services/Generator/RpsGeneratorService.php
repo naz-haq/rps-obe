@@ -169,6 +169,11 @@ class RpsGeneratorService
                         throw new GeneratorException('Penempatan evaluasi akan menghapus baris. Kembalikan satu baris per pekan reguler dengan UTS/UAS pada slot yang benar.');
                     }
                 }
+                if ($stage === 'penilaian') {
+                    // Bobot komponen/rubrik diskalakan proporsional ke total 100:
+                    // selisih kecil dari model adalah soal aritmetika, bukan substansi.
+                    $data = $this->normalisasiPenilaian($data);
+                }
                 // Kontrak penuh tetap ditegakkan pada hasil final yang akan disimpan.
                 $this->assertContract($stage, $data, $session, $mk, true);
             } catch (GeneratorException $e) {
@@ -956,11 +961,19 @@ class RpsGeneratorService
             if (! is_array($m)) {
                 continue;
             }
-            $t = strtolower((string) ($m['materi_pustaka'] ?? ''));
-            // Word-boundary: substring 'uas' ada di kata biasa (menstruasi, evaluasi).
-            if (preg_match('/\buts\b|ujian tengah|evaluasi tengah/', $t)) {
+            // Sinyal ujian bisa ditaruh model di kolom mana pun (bentuk_luring/
+            // indikator, bukan hanya materi_pustaka). Word-boundary: substring
+            // 'uas' ada di kata biasa (menstruasi, evaluasi).
+            $t = strtolower(implode(' ', array_filter([
+                $m['materi_pustaka'] ?? null,
+                $m['bentuk_luring'] ?? null,
+                $m['bentuk_daring'] ?? null,
+                $m['indikator'] ?? null,
+                $m['kriteria_penilaian'] ?? null,
+            ], 'is_string')));
+            if (preg_match('/\buts\b|\bets\b|\b(ujian|evaluasi|penilaian|asesmen|ulangan)\s+tengah|\btengah\s+semester|midterm/', $t)) {
                 $barisUts ??= $m;
-            } elseif (preg_match('/\buas\b|ujian akhir|evaluasi akhir/', $t)) {
+            } elseif (preg_match('/\buas\b|\beas\b|\b(ujian|evaluasi|penilaian|asesmen|ulangan)\s+akhir|\bakhir\s+semester|final\s+(exam|test)/', $t)) {
                 $barisUas ??= $m;
             } else {
                 $belajar[] = $m;
@@ -1019,6 +1032,54 @@ class RpsGeneratorService
         $data['minggu'] = $rows;
 
         return $data;
+    }
+
+    /**
+     * Normalisasi tahap penilaian — bentuk, bukan substansi: bobot angka-string
+     * jadi float, lalu bobot komponen & bobot kriteria rubrik diskalakan
+     * proporsional ke total tepat 100 (selisih pembulatan ke butir terakhir).
+     */
+    private function normalisasiPenilaian(array $data): array
+    {
+        $rows = $data['komponen'] ?? null;
+        if (! is_array($rows) || ! array_is_list($rows)) {
+            return $data;
+        }
+        $rows = $this->skalakanBobot($rows, 'bobot_persen');
+        foreach ($rows as $i => $row) {
+            $kriteria = is_array($row) ? ($row['rubrik']['kriteria'] ?? null) : null;
+            if (is_array($kriteria) && array_is_list($kriteria)) {
+                $rows[$i]['rubrik']['kriteria'] = $this->skalakanBobot($kriteria, 'bobot');
+            }
+        }
+        $data['komponen'] = $rows;
+
+        return $data;
+    }
+
+    /** Skala proporsional field bobot ke total 100; bentuk tak sah dibiarkan agar kontrak menolak. */
+    private function skalakanBobot(array $items, string $field): array
+    {
+        $sum = 0.0;
+        foreach ($items as $i => $item) {
+            if (! is_array($item) || ! is_numeric($item[$field] ?? null)) {
+                return $items;
+            }
+            $items[$i][$field] = (float) $item[$field];
+            $sum += (float) $item[$field];
+        }
+        if ($sum <= 0 || abs($sum - 100) < 0.000001) {
+            return $items;
+        }
+        $total = 0.0;
+        $last = array_key_last($items);
+        foreach ($items as $i => $item) {
+            $items[$i][$field] = round($item[$field] * 100 / $sum, 2);
+            $total += $items[$i][$field];
+        }
+        $items[$last][$field] = round($items[$last][$field] + (100 - $total), 2);
+
+        return $items;
     }
 
     /** Baris evaluasi (UTS/UAS) baku; teks materi memicu band kuning di UI/PDF/DOCX. */

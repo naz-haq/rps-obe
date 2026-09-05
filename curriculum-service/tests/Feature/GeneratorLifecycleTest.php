@@ -852,6 +852,79 @@ class GeneratorLifecycleTest extends TestCase
         $this->assertSame('pending', ($session->fresh()->status_bagian ?? [])['mingguan']);
     }
 
+    public function test_baris_ujian_terdeteksi_meski_sinyal_hanya_di_bentuk_luring(): void
+    {
+        $session = $this->aiStagedSession();
+        // Pola gagal produksi: model menaruh label ujian di bentuk_luring, materi
+        // hanya berisi cakupan — baris ikut terpetakan ke pekan belajar dan gagal.
+        $uts = $this->aiWeek(8, '', 'Materi pekan 1-7 [Pustaka: tidak tersedia dalam konteks]', 20);
+        $uts['bentuk_luring'] = 'Ujian Tengah Semester';
+        $uas = $this->aiWeek(16, '', 'Seluruh materi semester [Pustaka: tidak tersedia dalam konteks]', 20);
+        $uas['bentuk_luring'] = 'Penilaian akhir semester';
+        $output = json_encode(['minggu' => [
+            $this->aiWeek(1, 'Sub-CPMK-1', 'Farmakologi dasar — pengantar reseptor [Pustaka: tidak tersedia dalam konteks]', 30),
+            $this->aiWeek(2, 'Sub-CPMK-2', 'Farmakokinetika — absorpsi dan distribusi [Pustaka: tidak tersedia dalam konteks]', 30),
+            $uts,
+            $uas,
+        ]], JSON_THROW_ON_ERROR);
+        $generator = $this->mockAiReturning($output, 1);
+
+        $generator->generateStage($session, 'mingguan');
+
+        $rows = $session->fresh()->draf['mingguan']['minggu'];
+        $this->assertSame([1, 2, 8, 16], array_column($rows, 'minggu_ke'));
+        $this->assertSame(['Sub-CPMK-1', 'Sub-CPMK-2', null, null], array_map(fn($r) => $r['sub_cpmk_kode'], $rows));
+        $this->assertSame('Ujian Tengah Semester', $rows[2]['bentuk_luring']);
+        $this->assertSame('Penilaian akhir semester', $rows[3]['bentuk_luring']);
+    }
+
+    public function test_generate_penilaian_menskalakan_bobot_komponen_dan_rubrik_ke_100(): void
+    {
+        $session = $this->aiStagedSession();
+        $session = $this->generator->acceptStage($session, 'mingguan', ['minggu' => [
+            $this->aiWeek(1, 'Sub-CPMK-1', 'Farmakologi dasar.', 50),
+            $this->aiWeek(2, 'Sub-CPMK-2', 'Farmakokinetika.', 50),
+        ]]);
+        // Pola gagal produksi: "Total bobot_persen komponen harus tepat 100" —
+        // selisih aritmetika diskalakan sistem, substansi tetap dari model.
+        $output = json_encode(['komponen' => [
+            [
+                'nama' => 'Kuis farmakodinamika',
+                'jenis' => 'kuis',
+                'instrumen' => 'Tes objektif',
+                'bobot_persen' => 30,
+                'sub_cpmk_kode' => 'Sub-CPMK-1',
+                'minggu_ke' => 3,
+                'rubrik' => null,
+            ],
+            [
+                'nama' => 'Laporan analisis kasus',
+                'jenis' => 'tugas',
+                'instrumen' => 'Laporan',
+                'bobot_persen' => '60',
+                'sub_cpmk_kode' => 'Sub-CPMK-2',
+                'minggu_ke' => 6,
+                'rubrik' => [
+                    'jenis' => 'analitik',
+                    'jumlah_level_skala' => 2,
+                    'label_skala' => ['Kurang', 'Baik'],
+                    'kriteria' => [
+                        ['kriteria' => 'Ketepatan analisis', 'bobot' => 40, 'deskriptor' => ['Analisis belum tepat.', 'Analisis tepat.']],
+                        ['kriteria' => 'Kelengkapan data', 'bobot' => '40', 'deskriptor' => ['Data belum lengkap.', 'Data lengkap.']],
+                    ],
+                ],
+            ],
+        ]], JSON_THROW_ON_ERROR);
+        $generator = $this->mockAiReturning($output, 1);
+
+        $generator->generateStage($session, 'penilaian');
+
+        $rows = $session->fresh()->draf['penilaian']['komponen'];
+        $this->assertEqualsWithDelta(100, array_sum(array_column($rows, 'bobot_persen')), 0.001);
+        $this->assertEqualsWithDelta(33.33, $rows[0]['bobot_persen'], 0.001);
+        $this->assertEquals([50, 50], array_column($rows[1]['rubrik']['kriteria'], 'bobot'));
+    }
+
     private function aiStagedSession(): GenerateSession
     {
         $session = $this->generator->start($this->course, [
