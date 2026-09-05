@@ -4,7 +4,6 @@ import { PageHeader, Card, CardBody, Table, Th, Td, Badge, EmptyState, Stat, but
 
 type SearchParams = Promise<{ hari?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 
 const PERIODE = [
   { value: "7", label: "7 hari" },
@@ -38,8 +37,8 @@ export default async function GovernanceDashboardPage({ searchParams }: { search
   const hari = sp.hari ?? "90";
 
   const [ringkasanRes, penggunaanRes] = await Promise.all([
-    apiGet<Single<GovRingkasan>>("/governance/ringkasan", { institusi_id: DEFAULT_INSTITUSI, hari }).catch(() => null),
-    apiGet<Single<GovPenggunaan>>("/governance/penggunaan", { institusi_id: DEFAULT_INSTITUSI, hari }).catch(() => null),
+    apiGet<Single<GovRingkasan>>("/governance/ringkasan", { hari }).catch(() => null),
+    apiGet<Single<GovPenggunaan>>("/governance/penggunaan", { hari }).catch(() => null),
   ]);
 
   const r = ringkasanRes?.data;

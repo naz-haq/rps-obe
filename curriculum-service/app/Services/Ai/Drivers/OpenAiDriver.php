@@ -69,6 +69,9 @@ class OpenAiDriver implements Driver
 
         $url = rtrim($model['base_url'], '/') . '/chat/completions';
         $lastError = 'permintaan gagal';
+        $retriedInputTokens = 0;
+        $retriedOutputTokens = 0;
+        $retriedCacheReadTokens = 0;
 
         // Coba-ulang untuk galat transien (mis. Gemini "503 model overloaded"
         // yang kerap muncul pada tahap besar 'mingguan'). Backoff eksponensial
@@ -99,7 +102,21 @@ class OpenAiDriver implements Driver
                     return new LlmResult(error: $lastError, latencyMs: $latency);
                 }
 
-                return $this->parseSuccess($data, $model, $latency);
+                $result = $this->parseSuccess($data, $model, $latency);
+                $result->inputTokens += $retriedInputTokens;
+                $result->outputTokens += $retriedOutputTokens;
+                $result->cacheReadTokens += $retriedCacheReadTokens;
+                if (($result->raw['finish_reason'] ?? null) === 'length' && $attempt < $maxAttempts) {
+                    $retriedInputTokens = $result->inputTokens;
+                    $retriedOutputTokens = $result->outputTokens;
+                    $retriedCacheReadTokens = $result->cacheReadTokens;
+                    $tokenKey = $reasoningOpenAi ? 'max_completion_tokens' : 'max_tokens';
+                    $payload[$tokenKey] = (int) ceil($payload[$tokenKey] * 1.5);
+                    $this->backoff($attempt);
+                    continue;
+                }
+
+                return $result;
             } catch (\Throwable $e) {
                 $lastError = $e->getMessage();
                 // Galat koneksi/timeout juga transien → ulangi bila masih ada jatah.
@@ -133,16 +150,30 @@ class OpenAiDriver implements Driver
     {
         $text = $data['choices'][0]['message']['content'] ?? '';
         $usage = $data['usage'] ?? [];
+        $finish = $data['choices'][0]['finish_reason'] ?? null;
+
+        if ($finish === 'length') {
+            return new LlmResult(
+                text: trim((string) $text),
+                inputTokens: (int) ($usage['prompt_tokens'] ?? 0),
+                outputTokens: (int) ($usage['completion_tokens'] ?? 0),
+                latencyMs: $latency,
+                modelVersion: $data['model'] ?? $model['model'],
+                error: 'Keluaran model terpotong karena batas token tercapai. Coba ulang atau gunakan model dengan kapasitas output lebih besar.',
+                raw: ['finish_reason' => $finish] + $usage,
+            );
+        }
 
         // Keluaran kosong = kegagalan yang harus terlihat (bukan sukses teks
         // kosong). Umum terjadi bila max_tokens habis dipakai reasoning atau
         // respons terpotong (finish_reason: length).
         if (trim((string) $text) === '') {
-            $finish = $data['choices'][0]['finish_reason'] ?? 'tidak diketahui';
+            $finish ??= 'tidak diketahui';
             return new LlmResult(
                 error: "Model mengembalikan konten kosong (finish_reason: {$finish}). "
                     . 'Kemungkinan max_tokens habis untuk reasoning atau keluaran terpotong.',
                 latencyMs: $latency,
+                raw: ['finish_reason' => $finish] + $usage,
             );
         }
 
@@ -158,7 +189,7 @@ class OpenAiDriver implements Driver
             cacheWriteTokens: 0,
             latencyMs: $latency,
             modelVersion: $data['model'] ?? $model['model'],
-            raw: $usage,
+            raw: ['finish_reason' => $finish] + $usage,
         );
     }
 }

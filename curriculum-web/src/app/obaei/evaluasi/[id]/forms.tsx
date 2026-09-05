@@ -36,7 +36,7 @@ export function AnalisisAiButton({ id, angkatan }: { id: number; angkatan?: stri
       <button
         type="button"
         disabled={pending}
-        className={buttonClass("primary")}
+        className={buttonClass("ai", "xs")}
         onClick={async () => {
           setPending(true);
           setError(null);

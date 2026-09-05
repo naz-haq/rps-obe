@@ -82,9 +82,14 @@ class GenerateSessionController extends Controller
         ], fn($v) => $v !== '');
 
         $mk = MataKuliah::findOrFail($data['mk_id']);
+        $institusiId = $request->user()?->institusi_id;
+        if ($institusiId !== null && (int) $mk->institusi_id !== (int) $institusiId) {
+            abort(403, 'Anda tidak memiliki akses ke mata kuliah tersebut.');
+        }
+
         $session = $this->generator->start($mk, [
             'sumber'  => $data['sumber'] ?? 'baru',
-            'user_id' => $data['user_id'] ?? null,
+            'user_id' => $request->user()?->id,
             'konteks_tambahan' => $konteks !== [] ? $konteks : null,
         ]);
 
@@ -107,9 +112,9 @@ class GenerateSessionController extends Controller
             'bahan_kajian_khusus' => trim((string) ($data['bahan_kajian_khusus'] ?? '')),
         ], fn($v) => $v !== '');
 
-        $generateSession->update(['konteks_tambahan' => $konteks !== [] ? $konteks : null]);
-
-        return new GenerateSessionResource($generateSession->load('mataKuliah'));
+        return $this->run(function () use ($generateSession, $konteks) {
+            $this->generator->updateKonteks($generateSession, $konteks);
+        }, $generateSession);
     }
 
     /** Generate satu tahap (satu panggilan AI + grounding + auto-regen). */
@@ -149,6 +154,22 @@ class GenerateSessionController extends Controller
     }
 
     /** Commit draf ke entitas RPS resmi (menuntut semua tahap terkunci). */
+    public function unpin(Request $request, GenerateSession $generateSession)
+    {
+        $stage = $this->stage($request);
+        return $this->run(fn() => $this->generator->unpinStage($generateSession, $stage), $generateSession);
+    }
+
+    public function reopen(Request $request, GenerateSession $generateSession)
+    {
+        $data = $request->validate(['catatan' => ['required', 'string', 'max:2000']]);
+        return $this->run(fn() => $this->generator->reopen($generateSession, [
+            'catatan' => $data['catatan'],
+            'id' => $request->user()->id,
+            'nama' => $request->user()->name,
+        ]), $generateSession);
+    }
+
     public function commit(GenerateSession $generateSession)
     {
         try {
@@ -166,6 +187,24 @@ class GenerateSessionController extends Controller
                 'rps'     => new RpsVersionResource($rps),
             ],
         ], 201);
+    }
+
+    /** Lengkapi field kosong SATU item dari editor manual — tanpa menyentuh draf. */
+    public function itemSuggest(Request $request, GenerateSession $generateSession)
+    {
+        $data = $request->validate([
+            'stage'       => ['required', 'string', Rule::in(config('generator.pipeline'))],
+            'item'        => ['present', 'array'],
+            'instruction' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $result = $this->generator->suggestItem($generateSession, $data['stage'], $data['item'], $data['instruction'] ?? null);
+        } catch (GeneratorException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['data' => $result]);
     }
 
     /** Usulan perbaikan SATU item (candidate patch) — tanpa menyentuh draf. */
@@ -234,6 +273,8 @@ class GenerateSessionController extends Controller
     {
         try {
             $action();
+        } catch (RevisiConflictException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         } catch (GeneratorException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

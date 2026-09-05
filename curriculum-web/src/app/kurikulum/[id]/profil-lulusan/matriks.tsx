@@ -219,7 +219,7 @@ export function MatrixShell({
             type="button"
             onClick={ai.onRun}
             disabled={ai.busy}
-            className={buttonClass("secondary", "sm") + " shrink-0 whitespace-nowrap"}
+            className={buttonClass("ai", "xs") + " shrink-0 whitespace-nowrap"}
           >
             {ai.busy ? "AI menyusun saran…" : "✨ Saran AI"}
           </button>

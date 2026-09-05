@@ -14,6 +14,8 @@ class DokumenChunk extends Model
         'urutan' => 'integer',
         'halaman' => 'integer',
         'embedding' => 'array',
+        // Null = legacy vector of unknown provenance; reindex before retrieval.
+        'embedding_identity' => 'array',
         'token_count' => 'integer',
     ];
 

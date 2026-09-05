@@ -72,13 +72,15 @@ export function Badge({
 
 // ---- Button & Link-button ----
 const btnBase =
-  "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition focus-ring disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none";
-const btnSizes = { sm: "h-8 px-3", md: "h-9 px-4" };
+  "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg font-medium transition focus-ring disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none";
+const btnSizes = { xs: "h-6 px-2 text-xs", sm: "h-8 px-3 text-sm", md: "h-9 px-4 text-sm" };
 const btnVariants = {
   primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",
   secondary: "border border-border bg-surface text-ink hover:bg-gray-50",
   ghost: "text-brand-700 hover:bg-brand-50",
   danger: "border border-red-200 bg-white text-red-600 hover:bg-red-50",
+  // Varian seragam untuk semua tombol pemicu AI (✨ Saran/Perbaiki/Generate).
+  ai: "border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100",
 };
 
 export function buttonClass(

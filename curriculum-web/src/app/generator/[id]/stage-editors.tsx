@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { buttonClass } from "@/components/ui";
+import { useToast } from "@/components/toast";
 import type { Taksonomi } from "@/lib/api";
 import {
   type CpmkItem,
@@ -9,24 +11,73 @@ import {
   type KomponenItem,
 } from "./draft";
 
+/** Hasil pengisian AI satu item; field terisi dosen dipertahankan server. */
+export type SuggestFn = (
+  item: Record<string, unknown>,
+) => Promise<{ ok: boolean; message?: string; item?: Record<string, unknown> }>;
+
 const inputCls =
   "w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-brand-400";
 const labelCls = "text-[10px] font-semibold uppercase tracking-wide text-gray-400";
 
-function RowShell({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) {
+function RowShell({ children, onRemove, action }: { children: React.ReactNode; onRemove: () => void; action?: React.ReactNode }) {
   return (
     <div className="relative rounded-xl border border-border bg-gray-50/50 p-3">
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute right-2 top-2 text-xs text-gray-400 hover:text-rose-600"
-        title="Hapus"
-      >
-        ✕
-      </button>
+      <div className="absolute right-2 top-2 flex items-center gap-2">
+        {action}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-xs text-gray-400 hover:text-rose-600"
+          title="Hapus"
+        >
+          ✕
+        </button>
+      </div>
       {children}
     </div>
   );
+}
+
+/** Tombol "Isi dengan AI" per kartu — melengkapi kolom kosong, pilihan dosen dipertahankan. */
+function AiFillButton({ busy, disabled, onClick }: { busy: boolean; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={busy || disabled}
+      onClick={onClick}
+      className={buttonClass("ai", "xs")}
+      title="Isi kolom yang masih kosong dengan AI — kolom yang sudah diisi tidak diubah"
+    >
+      {busy ? "Mengisi…" : "✨ Isi dengan AI"}
+    </button>
+  );
+}
+
+/** State & handler bersama pengisian AI per index kartu. */
+function useAiFill<T extends object>(
+  value: T[],
+  set: (i: number, patch: Partial<T>) => void,
+  onSuggest?: SuggestFn,
+) {
+  const toast = useToast();
+  const [aiBusy, setAiBusy] = useState<number | null>(null);
+  const aiFill = async (i: number) => {
+    if (!onSuggest || aiBusy !== null) return;
+    setAiBusy(i);
+    try {
+      const r = await onSuggest(value[i] as Record<string, unknown>);
+      if (r.ok && r.item) {
+        set(i, r.item as Partial<T>);
+        toast({ type: "success", message: "Kolom kosong diisi AI. Tinjau lalu sunting bila perlu." });
+      } else {
+        toast({ type: "error", message: r.message ?? "Gagal mengisi dengan AI." });
+      }
+    } finally {
+      setAiBusy(null);
+    }
+  };
+  return { aiBusy, aiFill };
 }
 
 /** Baca berkas .xlsx/.csv jadi matriks string. */
@@ -274,14 +325,17 @@ export function CpmkEditor({
   onChange,
   cplList = [],
   taksonomiList = [],
+  onSuggest,
 }: {
   value: CpmkItem[];
   onChange: (v: CpmkItem[]) => void;
   cplList?: CplOpt[];
   taksonomiList?: Taksonomi[];
+  onSuggest?: SuggestFn;
 }) {
   const set = (i: number, patch: Partial<CpmkItem>) =>
     onChange(value.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const { aiBusy, aiFill } = useAiFill(value, set, onSuggest);
 
   const importRows = (rows: string[][]) => {
     const data = stripHeader(rows, ["kode", "cpmk"]);
@@ -309,7 +363,11 @@ export function CpmkEditor({
         <ExcelImportInline hint="Kolom: Kode | CPL (pisah ; atau ,) | Taksonomi (pisah ; atau ,) | Deskripsi" onRows={importRows} />
       </div>
       {value.map((c, i) => (
-        <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
+        <RowShell
+          key={i}
+          onRemove={() => onChange(value.filter((_, idx) => idx !== i))}
+          action={onSuggest && <AiFillButton busy={aiBusy === i} disabled={aiBusy !== null} onClick={() => aiFill(i)} />}
+        >
           <div className="grid gap-2 sm:grid-cols-4">
             <label className="sm:col-span-1">
               <span className={labelCls}>Kode</span>
@@ -358,14 +416,17 @@ export function SubCpmkEditor({
   onChange,
   cpmkList = [],
   taksonomiList = [],
+  onSuggest,
 }: {
   value: SubCpmkItem[];
   onChange: (v: SubCpmkItem[]) => void;
   cpmkList?: string[];
   taksonomiList?: Taksonomi[];
+  onSuggest?: SuggestFn;
 }) {
   const set = (i: number, patch: Partial<SubCpmkItem>) =>
     onChange(value.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const { aiBusy, aiFill } = useAiFill(value, set, onSuggest);
 
   const importRows = (rows: string[][]) => {
     const data = stripHeader(rows, ["kode", "sub"]);
@@ -397,7 +458,11 @@ export function SubCpmkEditor({
         />
       </div>
       {value.map((s, i) => (
-        <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
+        <RowShell
+          key={i}
+          onRemove={() => onChange(value.filter((_, idx) => idx !== i))}
+          action={onSuggest && <AiFillButton busy={aiBusy === i} disabled={aiBusy !== null} onClick={() => aiFill(i)} />}
+        >
           <div className="grid gap-2 sm:grid-cols-3">
             <label>
               <span className={labelCls}>Kode</span>
@@ -511,14 +576,17 @@ export function MingguEditor({
   onChange,
   subCpmkList = [],
   estimasiWaktu = "",
+  onSuggest,
 }: {
   value: MingguItem[];
   onChange: (v: MingguItem[]) => void;
   subCpmkList?: SubCpmkOption[];
   estimasiWaktu?: string;
+  onSuggest?: SuggestFn;
 }) {
   const set = (i: number, patch: Partial<MingguItem>) =>
     onChange(value.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const { aiBusy, aiFill } = useAiFill(value, set, onSuggest);
   const duplicateAt = (i: number) => {
     const row = value[i] ?? { minggu_ke: 1 };
     onChange([
@@ -545,7 +613,11 @@ export function MingguEditor({
           : "";
 
         return (
-          <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
+          <RowShell
+            key={i}
+            onRemove={() => onChange(value.filter((_, idx) => idx !== i))}
+            action={onSuggest && <AiFillButton busy={aiBusy === i} disabled={aiBusy !== null} onClick={() => aiFill(i)} />}
+          >
             {/* Kolom (1) Mg + (2) Sub-CPMK + (8) Bobot */}
             <div className="grid gap-2 sm:grid-cols-4">
               <label>
@@ -696,21 +768,28 @@ export function KomponenEditor({
   onChange,
   subCpmkList = [],
   mingguList = [],
+  onSuggest,
 }: {
   value: KomponenItem[];
   onChange: (v: KomponenItem[]) => void;
   subCpmkList?: SubCpmkOption[];
   mingguList?: number[];
+  onSuggest?: SuggestFn;
 }) {
   const set = (i: number, patch: Partial<KomponenItem>) =>
     onChange(value.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const { aiBusy, aiFill } = useAiFill(value, set, onSuggest);
   const total = value.reduce((a, c) => a + (Number(c.bobot_persen) || 0), 0);
   return (
     <div className="space-y-3">
       {value.map((k, i) => {
         const selectedSub = subCpmkList.find((x) => x.kode === (k.sub_cpmk_kode ?? ""));
         return (
-        <RowShell key={i} onRemove={() => onChange(value.filter((_, idx) => idx !== i))}>
+        <RowShell
+          key={i}
+          onRemove={() => onChange(value.filter((_, idx) => idx !== i))}
+          action={onSuggest && <AiFillButton busy={aiBusy === i} disabled={aiBusy !== null} onClick={() => aiFill(i)} />}
+        >
           <div className="grid gap-2 sm:grid-cols-6">
             <label className="sm:col-span-2">
               <span className={labelCls}>Nama</span>

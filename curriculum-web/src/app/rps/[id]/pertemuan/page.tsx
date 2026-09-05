@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiGet, type Single, type RpsDetail } from "@/lib/api";
 import { PageHeader, Card, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
+import { deteksiUjian } from "@/lib/rps-status";
 import { GeneratePertemuanButton } from "./generate-button";
 
 /**
@@ -52,11 +53,11 @@ export default async function RincianPertemuanPage({ params }: { params: Promise
         <div className="space-y-5">
           {minggu.map((m) => {
             const rincian = m.rincian_pertemuan ?? [];
-            const materiLower = (m.materi_pustaka ?? "").toLowerCase();
+            const jenisUjian = deteksiUjian(m.materi_pustaka);
             const evaluasi =
-              materiLower.includes("uts") || materiLower.includes("ujian tengah")
+              jenisUjian === "uts"
                 ? "Evaluasi Tengah Semester (UTS)"
-                : materiLower.includes("uas") || materiLower.includes("ujian akhir")
+                : jenisUjian === "uas"
                   ? "Evaluasi Akhir Semester (UAS)"
                   : null;
 

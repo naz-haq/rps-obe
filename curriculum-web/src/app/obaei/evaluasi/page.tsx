@@ -5,7 +5,6 @@ import { BuatEvaluasi, HapusEvaluasi } from "./forms";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 const basePath = "/obaei/evaluasi";
 
 const STATUS_FILTER = [
@@ -22,14 +21,13 @@ export default async function EvaluasiListPage({ searchParams }: { searchParams:
 
   const [res, cplRes] = await Promise.all([
     apiGet<Paginated<EvaluasiCpl>>("/evaluasi-cpl", {
-      institusi_id: DEFAULT_INSTITUSI,
       sort,
       dir,
       page,
       status: sp.status,
       per_page: 15,
     }).catch(() => null),
-    apiGet<Paginated<Cpl>>("/cpl", { institusi_id: DEFAULT_INSTITUSI, per_page: 200 }).catch(() => null),
+    apiGet<Paginated<Cpl>>("/cpl", { per_page: 200 }).catch(() => null),
   ]);
 
   const cplOptions = (cplRes?.data ?? []).map((c) => ({

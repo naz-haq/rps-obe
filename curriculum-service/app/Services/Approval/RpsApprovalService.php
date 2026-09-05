@@ -31,9 +31,8 @@ class RpsApprovalService
     /** Ajukan RPS untuk ditinjau (draft/revisi → review). */
     public function ajukan(RpsVersion $rps, array $aktor = []): RpsVersion
     {
-        $this->pastikanBoleh('ajukan', $rps->status);
-
         return DB::transaction(function () use ($rps, $aktor) {
+            $rps = $this->lockForTransition($rps, 'ajukan');
             $dari = $rps->status;
             $rps->forceFill([
                 'status'       => 'review',
@@ -50,9 +49,8 @@ class RpsApprovalService
     /** Setujui RPS (review → approved, versi terkunci). */
     public function setujui(RpsVersion $rps, array $aktor = []): RpsVersion
     {
-        $this->pastikanBoleh('setujui', $rps->status);
-
         return DB::transaction(function () use ($rps, $aktor) {
+            $rps = $this->lockForTransition($rps, 'setujui');
             $dari = $rps->status;
             $rps->forceFill([
                 'status'         => 'approved',
@@ -70,14 +68,13 @@ class RpsApprovalService
     /** Minta revisi (review → revisi). Catatan wajib agar dosen tahu perbaikannya. */
     public function mintaRevisi(RpsVersion $rps, array $aktor = []): RpsVersion
     {
-        $this->pastikanBoleh('revisi', $rps->status);
-
         $catatan = trim((string) ($aktor['catatan'] ?? ''));
         if ($catatan === '') {
             throw new ApprovalException('Catatan revisi wajib diisi agar penyusun tahu bagian yang perlu diperbaiki.');
         }
 
         return DB::transaction(function () use ($rps, $aktor, $catatan) {
+            $rps = $this->lockForTransition($rps, 'revisi');
             $dari = $rps->status;
             $rps->forceFill([
                 'status'         => 'revisi',
@@ -93,9 +90,8 @@ class RpsApprovalService
     /** Tarik pengajuan (review → draft) oleh penyusun. */
     public function tarik(RpsVersion $rps, array $aktor = []): RpsVersion
     {
-        $this->pastikanBoleh('tarik', $rps->status);
-
         return DB::transaction(function () use ($rps, $aktor) {
+            $rps = $this->lockForTransition($rps, 'tarik');
             $dari = $rps->status;
             $rps->forceFill([
                 'status'       => 'draft',
@@ -116,6 +112,21 @@ class RpsApprovalService
                 "Aksi '{$aksi}' tidak dapat dilakukan pada RPS berstatus '{$statusSekarang}'."
             );
         }
+    }
+
+    private function lockForTransition(RpsVersion $rps, string $aksi): RpsVersion
+    {
+        // Urutan kunci sama dengan commit: mata kuliah lalu dokumen.
+        \App\Models\MataKuliah::where('institusi_id', $rps->institusi_id)
+            ->where('kode_mk', $rps->kode_mk)->lockForUpdate()->first();
+        $locked = RpsVersion::query()->lockForUpdate()->findOrFail($rps->id);
+        $this->pastikanBoleh($aksi, $locked->status);
+        if (\App\Models\GenerateSession::where('rps_version_id', $locked->id)
+            ->where('status', '!=', 'committed')->exists()
+        ) {
+            throw new ApprovalException('Draf sedang disunting di generator. Commit ulang sebelum melanjutkan persetujuan.');
+        }
+        return $locked;
     }
 
     private function catat(RpsVersion $rps, string $aksi, ?string $dari, string $ke, ?string $catatan, array $aktor): void

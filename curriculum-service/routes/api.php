@@ -41,8 +41,8 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | API Routes — Curriculum Service (prefix: /api/v1)
 |--------------------------------------------------------------------------
-| Auth (Keycloak/JWT) DITUNDA ke fase akhir. Selama pengembangan endpoint
-| dibiarkan terbuka agar mudah diuji, mengikuti pola Survey Service.
+| Health dan login bersifat publik. Seluruh endpoint bisnis wajib memakai
+| token Sanctum; migrasi identitas ke Keycloak/JWT tetap dapat dilakukan nanti.
 */
 
 Route::get('/health', fn() => response()->json([
@@ -52,8 +52,8 @@ Route::get('/health', fn() => response()->json([
 ]));
 
 // Modul Auth & RBAC (Sanctum + spatie/permission)
-Route::post('auth/login', [AuthController::class, 'login']);
-Route::middleware('auth:sanctum')->group(function () {
+Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
+Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
@@ -100,168 +100,175 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
-// Pengaturan AI (profil produksi/simulasi) — dapat diubah dari UI tanpa deploy
-Route::get('ai/pengaturan', [AiPengaturanController::class, 'show']);
-Route::get('ai/pengaturan/model-live', [AiPengaturanController::class, 'modelsLive']);
-Route::put('ai/pengaturan', [AiPengaturanController::class, 'update']);
-Route::put('ai/pengaturan/model', [AiPengaturanController::class, 'updateModel']);
-Route::put('ai/pengaturan/embedding', [AiPengaturanController::class, 'updateEmbedding']);
+Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->group(function () {
+    // Pengaturan AI (profil produksi/simulasi) — dapat diubah dari UI tanpa deploy
+    Route::get('ai/pengaturan', [AiPengaturanController::class, 'show']);
+    Route::get('ai/pengaturan/model-live', [AiPengaturanController::class, 'modelsLive']);
+    Route::put('ai/pengaturan', [AiPengaturanController::class, 'update']);
+    Route::put('ai/pengaturan/model', [AiPengaturanController::class, 'updateModel']);
+    Route::put('ai/pengaturan/embedding', [AiPengaturanController::class, 'updateEmbedding']);
 
-// AI Asistif inline (perbaiki/parafrase/ringkas satu field)
-Route::post('ai/asistif', [AiAsistifController::class, 'asistif']);
+    // AI Asistif inline (perbaiki/parafrase/ringkas satu field)
+    Route::post('ai/asistif', [AiAsistifController::class, 'asistif'])->middleware('throttle:ai');
 
-// Modul 1 — Konfigurasi Aturan (diisi manual, otoritatif)
-Route::get('konfigurasi-aturan', [KonfigurasiAturanController::class, 'index']);
-Route::post('konfigurasi-aturan/upsert', [KonfigurasiAturanController::class, 'upsert']);
-Route::delete('konfigurasi-aturan/{konfigurasiAturan}', [KonfigurasiAturanController::class, 'destroy']);
+    // Modul 1 — Konfigurasi Aturan (diisi manual, otoritatif)
+    Route::get('konfigurasi-aturan', [KonfigurasiAturanController::class, 'index']);
+    Route::post('konfigurasi-aturan/upsert', [KonfigurasiAturanController::class, 'upsert']);
+    Route::delete('konfigurasi-aturan/{konfigurasiAturan}', [KonfigurasiAturanController::class, 'destroy']);
 
-// Template/format dokumen RPS untuk cetak seragam (unggah berkas + tandai aktif)
-Route::get('template-rps', [TemplateRpsController::class, 'index']);
-Route::post('template-rps', [TemplateRpsController::class, 'store']);
-Route::post('template-rps/{template}/activate', [TemplateRpsController::class, 'activate']);
-Route::get('template-rps/{template}/download', [TemplateRpsController::class, 'download']);
-Route::put('template-rps/{template}', [TemplateRpsController::class, 'update']);
-Route::delete('template-rps/{template}', [TemplateRpsController::class, 'destroy']);
+    // Template/format dokumen RPS untuk cetak seragam (unggah berkas + tandai aktif)
+    Route::get('template-rps', [TemplateRpsController::class, 'index']);
+    Route::post('template-rps', [TemplateRpsController::class, 'store']);
+    Route::post('template-rps/{template}/activate', [TemplateRpsController::class, 'activate']);
+    Route::get('template-rps/{template}/download', [TemplateRpsController::class, 'download']);
+    Route::put('template-rps/{template}', [TemplateRpsController::class, 'update']);
+    Route::delete('template-rps/{template}', [TemplateRpsController::class, 'destroy']);
 
-// Prompt AI terpusat: katalog slot bawaan + CRUD override (per-tenant/jenis_mk)
-Route::get('prompts/catalog', [PromptTemplateController::class, 'catalog']);
-Route::apiResource('prompt-templates', PromptTemplateController::class);
+    // Prompt AI terpusat: katalog slot bawaan + CRUD override (per-tenant/jenis_mk)
+    Route::get('prompts/catalog', [PromptTemplateController::class, 'catalog']);
+    Route::post('prompts/reset', [PromptTemplateController::class, 'reset']);
+    Route::apiResource('prompt-templates', PromptTemplateController::class);
 
-// Modul 0 — Onboarding & Column-Mapping
-Route::post('onboarding/preview', [OnboardingController::class, 'preview']);
-Route::get('onboarding/mapping', [OnboardingController::class, 'mappingIndex']);
-Route::post('onboarding/mapping', [OnboardingController::class, 'mappingStore']);
-Route::post('onboarding/import', [OnboardingController::class, 'import']);
+    // Modul 0 — Onboarding & Column-Mapping
+    Route::post('onboarding/preview', [OnboardingController::class, 'preview'])->middleware('throttle:imports');
+    Route::get('onboarding/mapping', [OnboardingController::class, 'mappingIndex']);
+    Route::post('onboarding/mapping', [OnboardingController::class, 'mappingStore']);
+    Route::post('onboarding/import', [OnboardingController::class, 'import'])->middleware('throttle:imports');
 
-// Modul 1 — Peta Kurikulum
-Route::apiResource('kurikulum', KurikulumController::class);
-Route::apiResource('profil-lulusan', ProfilLulusanController::class);
-Route::apiResource('cpl', CplController::class);
-Route::apiResource('mata-kuliah', MataKuliahController::class);
-Route::apiResource('bahan-kajian', BahanKajianController::class);
+    // Modul 1 — Peta Kurikulum
+    Route::apiResource('kurikulum', KurikulumController::class);
+    Route::apiResource('profil-lulusan', ProfilLulusanController::class);
+    Route::apiResource('cpl', CplController::class);
+    Route::apiResource('mata-kuliah', MataKuliahController::class);
+    Route::apiResource('bahan-kajian', BahanKajianController::class);
 
-// Pustaka/Referensi per Mata Kuliah (rujukan "Pustaka Utama & Pendukung" RPS)
-Route::get('referensi', [ReferensiController::class, 'index']);
-Route::post('referensi/sync', [ReferensiController::class, 'sync']);
-Route::post('referensi/suggest', [ReferensiController::class, 'suggest']);
+    // Pustaka/Referensi per Mata Kuliah (rujukan "Pustaka Utama & Pendukung" RPS)
+    Route::get('referensi', [ReferensiController::class, 'index']);
+    Route::post('referensi/sync', [ReferensiController::class, 'sync']);
+    Route::post('referensi/suggest', [ReferensiController::class, 'suggest'])->middleware('throttle:ai');
+    Route::post('mata-kuliah/deskripsi/suggest', [ReferensiController::class, 'suggestDeskripsi'])->middleware('throttle:ai');
 
-// Modul 1 — Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional)
-Route::apiResource('taksonomi', TaksonomiController::class)->parameters(['taksonomi' => 'taksonomi']);
+    // Modul 1 — Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional)
+    Route::apiResource('taksonomi', TaksonomiController::class)->parameters(['taksonomi' => 'taksonomi']);
 
-Route::get('kurikulum/{kurikulum}/matriks', [PetaKurikulumController::class, 'matriks']);
-Route::post('kurikulum/{kurikulum}/matriks/link', [PetaKurikulumController::class, 'link']);
-Route::delete('kurikulum/{kurikulum}/matriks/link', [PetaKurikulumController::class, 'unlink']);
-Route::post('kurikulum/{kurikulum}/matriks/suggest', [PetaKurikulumController::class, 'suggestMataKuliah']);
-Route::get('kurikulum/{kurikulum}/matriks-bahan-kajian', [PetaKurikulumController::class, 'matriksBahanKajian']);
-Route::post('kurikulum/{kurikulum}/matriks-bahan-kajian/link', [PetaKurikulumController::class, 'linkBahanKajian']);
-Route::delete('kurikulum/{kurikulum}/matriks-bahan-kajian/link', [PetaKurikulumController::class, 'unlinkBahanKajian']);
-Route::post('kurikulum/{kurikulum}/matriks-bahan-kajian/suggest', [PetaKurikulumController::class, 'suggestBahanKajian']);
-Route::get('kurikulum/{kurikulum}/matriks-mk-bahan-kajian', [PetaKurikulumController::class, 'matriksMkBahanKajian']);
-Route::post('kurikulum/{kurikulum}/matriks-mk-bahan-kajian/link', [PetaKurikulumController::class, 'linkMkBahanKajian']);
-Route::delete('kurikulum/{kurikulum}/matriks-mk-bahan-kajian/link', [PetaKurikulumController::class, 'unlinkMkBahanKajian']);
-Route::post('kurikulum/{kurikulum}/matriks-mk-bahan-kajian/suggest', [PetaKurikulumController::class, 'suggestMkBahanKajian']);
-Route::get('kurikulum/{kurikulum}/matriks-profil-lulusan', [PetaKurikulumController::class, 'matriksProfilLulusan']);
-Route::post('kurikulum/{kurikulum}/matriks-profil-lulusan/link', [PetaKurikulumController::class, 'linkProfilLulusan']);
-Route::delete('kurikulum/{kurikulum}/matriks-profil-lulusan/link', [PetaKurikulumController::class, 'unlinkProfilLulusan']);
-Route::post('kurikulum/{kurikulum}/matriks-profil-lulusan/suggest', [PetaKurikulumController::class, 'suggestProfilLulusan']);
-Route::get('kurikulum/{kurikulum}/traceability', [PetaKurikulumController::class, 'traceability']);
+    Route::get('kurikulum/{kurikulum}/matriks', [PetaKurikulumController::class, 'matriks']);
+    Route::post('kurikulum/{kurikulum}/matriks/link', [PetaKurikulumController::class, 'link']);
+    Route::delete('kurikulum/{kurikulum}/matriks/link', [PetaKurikulumController::class, 'unlink']);
+    Route::post('kurikulum/{kurikulum}/matriks/suggest', [PetaKurikulumController::class, 'suggestMataKuliah'])->middleware('throttle:ai');
+    Route::get('kurikulum/{kurikulum}/matriks-bahan-kajian', [PetaKurikulumController::class, 'matriksBahanKajian']);
+    Route::post('kurikulum/{kurikulum}/matriks-bahan-kajian/link', [PetaKurikulumController::class, 'linkBahanKajian']);
+    Route::delete('kurikulum/{kurikulum}/matriks-bahan-kajian/link', [PetaKurikulumController::class, 'unlinkBahanKajian']);
+    Route::post('kurikulum/{kurikulum}/matriks-bahan-kajian/suggest', [PetaKurikulumController::class, 'suggestBahanKajian'])->middleware('throttle:ai');
+    Route::get('kurikulum/{kurikulum}/matriks-mk-bahan-kajian', [PetaKurikulumController::class, 'matriksMkBahanKajian']);
+    Route::post('kurikulum/{kurikulum}/matriks-mk-bahan-kajian/link', [PetaKurikulumController::class, 'linkMkBahanKajian']);
+    Route::delete('kurikulum/{kurikulum}/matriks-mk-bahan-kajian/link', [PetaKurikulumController::class, 'unlinkMkBahanKajian']);
+    Route::post('kurikulum/{kurikulum}/matriks-mk-bahan-kajian/suggest', [PetaKurikulumController::class, 'suggestMkBahanKajian'])->middleware('throttle:ai');
+    Route::get('kurikulum/{kurikulum}/matriks-profil-lulusan', [PetaKurikulumController::class, 'matriksProfilLulusan']);
+    Route::post('kurikulum/{kurikulum}/matriks-profil-lulusan/link', [PetaKurikulumController::class, 'linkProfilLulusan']);
+    Route::delete('kurikulum/{kurikulum}/matriks-profil-lulusan/link', [PetaKurikulumController::class, 'unlinkProfilLulusan']);
+    Route::post('kurikulum/{kurikulum}/matriks-profil-lulusan/suggest', [PetaKurikulumController::class, 'suggestProfilLulusan'])->middleware('throttle:ai');
+    Route::get('kurikulum/{kurikulum}/traceability', [PetaKurikulumController::class, 'traceability']);
 
-// Modul — Buku Kurikulum (dokumen kurikulum prodi, ekspor .docx)
-Route::get('kurikulum/{kurikulum}/buku/kelengkapan', [KurikulumBukuController::class, 'kelengkapan']);
-Route::get('kurikulum/{kurikulum}/buku/pratinjau', [KurikulumBukuController::class, 'pratinjau']);
-Route::post('kurikulum/{kurikulum}/buku/naratif', [KurikulumBukuController::class, 'generateNaratif']);
-Route::get('kurikulum/{kurikulum}/buku/docx', [KurikulumBukuController::class, 'unduhDocx']);
+    // Modul — Buku Kurikulum (dokumen kurikulum prodi, ekspor .docx)
+    Route::get('kurikulum/{kurikulum}/buku/kelengkapan', [KurikulumBukuController::class, 'kelengkapan']);
+    Route::get('kurikulum/{kurikulum}/buku/pratinjau', [KurikulumBukuController::class, 'pratinjau']);
+    Route::post('kurikulum/{kurikulum}/buku/naratif', [KurikulumBukuController::class, 'generateNaratif'])->middleware('throttle:ai');
+    Route::get('kurikulum/{kurikulum}/buku/docx', [KurikulumBukuController::class, 'unduhDocx']);
 
-// Modul 2 — RPS Generator (bertahap + grounding)
-Route::apiResource('generate-sessions', GenerateSessionController::class)
-    ->only(['index', 'store', 'show', 'destroy']);
-Route::post('generate-sessions/{generateSession}/generate', [GenerateSessionController::class, 'generate']);
-Route::patch('generate-sessions/{generateSession}/konteks', [GenerateSessionController::class, 'konteks']);
-Route::post('generate-sessions/{generateSession}/accept', [GenerateSessionController::class, 'accept']);
-Route::post('generate-sessions/{generateSession}/reject', [GenerateSessionController::class, 'reject']);
-Route::post('generate-sessions/{generateSession}/pin', [GenerateSessionController::class, 'pin']);
-Route::post('generate-sessions/{generateSession}/item-candidate', [GenerateSessionController::class, 'itemCandidate']);
-Route::post('generate-sessions/{generateSession}/item-apply', [GenerateSessionController::class, 'itemApply']);
-Route::patch('generate-sessions/{generateSession}/item-pin', [GenerateSessionController::class, 'itemPin']);
-Route::post('generate-sessions/{generateSession}/commit', [GenerateSessionController::class, 'commit']);
+    // Modul 2 — RPS Generator (bertahap + grounding)
+    Route::apiResource('generate-sessions', GenerateSessionController::class)
+        ->only(['index', 'store', 'show', 'destroy']);
+    Route::post('generate-sessions/{generateSession}/generate', [GenerateSessionController::class, 'generate'])->middleware('throttle:ai');
+    Route::patch('generate-sessions/{generateSession}/konteks', [GenerateSessionController::class, 'konteks']);
+    Route::post('generate-sessions/{generateSession}/accept', [GenerateSessionController::class, 'accept']);
+    Route::post('generate-sessions/{generateSession}/reject', [GenerateSessionController::class, 'reject']);
+    Route::post('generate-sessions/{generateSession}/pin', [GenerateSessionController::class, 'pin']);
+    Route::post('generate-sessions/{generateSession}/unpin', [GenerateSessionController::class, 'unpin']);
+    Route::post('generate-sessions/{generateSession}/reopen', [GenerateSessionController::class, 'reopen']);
+    Route::post('generate-sessions/{generateSession}/item-candidate', [GenerateSessionController::class, 'itemCandidate'])->middleware('throttle:ai');
+    Route::post('generate-sessions/{generateSession}/item-suggest', [GenerateSessionController::class, 'itemSuggest'])->middleware('throttle:ai');
+    Route::post('generate-sessions/{generateSession}/item-apply', [GenerateSessionController::class, 'itemApply']);
+    Route::patch('generate-sessions/{generateSession}/item-pin', [GenerateSessionController::class, 'itemPin']);
+    Route::post('generate-sessions/{generateSession}/commit', [GenerateSessionController::class, 'commit']);
 
-Route::get('rps-versions', [RpsVersionController::class, 'index']);
-Route::get('rps-versions/{rpsVersion}', [RpsVersionController::class, 'show']);
-Route::delete('rps-versions/{rpsVersion}', [RpsVersionController::class, 'destroy']);
-Route::get('rps-versions/{rpsVersion}/traceability', [RpsVersionController::class, 'traceability']);
-Route::get('rps-versions/{rpsVersion}/cetak', [RpsVersionController::class, 'cetak']);
-Route::get('rps-versions/{rpsVersion}/docx', [RpsVersionController::class, 'unduhDocx']);
+    Route::get('rps-versions', [RpsVersionController::class, 'index']);
+    Route::get('rps-versions/{rpsVersion}', [RpsVersionController::class, 'show']);
+    Route::delete('rps-versions/{rpsVersion}', [RpsVersionController::class, 'destroy']);
+    Route::get('rps-versions/{rpsVersion}/traceability', [RpsVersionController::class, 'traceability']);
+    Route::get('rps-versions/{rpsVersion}/cetak', [RpsVersionController::class, 'cetak']);
+    Route::get('rps-versions/{rpsVersion}/docx', [RpsVersionController::class, 'unduhDocx']);
 
-// Modul 2 — Layanan AI di atas RPS: audit keselarasan (#6) & chat konsultan (#7)
-Route::post('generate-sessions/{generateSession}/audit', [RpsAiController::class, 'auditSession']);
-Route::post('rps-versions/{rpsVersion}/audit', [RpsAiController::class, 'auditRpsVersion']);
-Route::post('rps-versions/{rpsVersion}/generate-pertemuan', [RpsAiController::class, 'generatePertemuan']);
-Route::post('rps/ai/chat', [RpsAiController::class, 'chat']);
+    // Modul 2 — Layanan AI di atas RPS: audit keselarasan (#6) & chat konsultan (#7)
+    Route::post('generate-sessions/{generateSession}/audit', [RpsAiController::class, 'auditSession'])->middleware('throttle:ai');
+    Route::post('rps-versions/{rpsVersion}/audit', [RpsAiController::class, 'auditRpsVersion'])->middleware('throttle:ai');
+    Route::post('rps-versions/{rpsVersion}/generate-pertemuan', [RpsAiController::class, 'generatePertemuan'])->middleware('throttle:ai');
+    Route::post('rps/ai/chat', [RpsAiController::class, 'chat'])->middleware('throttle:ai');
 
-// Modul 3 — Validator Overlap (deteksi keterampilan diklaim >1 MK)
-Route::get('validasi-overlap', [ValidasiOverlapController::class, 'index']);
-Route::get('validasi-overlap/{validasiOverlap}', [ValidasiOverlapController::class, 'show']);
-Route::post('validasi-overlap/pindai', [ValidasiOverlapController::class, 'pindai']);
-Route::post('validasi-overlap/{validasiOverlap}/analisis', [ValidasiOverlapController::class, 'analisis']);
-Route::put('validasi-overlap/{validasiOverlap}/review', [ValidasiOverlapController::class, 'review']);
+    // Modul 3 — Validator Overlap (deteksi keterampilan diklaim >1 MK)
+    Route::get('validasi-overlap', [ValidasiOverlapController::class, 'index']);
+    Route::get('validasi-overlap/{validasiOverlap}', [ValidasiOverlapController::class, 'show']);
+    Route::post('validasi-overlap/pindai', [ValidasiOverlapController::class, 'pindai']);
+    Route::post('validasi-overlap/{validasiOverlap}/analisis', [ValidasiOverlapController::class, 'analisis'])->middleware('throttle:ai');
+    Route::put('validasi-overlap/{validasiOverlap}/review', [ValidasiOverlapController::class, 'review']);
 
-// Modul 4 — Workflow Approval (Dosen → Kaprodi/STPMP, audit trail)
-Route::get('persetujuan', [RpsApprovalController::class, 'antrian']);
-Route::get('rps-versions/{rpsVersion}/riwayat-persetujuan', [RpsApprovalController::class, 'riwayat']);
-Route::post('rps-versions/{rpsVersion}/ajukan', [RpsApprovalController::class, 'ajukan']);
-Route::post('rps-versions/{rpsVersion}/setujui', [RpsApprovalController::class, 'setujui']);
-Route::post('rps-versions/{rpsVersion}/revisi', [RpsApprovalController::class, 'revisi']);
-Route::post('rps-versions/{rpsVersion}/tarik', [RpsApprovalController::class, 'tarik']);
+    // Modul 4 — Workflow Approval (Dosen → Kaprodi/STPMP, audit trail)
+    Route::get('persetujuan', [RpsApprovalController::class, 'antrian']);
+    Route::get('rps-versions/{rpsVersion}/riwayat-persetujuan', [RpsApprovalController::class, 'riwayat']);
+    Route::post('rps-versions/{rpsVersion}/ajukan', [RpsApprovalController::class, 'ajukan']);
+    Route::post('rps-versions/{rpsVersion}/setujui', [RpsApprovalController::class, 'setujui']);
+    Route::post('rps-versions/{rpsVersion}/revisi', [RpsApprovalController::class, 'revisi']);
+    Route::post('rps-versions/{rpsVersion}/tarik', [RpsApprovalController::class, 'tarik']);
 
-// Modul 6 — OBAEI (evaluasi ketercapaian CPL + tindak lanjut, closing the loop)
-Route::get('obaei/agregasi', [EvaluasiCplController::class, 'agregasi']);
+    // Modul 6 — OBAEI (evaluasi ketercapaian CPL + tindak lanjut, closing the loop)
+    Route::get('obaei/agregasi', [EvaluasiCplController::class, 'agregasi']);
 
-Route::get('target-cpl', [TargetCplController::class, 'index']);
-Route::post('target-cpl', [TargetCplController::class, 'store']);
-Route::put('target-cpl/{targetCpl}', [TargetCplController::class, 'update']);
-Route::delete('target-cpl/{targetCpl}', [TargetCplController::class, 'destroy']);
+    Route::get('target-cpl', [TargetCplController::class, 'index']);
+    Route::post('target-cpl', [TargetCplController::class, 'store']);
+    Route::put('target-cpl/{targetCpl}', [TargetCplController::class, 'update']);
+    Route::delete('target-cpl/{targetCpl}', [TargetCplController::class, 'destroy']);
 
-Route::get('capaian-mahasiswa', [CapaianMahasiswaController::class, 'index']);
-Route::post('capaian-mahasiswa', [CapaianMahasiswaController::class, 'store']);
-Route::put('capaian-mahasiswa/{capaianMahasiswa}', [CapaianMahasiswaController::class, 'update']);
-Route::delete('capaian-mahasiswa/{capaianMahasiswa}', [CapaianMahasiswaController::class, 'destroy']);
+    Route::get('capaian-mahasiswa', [CapaianMahasiswaController::class, 'index']);
+    Route::post('capaian-mahasiswa', [CapaianMahasiswaController::class, 'store']);
+    Route::put('capaian-mahasiswa/{capaianMahasiswa}', [CapaianMahasiswaController::class, 'update']);
+    Route::delete('capaian-mahasiswa/{capaianMahasiswa}', [CapaianMahasiswaController::class, 'destroy']);
 
-Route::get('evaluasi-cpl', [EvaluasiCplController::class, 'index']);
-Route::get('evaluasi-cpl/{evaluasiCpl}', [EvaluasiCplController::class, 'show']);
-Route::post('evaluasi-cpl', [EvaluasiCplController::class, 'store']);
-Route::put('evaluasi-cpl/{evaluasiCpl}', [EvaluasiCplController::class, 'update']);
-Route::post('evaluasi-cpl/{evaluasiCpl}/analisis', [EvaluasiCplController::class, 'analisis']);
-Route::post('evaluasi-cpl/{evaluasiCpl}/finalisasi', [EvaluasiCplController::class, 'finalisasi']);
-Route::delete('evaluasi-cpl/{evaluasiCpl}', [EvaluasiCplController::class, 'destroy']);
+    Route::get('evaluasi-cpl', [EvaluasiCplController::class, 'index']);
+    Route::get('evaluasi-cpl/{evaluasiCpl}', [EvaluasiCplController::class, 'show']);
+    Route::post('evaluasi-cpl', [EvaluasiCplController::class, 'store']);
+    Route::put('evaluasi-cpl/{evaluasiCpl}', [EvaluasiCplController::class, 'update']);
+    Route::post('evaluasi-cpl/{evaluasiCpl}/analisis', [EvaluasiCplController::class, 'analisis'])->middleware('throttle:ai');
+    Route::post('evaluasi-cpl/{evaluasiCpl}/finalisasi', [EvaluasiCplController::class, 'finalisasi']);
+    Route::delete('evaluasi-cpl/{evaluasiCpl}', [EvaluasiCplController::class, 'destroy']);
 
-Route::post('evaluasi-cpl/{evaluasiCpl}/tindak-lanjut', [TindakLanjutController::class, 'store']);
-Route::put('tindak-lanjut/{tindakLanjut}', [TindakLanjutController::class, 'update']);
-Route::delete('tindak-lanjut/{tindakLanjut}', [TindakLanjutController::class, 'destroy']);
+    Route::post('evaluasi-cpl/{evaluasiCpl}/tindak-lanjut', [TindakLanjutController::class, 'store']);
+    Route::put('tindak-lanjut/{tindakLanjut}', [TindakLanjutController::class, 'update']);
+    Route::delete('tindak-lanjut/{tindakLanjut}', [TindakLanjutController::class, 'destroy']);
 
-// Modul 0a — Dokumen Rujukan (Doc-intel + RAG)
-Route::apiResource('badan-rujukan', BadanRujukanController::class);
-Route::get('dokumen-rujukan', [DokumenRujukanController::class, 'index']);
-Route::post('dokumen-rujukan', [DokumenRujukanController::class, 'store']);
-Route::get('dokumen-rujukan/search', [DokumenRujukanController::class, 'search']);
-Route::get('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'show']);
-Route::patch('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'update']);
-Route::post('dokumen-rujukan/{dokumenRujukan}/reindex', [DokumenRujukanController::class, 'reindex']);
-Route::delete('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'destroy']);
-// Tautan dokumen ↔ mata kuliah (satu dokumen dipakai lintas MK tanpa unggah ulang)
-Route::get('dokumen-rujukan/{dokumenRujukan}/mata-kuliah', [DokumenRujukanController::class, 'mataKuliahIndex']);
-Route::post('dokumen-rujukan/{dokumenRujukan}/mata-kuliah', [DokumenRujukanController::class, 'mataKuliahAttach']);
-Route::delete('dokumen-rujukan/{dokumenRujukan}/mata-kuliah/{kodeMk}', [DokumenRujukanController::class, 'mataKuliahDetach']);
+    // Modul 0a — Dokumen Rujukan (Doc-intel + RAG)
+    Route::apiResource('badan-rujukan', BadanRujukanController::class);
+    Route::get('dokumen-rujukan', [DokumenRujukanController::class, 'index']);
+    Route::post('dokumen-rujukan', [DokumenRujukanController::class, 'store']);
+    Route::get('dokumen-rujukan/search', [DokumenRujukanController::class, 'search']);
+    Route::get('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'show']);
+    Route::patch('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'update']);
+    Route::post('dokumen-rujukan/{dokumenRujukan}/reindex', [DokumenRujukanController::class, 'reindex']);
+    Route::delete('dokumen-rujukan/{dokumenRujukan}', [DokumenRujukanController::class, 'destroy']);
+    // Tautan dokumen ↔ mata kuliah (satu dokumen dipakai lintas MK tanpa unggah ulang)
+    Route::get('dokumen-rujukan/{dokumenRujukan}/mata-kuliah', [DokumenRujukanController::class, 'mataKuliahIndex']);
+    Route::post('dokumen-rujukan/{dokumenRujukan}/mata-kuliah', [DokumenRujukanController::class, 'mataKuliahAttach']);
+    Route::delete('dokumen-rujukan/{dokumenRujukan}/mata-kuliah/{kodeMk}', [DokumenRujukanController::class, 'mataKuliahDetach']);
 
-// Modul 0b — Checklist Penyelarasan Acuan
-Route::apiResource('kerangka-acuan', KerangkaAcuanController::class);
-Route::post('kerangka-acuan/{kerangkaAcuan}/butir', [ButirAcuanController::class, 'store']);
-Route::put('butir-acuan/{butirAcuan}', [ButirAcuanController::class, 'update']);
-Route::delete('butir-acuan/{butirAcuan}', [ButirAcuanController::class, 'destroy']);
-Route::post('pemenuhan-acuan/upsert', [PemenuhanAcuanController::class, 'upsert']);
+    // Modul 0b — Checklist Penyelarasan Acuan
+    Route::apiResource('kerangka-acuan', KerangkaAcuanController::class);
+    Route::post('kerangka-acuan/{kerangkaAcuan}/butir', [ButirAcuanController::class, 'store']);
+    Route::put('butir-acuan/{butirAcuan}', [ButirAcuanController::class, 'update']);
+    Route::delete('butir-acuan/{butirAcuan}', [ButirAcuanController::class, 'destroy']);
+    Route::post('pemenuhan-acuan/upsert', [PemenuhanAcuanController::class, 'upsert']);
 
-// Modul 8 — Tata Kelola & Monitoring (dashboard biaya/penggunaan + audit log + notifikasi)
-Route::get('governance/ringkasan', [GovernanceController::class, 'ringkasan']);
-Route::get('governance/penggunaan', [GovernanceController::class, 'penggunaan']);
-Route::get('governance/audit-log', [GovernanceController::class, 'auditLog']);
-Route::get('governance/notifikasi', [GovernanceController::class, 'notifikasi']);
-Route::post('governance/notifikasi/{notifikasi}/dibaca', [GovernanceController::class, 'tandaiDibaca']);
+    // Modul 8 — Tata Kelola & Monitoring (dashboard biaya/penggunaan + audit log + notifikasi)
+    Route::get('governance/ringkasan', [GovernanceController::class, 'ringkasan']);
+    Route::get('governance/penggunaan', [GovernanceController::class, 'penggunaan']);
+    Route::get('governance/audit-log', [GovernanceController::class, 'auditLog']);
+    Route::get('governance/notifikasi', [GovernanceController::class, 'notifikasi']);
+    Route::post('governance/notifikasi/{notifikasi}/dibaca', [GovernanceController::class, 'tandaiDibaca']);
+});

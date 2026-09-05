@@ -11,10 +11,12 @@ class PromptTemplate extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'institusi_id' => 'integer',
         'skema_output' => 'array',
         'few_shot' => 'array',
         'versi' => 'integer',
         'aktif' => 'boolean',
+        'use_default' => 'boolean',
     ];
 
     public function institusi(): BelongsTo

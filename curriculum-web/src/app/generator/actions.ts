@@ -3,13 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPatch, apiDelete, type ApiResult, type ItemCandidate } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 
 export async function startSession(formData: FormData): Promise<ApiResult> {
   const mk_id = Number(formData.get("mk_id"));
   const sumber = (formData.get("sumber") as string) || "baru";
   const res = await apiPost("/generate-sessions", {
-    institusi_id: DEFAULT_INSTITUSI,
     mk_id,
     sumber,
     kompetensi_khusus: ((formData.get("kompetensi_khusus") as string) || "").trim() || null,
@@ -33,7 +31,6 @@ export async function updateKonteks(
 /** Simpan detail MK yang menjadi tanggung jawab dosen (deskripsi + pustaka). */
 export async function saveDetailMk(sessionId: number, formData: FormData): Promise<ApiResult> {
   const mkId = Number(formData.get("mk_id"));
-  const institusiId = Number(formData.get("institusi_id")) || DEFAULT_INSTITUSI;
   const kodeMk = (formData.get("kode_mk") as string) || "";
 
   const res = await apiPatch(`/mata-kuliah/${mkId}`, {
@@ -49,7 +46,7 @@ export async function saveDetailMk(sessionId: number, formData: FormData): Promi
       const items = (Array.isArray(arr) ? arr : [])
         .map((r) => ({ tipe: r.tipe === "pendukung" ? "pendukung" : "utama", sitasi: String(r.sitasi ?? "").trim() }))
         .filter((r) => r.sitasi !== "");
-      const sync = await apiPost("/referensi/sync", { institusi_id: institusiId, kode_mk: kodeMk, items });
+      const sync = await apiPost("/referensi/sync", { kode_mk: kodeMk, items });
       if (!sync.ok) return sync;
     } catch {
       // referensi_json korup → biarkan; deskripsi sudah tersimpan
@@ -126,11 +123,28 @@ export async function pinStage(id: number, stage: string): Promise<ApiResult> {
   return res;
 }
 
+export async function unpinStage(id: number, stage: string): Promise<ApiResult> {
+  const res = await apiPost(`/generate-sessions/${id}/unpin`, { stage });
+  revalidatePath(`/generator/${id}`);
+  return res;
+}
+
 export async function commitSession(id: number): Promise<ApiResult> {
   const res = await apiPost(`/generate-sessions/${id}/commit`);
   revalidatePath(`/generator/${id}`);
   revalidatePath("/generator");
   revalidatePath("/rps");
+  revalidatePath("/rps/[id]", "page");
+  return res;
+}
+
+export async function reopenSession(id: number, catatan: string): Promise<ApiResult> {
+  const res = await apiPost(`/generate-sessions/${id}/reopen`, { catatan });
+  revalidatePath(`/generator/${id}`);
+  revalidatePath("/generator");
+  revalidatePath("/rps");
+  revalidatePath("/rps/[id]", "page");
+  revalidatePath("/persetujuan");
   return res;
 }
 
@@ -176,6 +190,21 @@ export async function regenerateItem(
   return { ok: true, candidate: res.data };
 }
 
+/** Isi kolom kosong SATU item dari editor manual dengan AI — field terisi dipertahankan server, draf tak disentuh. */
+export async function suggestItemFill(
+  id: number,
+  stage: string,
+  item: Record<string, unknown>,
+  instruction?: string,
+): Promise<{ ok: boolean; message?: string; item?: Record<string, unknown> }> {
+  const res = await apiPost<{ stage: string; item: Record<string, unknown> }>(
+    `/generate-sessions/${id}/item-suggest`,
+    { stage, item, instruction: instruction ?? null },
+  );
+  if (!res.ok) return { ok: false, message: res.message };
+  return { ok: true, item: res.data?.item };
+}
+
 /** Terapkan usulan satu item (optimistic locking; konflik → status 409). */
 export async function applyItem(
   id: number,
@@ -213,7 +242,6 @@ export async function chatConsult(
   messages: ChatMessage[],
 ): Promise<{ ok: boolean; message?: string; text?: string }> {
   const res = await apiPost<{ text: string }>(`/rps/ai/chat`, {
-    institusi_id: DEFAULT_INSTITUSI,
     messages,
     generate_session_id: sessionId,
   });

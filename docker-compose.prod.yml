@@ -31,7 +31,7 @@ services:
     networks: [internal]
 
   api:
-    image: ghcr.io/naz-haq/rps-api:latest
+    image: ghcr.io/naz-haq/rps-api:${IMAGE_TAG:-latest}
     build:
       context: ./curriculum-service
     restart: unless-stopped
@@ -52,6 +52,9 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DRIVER: database
+      SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-true}
+      SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
+      SESSION_ENCRYPT: ${SESSION_ENCRYPT:-true}
       CACHE_STORE: database
       QUEUE_CONNECTION: database
       AI_PROFILE: ${AI_PROFILE:-simulasi}
@@ -67,6 +70,9 @@ services:
       AI_HTTP_TIMEOUT: ${AI_HTTP_TIMEOUT:-90}
       AI_HTTP_MAX_ATTEMPTS: ${AI_HTTP_MAX_ATTEMPTS:-2}
       AI_CACHE_TTL: ${AI_CACHE_TTL:-0}
+      AI_PROMPT_VERSION: ${AI_PROMPT_VERSION:-v1}
+      AI_SCHEMA_VERSION: ${AI_SCHEMA_VERSION:-v1}
+      AI_SOURCE_VERSION: ${AI_SOURCE_VERSION:-v1}
       AI_EMBED_PROVIDER: ${AI_EMBED_PROVIDER:-openai}
       AI_EMBED_MODEL: ${AI_EMBED_MODEL:-text-embedding-3-small}
       AI_EMBED_DIMENSIONS: ${AI_EMBED_DIMENSIONS:-1536}
@@ -89,7 +95,7 @@ services:
     networks: [internal]
 
   web:
-    image: ghcr.io/naz-haq/rps-web:latest
+    image: ghcr.io/naz-haq/rps-web:${IMAGE_TAG:-latest}
     build:
       context: ./curriculum-web
       args:

@@ -356,8 +356,10 @@ class RpsDocxExporter
         }
 
         foreach ($minggu as $m) {
-            $isUts = str_contains(strtolower((string) $m->materi_pustaka), 'uts') || str_contains(strtolower((string) $m->materi_pustaka), 'ujian tengah');
-            $isUas = str_contains(strtolower((string) $m->materi_pustaka), 'uas') || str_contains(strtolower((string) $m->materi_pustaka), 'ujian akhir');
+            // Word-boundary: substring 'uas' ada di kata biasa (menstruasi, evaluasi).
+            $t = strtolower((string) $m->materi_pustaka);
+            $isUts = (bool) preg_match('/\buts\b|ujian tengah|evaluasi tengah/', $t);
+            $isUas = ! $isUts && preg_match('/\buas\b|ujian akhir|evaluasi akhir/', $t);
             if ($isUts || $isUas) {
                 $table->addRow();
                 $this->dataCell($table, (string) $m->minggu_ke, $widths[0], Jc::CENTER);

@@ -10,7 +10,8 @@ use App\Models\PromptTemplate;
  * RpsGeneratorService (generator bertahap) & GroundingValidator (validasi).
  *
  * Prioritas efektif: override DB (tenant > jenis_mk spesifik > versi terbaru)
- * lalu fallback default config. Bila override kosong/nonaktif → kembali default.
+ * lalu fallback default config. Penanda use_default menghentikan fallback DB
+ * dan selalu membaca default kode terkini, bukan salinan saat reset.
  */
 class PromptRepository
 {
@@ -23,21 +24,22 @@ class PromptRepository
     {
         $default = config("prompts.slots.{$slot}", []);
         $template = $this->override($slot, $institusiId, $jenisMk);
+        $useOverride = $template !== null && ! $template->use_default;
 
-        $system = $template?->sistem_prompt ?: ($default['system'] ?? '');
-        $schema = $template && ! empty($template->skema_output)
+        $system = $useOverride ? ($template->sistem_prompt ?: ($default['system'] ?? '')) : ($default['system'] ?? '');
+        $schema = $useOverride && ! empty($template->skema_output)
             ? (string) json_encode($template->skema_output, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             : ($default['schema'] ?? '');
 
         return [
             'system'      => $system,
             'schema'      => $schema,
-            'sumber'      => $template ? 'override' : 'default',
+            'sumber'      => $useOverride ? 'override' : 'default',
             'template_id' => $template?->id,
         ];
     }
 
-    /** Baris override aktif paling relevan untuk slot (atau null bila tak ada). */
+    /** Baris aktif terpilih (override ATAU penanda default). */
     public function override(string $slot, ?int $institusiId, ?string $jenisMk): ?PromptTemplate
     {
         return PromptTemplate::query()
@@ -48,6 +50,7 @@ class PromptRepository
             ->orderByRaw('institusi_id IS NULL')  // template tenant diprioritaskan
             ->orderByRaw('jenis_mk IS NULL')      // yang spesifik jenis_mk diprioritaskan
             ->orderByDesc('versi')
+            ->orderByDesc('id')                   // deterministik untuk versi legacy duplikat
             ->first();
     }
 

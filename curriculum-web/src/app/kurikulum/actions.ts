@@ -3,11 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPut, apiDelete } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 
 export async function createKurikulum(formData: FormData) {
   const body = {
-    institusi_id: DEFAULT_INSTITUSI,
     kode: (formData.get("kode") as string) || null,
     nama: formData.get("nama") as string,
     tahun: formData.get("tahun") as string,

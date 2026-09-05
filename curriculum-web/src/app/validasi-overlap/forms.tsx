@@ -62,7 +62,7 @@ export function AnalisisButton({ id }: { id: number }) {
     <button
       type="button"
       disabled={pending}
-      className={buttonClass("secondary", "sm")}
+      className={buttonClass("ai", "xs")}
       onClick={async () => {
         setPending(true);
         const r = await analisisOverlap(id);

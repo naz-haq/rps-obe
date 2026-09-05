@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, type ApiResult, type Referensi, type DokumenRujukan } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 
 function base(kurikulumId: string) {
   return `/kurikulum/${kurikulumId}/mata-kuliah`;
@@ -37,14 +36,14 @@ function parseReferensi(fd: FormData): ReferensiItem[] {
 }
 
 /** Ganti-total referensi satu MK (dipakai setelah MK tersimpan). */
-async function syncReferensi(institusiId: number, kodeMk: string, items: ReferensiItem[]) {
-  await apiPost("/referensi/sync", { institusi_id: institusiId, kode_mk: kodeMk, items });
+async function syncReferensi(kodeMk: string, items: ReferensiItem[]) {
+  await apiPost("/referensi/sync", { kode_mk: kodeMk, items });
 }
 
 /** Muat referensi satu MK untuk mengisi editor saat modal dibuka. */
-export async function listReferensi(institusiId: number, kodeMk: string): Promise<Referensi[]> {
+export async function listReferensi(kodeMk: string): Promise<Referensi[]> {
   try {
-    const res = await apiGet<{ data: Referensi[] }>("/referensi", { institusi_id: institusiId, kode_mk: kodeMk });
+    const res = await apiGet<{ data: Referensi[] }>("/referensi", { kode_mk: kodeMk });
     return res.data ?? [];
   } catch {
     return [];
@@ -60,12 +59,30 @@ export async function suggestReferensi(input: {
   kode_mk?: string;
 }): Promise<ApiResult<ReferensiItem[]>> {
   return apiPost<ReferensiItem[]>("/referensi/suggest", {
-    institusi_id: DEFAULT_INSTITUSI,
     nama: input.nama,
     jenis: input.jenis ?? null,
     sks: input.sks ?? null,
     deskripsi: input.deskripsi ?? null,
     kode_mk: input.kode_mk ?? null,
+  });
+}
+
+/** Saran deskripsi singkat MK via AI — draf yang wajib ditinjau dosen. */
+export async function suggestDeskripsiMk(input: {
+  nama: string;
+  jenis?: string | null;
+  sks_teori?: number | null;
+  sks_praktik?: number | null;
+  kode_mk?: string | null;
+  deskripsi?: string | null;
+}): Promise<ApiResult<{ deskripsi: string }>> {
+  return apiPost<{ deskripsi: string }>("/mata-kuliah/deskripsi/suggest", {
+    nama: input.nama,
+    jenis: input.jenis ?? null,
+    sks_teori: input.sks_teori ?? null,
+    sks_praktik: input.sks_praktik ?? null,
+    kode_mk: input.kode_mk ?? null,
+    deskripsi: input.deskripsi ?? null,
   });
 }
 
@@ -75,7 +92,6 @@ export async function suggestReferensi(input: {
 export async function listDokumenTautan(kodeMk: string): Promise<DokumenRujukan[]> {
   try {
     const res = await apiGet<{ data: DokumenRujukan[] }>("/dokumen-rujukan", {
-      institusi_id: DEFAULT_INSTITUSI,
       kode_mk: kodeMk,
       per_page: 100,
     });
@@ -89,7 +105,6 @@ export async function listDokumenTautan(kodeMk: string): Promise<DokumenRujukan[
 export async function cariDokumen(q: string): Promise<DokumenRujukan[]> {
   try {
     const res = await apiGet<{ data: DokumenRujukan[] }>("/dokumen-rujukan", {
-      institusi_id: DEFAULT_INSTITUSI,
       q,
       per_page: 20,
     });
@@ -115,7 +130,6 @@ export async function unggahDokumenUntukMk(
   formData: FormData
 ): Promise<ApiResult<DokumenRujukan> & { dedup?: boolean }> {
   const fd = new FormData();
-  fd.set("institusi_id", String(DEFAULT_INSTITUSI));
   fd.set("kode_mk", kodeMk);
   fd.set("jenis", (formData.get("jenis") as string) || "buku");
   fd.set("judul", (formData.get("judul") as string) || "");
@@ -128,10 +142,8 @@ export async function unggahDokumenUntukMk(
 
 export async function createMataKuliah(formData: FormData) {
   const kurikulumId = formData.get("kurikulum_id") as string;
-  const institusiId = toInt(formData.get("institusi_id")) ?? DEFAULT_INSTITUSI;
   const kodeMk = formData.get("kode_mk") as string;
   const body = {
-    institusi_id: institusiId,
     kurikulum_id: Number(kurikulumId),
     kode_mk: kodeMk,
     nama: formData.get("nama") as string,
@@ -152,7 +164,7 @@ export async function createMataKuliah(formData: FormData) {
   };
   const res = await apiPost("/mata-kuliah", body);
   if (res.ok && kodeMk && formData.has("referensi_json")) {
-    await syncReferensi(institusiId, kodeMk, parseReferensi(formData));
+    await syncReferensi(kodeMk, parseReferensi(formData));
   }
   revalidatePath(base(kurikulumId));
   return res;
@@ -161,10 +173,8 @@ export async function createMataKuliah(formData: FormData) {
 export async function updateMataKuliah(formData: FormData) {
   const id = formData.get("id") as string;
   const kurikulumId = formData.get("kurikulum_id") as string;
-  const institusiId = toInt(formData.get("institusi_id")) ?? DEFAULT_INSTITUSI;
   const kodeMk = formData.get("kode_mk") as string;
   const body = {
-    institusi_id: institusiId,
     kode_mk: kodeMk,
     nama: formData.get("nama") as string,
     jenis_mk: (formData.get("jenis_mk") as string) || "murni",
@@ -184,12 +194,12 @@ export async function updateMataKuliah(formData: FormData) {
   };
   const res = await apiPut(`/mata-kuliah/${id}`, body);
   if (res.ok && kodeMk && formData.has("referensi_json")) {
-    await syncReferensi(institusiId, kodeMk, parseReferensi(formData));
+    await syncReferensi(kodeMk, parseReferensi(formData));
     // Jika kode MK diubah, pindahkan referensi ke kode baru (sudah dilakukan di
     // atas) lalu bersihkan sisa yatim pada kode lama.
     const kodeMkLama = (formData.get("kode_mk_lama") as string) || "";
     if (kodeMkLama && kodeMkLama !== kodeMk) {
-      await syncReferensi(institusiId, kodeMkLama, []);
+      await syncReferensi(kodeMkLama, []);
     }
   }
   revalidatePath(base(kurikulumId));

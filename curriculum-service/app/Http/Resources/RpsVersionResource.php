@@ -10,6 +10,7 @@ class RpsVersionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $session = \App\Models\GenerateSession::where('rps_version_id', $this->id)->latest('id')->first();
         return [
             'id'                 => $this->id,
             'ulid'               => $this->ulid,
@@ -17,6 +18,11 @@ class RpsVersionResource extends JsonResource
             'kode_mk'            => $this->kode_mk,
             'versi'              => $this->versi,
             'status'             => $this->status,
+            'generate_session_id' => $session?->id,
+            'editing_in_generator' => $session && $session->status !== 'committed',
+            'can_reopen' => $session && $session->status === 'committed'
+                && in_array($this->status, ['draft', 'review', 'revisi'], true)
+                && ! $this->pernahDisetujui(),
             'bahasa'             => $this->bahasa,
             'kode_dokumen'       => $this->kode_dokumen,
             'created_by'         => $this->created_by,

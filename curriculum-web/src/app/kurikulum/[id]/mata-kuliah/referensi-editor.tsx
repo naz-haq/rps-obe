@@ -24,7 +24,7 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
   useEffect(() => {
     let aktif = true;
     if (mk?.kode_mk) {
-      listReferensi(mk.institusi_id, mk.kode_mk).then((data) => {
+      listReferensi(mk.kode_mk).then((data) => {
         if (!aktif) return;
         setRows(data.map((r) => ({ tipe: r.tipe, sitasi: r.sitasi })));
         setLoading(false);
@@ -105,7 +105,7 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
           type="button"
           onClick={saranAi}
           disabled={busyAi}
-          className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 transition hover:bg-brand-100 disabled:opacity-50"
+          className={buttonClass("ai", "xs")}
         >
           {busyAi ? "Meminta…" : "✨ Saran AI"}
         </button>

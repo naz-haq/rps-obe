@@ -1,11 +1,23 @@
 import type { NextConfig } from "next";
 
-// Origin backend Laravel (curriculum-service). Bisa di-override via env.
-const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8100";
-
 const nextConfig: NextConfig = {
   // Bundel mandiri (.next/standalone -> server.js) agar image Docker ramping.
   output: "standalone",
+
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
 
   // Izinkan akses dev-server dari domain tunnel (VS Code / Cloudflare / ngrok /
   // GitHub Codespaces) supaya aset _next tidak diblokir saat diuji orang lain.
@@ -36,16 +48,6 @@ const nextConfig: NextConfig = {
     },
   },
 
-  // Proxy: tautan unduhan/cetak dari browser (/backend/...) diteruskan ke
-  // backend Laravel. Dengan begini tester cukup memakai SATU URL (frontend).
-  async rewrites() {
-    return [
-      {
-        source: "/backend/:path*",
-        destination: `${backendOrigin}/:path*`,
-      },
-    ];
-  },
 };
 
 export default nextConfig;

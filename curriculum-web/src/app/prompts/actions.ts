@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiPost, apiPut, apiDelete, type ApiResult } from "@/lib/api";
+import { apiPost, apiPut, type ApiResult } from "@/lib/api";
 
 /** Buat override prompt untuk sebuah slot (jenis_output). */
 export async function createOverride(fd: FormData): Promise<ApiResult> {
@@ -10,6 +10,7 @@ export async function createOverride(fd: FormData): Promise<ApiResult> {
     sistem_prompt: String(fd.get("sistem_prompt") ?? ""),
     skema_output: String(fd.get("skema_output") ?? "").trim() || null,
     jenis_mk: (String(fd.get("jenis_mk") ?? "") || null) as string | null,
+    institusi_id: String(fd.get("institusi_id") ?? "") || null,
     aktif: true,
   };
   const res = await apiPost("/prompt-templates", payload);
@@ -25,18 +26,21 @@ export async function updateOverride(fd: FormData): Promise<ApiResult> {
     sistem_prompt: String(fd.get("sistem_prompt") ?? ""),
     skema_output: String(fd.get("skema_output") ?? "").trim() || null,
     jenis_mk: (String(fd.get("jenis_mk") ?? "") || null) as string | null,
-    aktif: fd.get("aktif") === "on" || fd.get("aktif") === "true",
+    institusi_id: String(fd.get("institusi_id") ?? "") || null,
+    aktif: true,
   };
   const res = await apiPut(`/prompt-templates/${id}`, payload);
   if (res.ok) revalidatePath("/prompts");
   return res;
 }
 
-/** Hapus override -> slot kembali memakai default config. */
-export async function deleteOverride(fd: FormData): Promise<ApiResult> {
-  const id = String(fd.get("id") ?? "");
-  if (!id) return { ok: false, status: 0, message: "ID kosong" };
-  const res = await apiDelete(`/prompt-templates/${id}`);
+/** Pin selected context to live code defaults without deleting override history. */
+export async function resetPrompt(fd: FormData): Promise<ApiResult> {
+  const res = await apiPost("/prompts/reset", {
+    slot: String(fd.get("slot") ?? ""),
+    jenis_mk: String(fd.get("jenis_mk") ?? "") || null,
+    institusi_id: String(fd.get("institusi_id") ?? "") || null,
+  });
   if (res.ok) revalidatePath("/prompts");
   return res;
 }

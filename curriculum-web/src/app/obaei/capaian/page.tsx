@@ -4,7 +4,6 @@ import { TambahCapaian, EditCapaian, HapusCapaian } from "./forms";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 const basePath = "/obaei/capaian";
 
 function fmt(n: number | null): string {
@@ -19,7 +18,6 @@ export default async function CapaianMahasiswaPage({ searchParams }: { searchPar
   const page = sp.page ?? "1";
 
   const res = await apiGet<Paginated<CapaianMahasiswa>>("/capaian-mahasiswa", {
-    institusi_id: DEFAULT_INSTITUSI,
     sort,
     dir,
     page,

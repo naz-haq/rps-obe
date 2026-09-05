@@ -14,7 +14,6 @@ function parseKataKerja(raw: string): string[] {
 
 function payload(formData: FormData) {
   return {
-    institusi_id: 1,
     domain: formData.get("domain") as string,
     kerangka: formData.get("kerangka") as string,
     kode: formData.get("kode") as string,

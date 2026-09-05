@@ -5,7 +5,6 @@ import { CreateKerangkaButton, EditKerangkaButton, DeleteKerangkaButton } from "
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; q?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 
 export default async function ChecklistAcuanPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -15,7 +14,7 @@ export default async function ChecklistAcuanPage({ searchParams }: { searchParam
 
   const [list, badanRes] = await Promise.all([
     apiGet<Paginated<KerangkaAcuan>>("/kerangka-acuan", { sort, dir, page, q: sp.q, per_page: 15 }).catch(() => null),
-    apiGet<Paginated<BadanRujukan>>("/badan-rujukan", { institusi_id: DEFAULT_INSTITUSI, per_page: 100 }).catch(() => null),
+    apiGet<Paginated<BadanRujukan>>("/badan-rujukan", { per_page: 100 }).catch(() => null),
   ]);
 
   const badanList = badanRes?.data ?? [];

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPut, apiDelete, type ApiResult } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 
 export async function buatEvaluasi(input: {
   cpl_id: number;
@@ -11,7 +10,6 @@ export async function buatEvaluasi(input: {
   ringkasan_naratif?: string;
 }): Promise<ApiResult> {
   const res = await apiPost("/evaluasi-cpl", {
-    institusi_id: DEFAULT_INSTITUSI,
     cpl_id: input.cpl_id,
     periode: input.periode || null,
     ringkasan_naratif: input.ringkasan_naratif || null,

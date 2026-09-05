@@ -3,7 +3,6 @@ import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptySt
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; entity?: string; q?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 const basePath = "/governance/audit";
 
 const ENTITY_FILTER = [
@@ -31,7 +30,6 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Sea
   const page = sp.page ?? "1";
 
   const res = await apiGet<Paginated<AuditLog>>("/governance/audit-log", {
-    institusi_id: DEFAULT_INSTITUSI,
     entity: sp.entity,
     q: sp.q,
     sort,

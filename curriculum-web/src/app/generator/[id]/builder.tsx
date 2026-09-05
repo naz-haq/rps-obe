@@ -4,6 +4,7 @@ import { useState, useTransition, Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, PageHeader, buttonClass, BulletCell } from "@/components/ui";
+import { deteksiUjian } from "@/lib/rps-status";
 import type { Cpl, GenerateSession, MataKuliah, Taksonomi } from "@/lib/api";
 import { KonteksPanel } from "./konteks-panel";
 import { DetailMkPanel } from "./detail-mk-panel";
@@ -13,7 +14,9 @@ import {
   acceptStage,
   rejectStage,
   pinStage,
+  unpinStage,
   commitSession,
+  suggestItemFill,
 } from "../actions";
 import {
   type Draf,
@@ -34,6 +37,7 @@ import { FloatingAiChat } from "./floating-ai";
 import { ItemRefine } from "./item-refine";
 import { QualityStrip, stageSummary, stageCount, stageReviewCount } from "./quality";
 import { useConfirm } from "@/components/confirm";
+import { ReopenButton } from "../reopen-button";
 
 const STAGES = [
   { key: "cpmk", label: "CPMK", desc: "Capaian Pembelajaran Mata Kuliah" },
@@ -119,8 +123,8 @@ export function Builder({
   const bagian = (session.status_bagian ?? {}) as Record<string, string>;
   const catatan = (session.catatan_validasi ?? {}) as Record<string, unknown>;
   const isLocked = (s: string) => LOCKED.includes(bagian[s] ?? "");
-  const allLocked = STAGES.every((s) => isLocked(s.key));
-  const committed = session.status === "committed" || !!session.rps_version_id;
+  const allLocked = STAGES.every((s) => isLocked(s.key) && stageReviewCount(draf, s.key) === 0);
+  const committed = session.status === "committed";
 
   // Commit dengan peringatan lunak bila capaian belum tergrounding ke sumber.
   const commit = async () => {
@@ -164,6 +168,7 @@ export function Builder({
         actions={
           <>
             <Badge tone={committed ? "ok" : "warn"}>{session.status}</Badge>
+            {session.can_reopen && <ReopenButton sessionId={session.id} />}
             {committed ? (
               <a href={`/rps/${session.rps_version_id}`} className={buttonClass("secondary", "sm")}>
                 Lihat Dokumen RPS →
@@ -174,7 +179,7 @@ export function Builder({
                 disabled={!allLocked || pending}
                 onClick={commit}
                 className={buttonClass("primary", "sm")}
-                title={allLocked ? "Commit ke RPS resmi" : "Kunci keempat tahap dulu"}
+                title={allLocked ? "Commit ke RPS resmi" : "Setujui keempat tahap dan tinjau semua butir bertanda"}
               >
                 {busy === null && pending ? "Mengomit…" : "Commit RPS"}
               </button>
@@ -191,6 +196,14 @@ export function Builder({
       )}
 
       <KonteksPanel session={session} committed={committed} />
+      {!committed && session.rps_version_id && (
+        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Draf dibuka kembali. Dokumen RPS masih menampilkan hasil commit terakhir. Commit ulang sebelum mengajukan ke prodi.
+        </p>
+      )}
+      {committed && session.rps_status === "approved" && (
+        <p className="text-sm text-muted">RPS telah disetujui prodi dan tidak dapat dikembalikan ke draf.</p>
+      )}
 
       {mk && <DetailMkPanel sessionId={session.id} mk={mk} committed={committed} />}
 
@@ -275,7 +288,7 @@ export function Builder({
           onGenerate={() => act(activeStage.key, () => generateStage(session.id, activeStage.key))}
           onAccept={(edited) => act(activeStage.key, () => acceptStage(session.id, activeStage.key, edited))}
           onReject={() => act(activeStage.key, () => rejectStage(session.id, activeStage.key))}
-          onPin={() => act(activeStage.key, () => pinStage(session.id, activeStage.key))}
+          onPin={() => act(activeStage.key, () => bagian[activeStage.key] === "pinned" ? unpinStage(session.id, activeStage.key) : pinStage(session.id, activeStage.key))}
         />
       ) : (
         <div className="space-y-6">
@@ -364,7 +377,7 @@ function StageCard({
       </div>
 
       <div className="space-y-4 p-5">
-        {!prevLocked ? (
+        {!prevLocked && !generated ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <p className="flex items-center gap-1.5 font-semibold">
               <span aria-hidden>🔒</span> Tahap terkunci
@@ -453,9 +466,18 @@ function StageBody({
   const [editing, setEditing] = useState(false);
   const generated = !!(draf as Record<string, unknown>)[stage];
   // Tampilkan editor hanya saat tahap masih kosong ATAU pengguna memilih Edit.
-  // Begitu ada isi (draft/accepted/edited/pinned) → tampilan preview (LockedView)
-  // agar tombol perbaikan per item muncul tanpa harus menyetujui dulu.
-  const editable = !generated || editing;
+  // Persetujuan tahap tidak menyembunyikan workspace; commit akhir bersifat baca-saja.
+  const editable = !committed && (!generated || editing);
+  const { confirm } = useConfirm();
+  const stageItems = stage === "cpmk" ? cpmk : stage === "sub_cpmk" ? sub : stage === "mingguan" ? minggu : komponen;
+  const hasPinnedItems = stageItems.some((item) => item._pin);
+  const requestGenerate = async () => {
+    if (generated && !await confirm({ title: "Regenerasi seluruh tahap?", message: "Seluruh isi tahap ini akan diganti. Gunakan AI per butir untuk mempertahankan bagian lainnya.", confirmLabel: "Regenerasi seluruh tahap" })) return;
+    onGenerate();
+  };
+  const requestReject = async () => {
+    if (await confirm({ title: "Tolak hasil tahap?", message: "Seluruh draf tahap ini akan dihapus. Tahap lain tetap tersimpan.", confirmLabel: "Hapus draf tahap", tone: "danger" })) onReject();
+  };
 
   const issues = validateStage(stage, { cpmk, sub, minggu, komponen });
   const valid = issues.length === 0;
@@ -488,7 +510,13 @@ function StageBody({
       {editable ? (
         <>
           {stage === "cpmk" && (
-            <CpmkEditor value={cpmk} onChange={setCpmk} cplList={cplList} taksonomiList={taksonomiList} />
+            <CpmkEditor
+              value={cpmk}
+              onChange={setCpmk}
+              cplList={cplList}
+              taksonomiList={taksonomiList}
+              onSuggest={(item) => suggestItemFill(sessionId, stage, item)}
+            />
           )}
           {stage === "sub_cpmk" && (
             <SubCpmkEditor
@@ -496,6 +524,7 @@ function StageBody({
               onChange={setSub}
               cpmkList={getCpmk(draf).map((c) => c.kode)}
               taksonomiList={taksonomiList}
+              onSuggest={(item) => suggestItemFill(sessionId, stage, item)}
             />
           )}
           {stage === "mingguan" && (
@@ -504,6 +533,7 @@ function StageBody({
               onChange={setMinggu}
               subCpmkList={subCpmkOptions}
               estimasiWaktu={estimasiWaktu}
+              onSuggest={(item) => suggestItemFill(sessionId, stage, item)}
             />
           )}
           {stage === "penilaian" && (
@@ -512,11 +542,19 @@ function StageBody({
               onChange={setKomponen}
               subCpmkList={subCpmkOptions}
               mingguList={getMinggu(draf).map((m) => m.minggu_ke)}
+              onSuggest={(item) => suggestItemFill(sessionId, stage, item)}
             />
           )}
         </>
       ) : (
-        <LockedView stage={stage} draf={draf} estimasiWaktu={estimasiWaktu} sessionId={sessionId} revisi={revisi} committed={committed} />
+        <LockedView
+          stage={stage}
+          draf={draf}
+          estimasiWaktu={estimasiWaktu}
+          sessionId={sessionId}
+          revisi={revisi}
+          committed={committed || status === "pinned"}
+        />
       )}
 
       {!committed && issues.length > 0 && (
@@ -534,6 +572,7 @@ function StageBody({
 
       {!committed && (
         <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+          {hasPinnedItems && <p className="w-full text-xs text-muted">Butir disematkan dilindungi. Regenerasi seluruh tahap dan penolakan dinonaktifkan; gunakan AI per butir atau lepas sematan.</p>}
           {editable ? (
             <>
               <button
@@ -548,9 +587,9 @@ function StageBody({
               {status !== "pinned" && (
                 <button
                   type="button"
-                  disabled={pending}
-                  onClick={onGenerate}
-                  className={buttonClass("secondary", "sm")}
+                  disabled={pending || hasPinnedItems}
+                  onClick={requestGenerate}
+                  className={buttonClass("ai", "sm")}
                   title={generated ? "Buat ulang seluruh tahap dengan AI" : "Isi otomatis dengan AI"}
                 >
                   {busy === stage && pending ? "Memproses…" : generated ? "Regenerasi AI" : "Generate AI"}
@@ -564,7 +603,7 @@ function StageBody({
             </>
           ) : (
             <>
-              {!locked && (
+              {status !== "pinned" && (!locked || stageReviewCount(draf, stage) > 0) && (
                 <button
                   type="button"
                   disabled={pending || !valid}
@@ -578,24 +617,25 @@ function StageBody({
               {status !== "pinned" && (
                 <button
                   type="button"
-                  disabled={pending}
-                  onClick={onGenerate}
-                  className={buttonClass("secondary", "sm")}
+                  disabled={pending || hasPinnedItems}
+                  onClick={requestGenerate}
+                  className={buttonClass("ai", "sm")}
                   title="Buat ulang SELURUH tahap dengan AI (menimpa semua item)"
                 >
                   {busy === stage && pending ? "Memproses…" : "Regenerasi AI (semua)"}
                 </button>
               )}
-              <button type="button" disabled={pending} onClick={() => setEditing(true)} className={buttonClass("secondary", "sm")}>
+              {status === "pinned" && <p className="w-full text-xs text-muted">Tahap disematkan. Lepas sematan tahap untuk regenerasi atau penyuntingan.</p>}
+              <button type="button" disabled={pending || status === "pinned"} onClick={() => setEditing(true)} className={buttonClass("secondary", "sm")}>
                 Edit manual
               </button>
-              {generated && (
-                <button type="button" disabled={pending} onClick={onReject} className={buttonClass("danger", "sm")}>
+              {generated && status !== "pinned" && (
+                <button type="button" disabled={pending || hasPinnedItems} onClick={requestReject} className={buttonClass("danger", "sm")}>
                   Tolak
                 </button>
               )}
               <button type="button" disabled={pending} onClick={onPin} className={buttonClass("ghost", "sm")}>
-                {status === "pinned" ? "Tersemat" : "Sematkan"}
+                {status === "pinned" ? "Lepas sematan tahap" : "Sematkan tahap"}
               </button>
             </>
           )}
@@ -699,25 +739,19 @@ function LockedView({
             {getMinggu(draf).map((m, i) => {
               const sub = m.sub_cpmk_kode ? subMap.get(m.sub_cpmk_kode) : undefined;
               const cpmk = sub?.cpmk_kode ? cpmkMap.get(sub.cpmk_kode) : undefined;
-              const materiLower = (m.materi_pustaka ?? "").toLowerCase();
-              const isUts = materiLower.includes("uts") || materiLower.includes("ujian tengah");
-              const isUas = materiLower.includes("uas") || materiLower.includes("ujian akhir");
-              if (isUts || isUas) {
-                return (
-                  <tr key={i} className="bg-amber-50">
-                    <td className="px-2 py-1.5 text-center font-medium tabular-nums">{m.minggu_ke}</td>
-                    <td className="px-2 py-1.5 text-center font-semibold text-amber-900" colSpan={8}>
-                      {isUts ? "Evaluasi Tengah Semester (UTS)" : "Evaluasi Akhir Semester (UAS)"}
-                      {m.indikator ? ` — ${m.indikator}` : ""}
-                    </td>
-                  </tr>
-                );
-              }
+              const ujian = deteksiUjian(m.materi_pustaka);
+              const isUts = ujian === "uts";
+              const isUjian = ujian !== null;
               return (
                 <Fragment key={i}>
-                <tr className="align-top">
+                <tr className={`align-top ${isUjian ? "bg-amber-50" : ""}`}>
                   <td className="px-2 py-1.5 font-medium tabular-nums">{m.minggu_ke}</td>
                   <td className="px-2 py-1.5">
+                    {isUjian && (
+                      <p className="mb-0.5 font-semibold text-amber-900">
+                        {isUts ? "Evaluasi Tengah Semester (UTS)" : "Evaluasi Akhir Semester (UAS)"}
+                      </p>
+                    )}
                     {m.sub_cpmk_kode ? (
                       <div className="space-y-0.5">
                         <p className="font-medium text-ink">{m.sub_cpmk_kode}</p>

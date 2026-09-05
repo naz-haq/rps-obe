@@ -80,13 +80,13 @@ function rowsFor(stage: string, draf: Draf): Row[] {
 
 function fmt(v: unknown): string {
   if (v == null) return "—";
-  if (Array.isArray(v)) return v.join(", ");
+  if (Array.isArray(v)) return v.map(fmt).join(", ");
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
 function DiffView({ before, after }: { before: Record<string, unknown>; after: Record<string, unknown> }) {
-  const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).filter((k) => !k.startsWith("_") && k !== "rubrik");
+  const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).filter((k) => !k.startsWith("_"));
   const changed = keys.filter((k) => fmt(before[k]) !== fmt(after[k]));
   if (changed.length === 0) return <p className="text-xs text-muted">AI tidak mengusulkan perubahan berarti.</p>;
   return (
@@ -113,11 +113,13 @@ export function GeneratorWorkspace({
   draf,
   sessionId,
   revisi,
+  readOnly = false,
 }: {
   stage: string;
   draf: Draf;
   sessionId: number;
   revisi: number;
+  readOnly?: boolean;
 }) {
   const rows = useMemo(() => rowsFor(stage, draf), [stage, draf]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -125,7 +127,8 @@ export function GeneratorWorkspace({
   const [action, setAction] = useState("perbaiki_redaksi");
   const [instruction, setInstruction] = useState("");
   const [cand, setCand] = useState<ItemCandidate | null>(null);
-  const [pending, start] = useTransition();
+  const [busy, start] = useTransition();
+  const pending = busy || readOnly;
   const router = useRouter();
   const toast = useToast();
 
@@ -167,7 +170,7 @@ export function GeneratorWorkspace({
         toast({ type: r.status === 409 ? "warning" : "error", message: r.message ?? "Gagal menerapkan usulan." });
         return;
       }
-      toast({ type: "success", message: "Usulan diterapkan. Versi sebelumnya tercatat." });
+      toast({ type: "success", message: "Usulan diterapkan. Butir terkait ditandai untuk ditinjau." });
       setCand(null);
       router.refresh();
     });
@@ -181,16 +184,25 @@ export function GeneratorWorkspace({
 
   const bulkPin = (pinned: boolean) =>
     start(async () => {
-      for (const id of selected) {
-        await pinItem(sessionId, stage, id, pinned);
+      const results = [];
+      for (const id of selected) results.push(await pinItem(sessionId, stage, id, pinned));
+      const failed = results.filter((result) => !result.ok);
+      if (failed.length > 0) {
+        toast({
+          type: "error",
+          message: `${failed.length} dari ${results.length} item gagal diubah sematannya. Muat ulang sebelum mencoba kembali.`,
+        });
+      } else {
+        toast({ type: "success", message: `${results.length} item berhasil ${pinned ? "disematkan" : "dilepas sematannya"}.` });
       }
       setSelected(new Set());
       router.refresh();
     });
 
   const bantuAi = () => {
-    const first = rows.find((r) => selected.has(r.id) && !r.pinned) ?? rows.find((r) => !r.pinned);
+    const first = rows.find((r) => (selected.size === 0 || selected.has(r.id)) && !r.pinned);
     if (first) openAi(first.id);
+    else toast({ type: "warning", message: "Lepas sematan butir terpilih sebelum meminta usulan AI." });
   };
 
   return (
@@ -200,21 +212,22 @@ export function GeneratorWorkspace({
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <div>
             <h3 className="text-sm font-semibold text-ink">{STAGE_TITLE[stage] ?? stage}</h3>
-            <p className="text-xs text-muted">Pilih satu atau beberapa butir untuk tindakan AI.</p>
+            <p className="text-xs text-muted">Ceklis untuk sematan massal. AI meninjau satu butir setiap kali.</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button type="button" disabled={pending || selected.size === 0} onClick={() => bulkPin(true)} className={buttonClass("ghost", "sm")}>📌 Sematkan</button>
+            <button type="button" disabled={pending || selected.size === 0} onClick={() => bulkPin(false)} className={buttonClass("ghost", "sm")}>Lepas sematan pilihan</button>
             <button type="button" disabled={pending || rows.length === 0} onClick={bantuAi} className={buttonClass("secondary", "sm")}>✨ Bantu dengan AI</button>
           </div>
         </header>
 
         {/* Kepala tabel */}
         <div className="hidden grid-cols-[28px_84px_minmax(0,1fr)_150px_120px_84px] gap-2 border-b border-border bg-gray-50/60 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted md:grid">
-          <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allChecked} onChange={toggleAll} aria-label="Pilih semua" />
+          <input type="checkbox" disabled={pending} className="h-4 w-4 accent-brand-600" checked={allChecked} onChange={toggleAll} aria-label="Pilih semua" />
           <span>Kode</span>
           <span>Rumusan Capaian</span>
           <span>Pemetaan</span>
-          <span>Sumber</span>
+          <span>Status</span>
           <span className="text-right">Aksi</span>
         </div>
 
@@ -229,7 +242,7 @@ export function GeneratorWorkspace({
                     isActive ? "bg-brand-50/40" : selected.has(r.id) ? "bg-brand-50/20" : ""
                   }`}
                 >
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Pilih ${r.code}`} />
+                  <input type="checkbox" disabled={pending} className="mt-0.5 h-4 w-4 accent-brand-600" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Pilih ${r.code}`} />
                   <span className="font-mono text-xs font-bold text-brand-700 md:pt-0.5">{r.code}</span>
                   <p className="col-span-2 text-sm text-ink md:col-span-1">{r.statement}</p>
                   <div className="col-start-2 flex flex-wrap gap-1 md:col-start-auto">
@@ -243,12 +256,12 @@ export function GeneratorWorkspace({
                     ) : r.pinned ? (
                       <span className="text-brand-600">📌 Tersemat</span>
                     ) : (
-                      <span className="text-muted">AI</span>
+                      <span className="text-muted">Draf</span>
                     )}
                   </div>
                   <div className="col-start-3 row-start-1 flex items-center justify-end gap-1 md:col-start-auto md:row-start-auto">
-                    <button type="button" disabled={pending} onClick={() => setPin(r.id, !r.pinned)} className={`grid h-7 w-7 place-items-center rounded-md text-xs ${r.pinned ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`} title={r.pinned ? "Lepas sematan" : "Sematkan"}>📌</button>
-                    <button type="button" disabled={pending || r.pinned} onClick={() => openAi(r.id)} className={`grid h-7 w-7 place-items-center rounded-md text-xs ${isActive ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`} title={r.pinned ? "Lepas sematan dulu" : "Perbaiki dengan AI"}>✨</button>
+                    <button type="button" disabled={pending} onClick={() => setPin(r.id, !r.pinned)} className={`grid h-7 w-7 place-items-center rounded-md text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${r.pinned ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`} title={r.pinned ? "Lepas sematan" : "Sematkan"} aria-label={`${r.pinned ? "Lepas sematan" : "Sematkan"} ${r.code}`}>📌</button>
+                    <button type="button" disabled={pending || r.pinned} onClick={() => openAi(r.id)} className={`grid h-7 w-7 place-items-center rounded-md text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${isActive ? "bg-brand-100 text-brand-700" : "text-muted hover:bg-gray-100"}`} title={r.pinned ? "Lepas sematan dulu" : "Perbaiki dengan AI"} aria-label={`Perbaiki ${r.code} dengan AI`}>✨</button>
                   </div>
                 </li>
                 {/* Panel inline hanya pada layar sempit (di layar lebar pakai panel kanan) */}
@@ -314,11 +327,12 @@ function AiPanelBody({
       </div>
       <label className="mt-3 block text-[11px] font-semibold text-ink">Instruksi</label>
       <textarea
+        aria-label="Instruksi perbaikan AI"
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         placeholder="mis. Naikkan keterukuran rumusan tanpa mengubah makna."
         rows={2}
-        className="mt-1 w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-brand-400"
+        className="mt-1 w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-200"
       />
       <div className="mt-2 grid grid-cols-2 gap-1.5">
         {ACTIONS.map((a) => (

@@ -65,6 +65,57 @@ class OpenAiDriverTest extends TestCase
         );
     }
 
+    public function test_truncated_response_is_retried_with_a_larger_token_budget(): void
+    {
+        config()->set('ai.http.max_attempts', 2);
+        Http::fakeSequence()
+            ->push([
+                'model' => 'test-model',
+                'choices' => [[
+                    'message' => ['content' => '{"komponen":[{"nama":"Kuis"'],
+                    'finish_reason' => 'length',
+                ]],
+                'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 512],
+            ], 200)
+            ->push($this->successResponse(), 200);
+
+        $result = $this->driver()->run(
+            $this->model('gemini', 'gemini-2.5-flash-lite'),
+            'system',
+            'prompt',
+            $this->params(),
+        );
+
+        $this->assertFalse($result->failed());
+        $this->assertSame(102, $result->inputTokens);
+        $this->assertSame(513, $result->outputTokens);
+        Http::assertSentCount(2);
+        Http::assertSent(fn(Request $request) => $request['max_tokens'] === 768);
+    }
+
+    public function test_truncated_response_is_reported_when_retry_is_exhausted(): void
+    {
+        config()->set('ai.http.max_attempts', 1);
+        Http::fake(['*' => Http::response([
+            'model' => 'test-model',
+            'choices' => [[
+                'message' => ['content' => '{"minggu":[{"minggu_ke":1'],
+                'finish_reason' => 'length',
+            ]],
+            'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 512],
+        ], 200)]);
+
+        $result = $this->driver()->run(
+            $this->model('gemini', 'gemini-2.5-flash-lite'),
+            'system',
+            'prompt',
+            $this->params(),
+        );
+
+        $this->assertTrue($result->failed());
+        $this->assertStringContainsString('terpotong', (string) $result->error);
+    }
+
     private function driver(): OpenAiDriver
     {
         return new OpenAiDriver;

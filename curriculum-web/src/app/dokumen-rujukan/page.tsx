@@ -12,7 +12,6 @@ import {
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; jenis?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "danger"> = {
   indexed: "ok",
@@ -42,7 +41,6 @@ export default async function DokumenRujukanPage({ searchParams }: { searchParam
 
   const [docs, badanRes] = await Promise.all([
     apiGet<Paginated<DokumenRujukan>>("/dokumen-rujukan", {
-      institusi_id: DEFAULT_INSTITUSI,
       sort,
       dir,
       page,
@@ -50,7 +48,7 @@ export default async function DokumenRujukanPage({ searchParams }: { searchParam
       jenis: sp.jenis,
       per_page: 15,
     }).catch(() => null),
-    apiGet<Paginated<BadanRujukan>>("/badan-rujukan", { institusi_id: DEFAULT_INSTITUSI, per_page: 100 }).catch(() => null),
+    apiGet<Paginated<BadanRujukan>>("/badan-rujukan", { per_page: 100 }).catch(() => null),
   ]);
 
   const badanList = badanRes?.data ?? [];

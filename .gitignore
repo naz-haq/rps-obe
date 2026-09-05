@@ -13,6 +13,8 @@
 **/out/
 **/dist/
 **/build/
+**/test-results/
+**/playwright-report/
 
 # ===== Laravel runtime =====
 **/storage/*.key
@@ -31,6 +33,7 @@
 # ===== Dokumen konsep/perencanaan & rujukan (bukan bagian aplikasi; tetap di disk) =====
 /*.md
 !/README.md
+!/Audit-dan-Rencana-Perbaikan-Aplikasi-RPS.md
 /*.mermaid
 /*.html
 /*.pdf

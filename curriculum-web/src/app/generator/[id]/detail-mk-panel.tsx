@@ -6,6 +6,7 @@ import { buttonClass } from "@/components/ui";
 import type { MataKuliah } from "@/lib/api";
 import { ReferensiEditor } from "@/app/kurikulum/[id]/mata-kuliah/referensi-editor";
 import { DokumenTautanEditor } from "@/app/kurikulum/[id]/mata-kuliah/dokumen-tautan-editor";
+import { suggestDeskripsiMk } from "@/app/kurikulum/[id]/mata-kuliah/actions";
 import { saveDetailMk } from "../actions";
 
 /**
@@ -18,6 +19,31 @@ export function DetailMkPanel({ sessionId, mk, committed }: { sessionId: number;
   const [open, setOpen] = useState(false);
   const [pesan, setPesan] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [deskripsi, setDeskripsi] = useState(mk.deskripsi_singkat ?? "");
+  const [busyAi, setBusyAi] = useState(false);
+
+  const saranDeskripsi = async () => {
+    setBusyAi(true);
+    setPesan(null);
+    try {
+      const res = await suggestDeskripsiMk({
+        nama: mk.nama ?? "",
+        jenis: mk.jenis_mk ?? null,
+        sks_teori: mk.sks_teori ?? null,
+        sks_praktik: mk.sks_praktik ?? null,
+        kode_mk: mk.kode_mk ?? null,
+        deskripsi: deskripsi.trim() || null,
+      });
+      if (res.ok && res.data?.deskripsi) {
+        setDeskripsi(res.data.deskripsi);
+        setPesan({ tone: "ok", text: "Draf deskripsi dibuat AI — tinjau & sunting sebelum menyimpan." });
+      } else {
+        setPesan({ tone: "err", text: res.message ?? "Gagal meminta saran AI." });
+      }
+    } finally {
+      setBusyAi(false);
+    }
+  };
 
   const lengkap = [
     (mk.deskripsi_singkat ?? "").trim() !== "" ? "Deskripsi" : null,
@@ -71,11 +97,23 @@ export function DetailMkPanel({ sessionId, mk, committed }: { sessionId: number;
             <input type="hidden" name="sks_praktik" value={mk.sks_praktik ?? ""} />
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-ink">Deskripsi Singkat MK</span>
+              <span className="mb-1 flex items-center justify-between text-xs font-medium text-ink">
+                <span>Deskripsi Singkat MK</span>
+                <button
+                  type="button"
+                  disabled={busyAi || pending}
+                  onClick={saranDeskripsi}
+                  className={buttonClass("ai", "xs")}
+                  title="Buat draf deskripsi dengan AI — wajib ditinjau sebelum disimpan"
+                >
+                  {busyAi ? "Meminta…" : "✨ Saran AI"}
+                </button>
+              </span>
               <textarea
                 name="deskripsi_singkat"
                 rows={4}
-                defaultValue={mk.deskripsi_singkat ?? ""}
+                value={deskripsi}
+                onChange={(e) => setDeskripsi(e.target.value)}
                 placeholder="Ringkasan mata kuliah — dipakai AI sebagai konteks utama…"
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-ring placeholder:text-gray-400"
               />

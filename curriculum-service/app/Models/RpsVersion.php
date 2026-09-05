@@ -52,4 +52,15 @@ class RpsVersion extends Model
     {
         return $this->hasMany(RpsApprovalLog::class, 'rps_version_id');
     }
+
+    /**
+     * RPS pernah disetujui prodi (status/approved_at/riwayat 'setujui') = FINAL:
+     * tidak boleh dihapus, diubah, atau dikembalikan ke draf.
+     */
+    public function pernahDisetujui(): bool
+    {
+        return $this->status === 'approved'
+            || $this->approved_at !== null
+            || $this->approvalLogs()->where('aksi', 'setujui')->exists();
+    }
 }

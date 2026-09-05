@@ -330,6 +330,8 @@ export type GenerateSession = {  id: number;
   catatan_validasi: Record<string, unknown> | null;
   konteks_tambahan?: KonteksTambahan | null;
   rps_version_id: number | null;
+  rps_status?: string | null;
+  can_reopen?: boolean;
   revisi?: number;
   created_at?: string;
   updated_at?: string;
@@ -352,6 +354,9 @@ export type RpsVersion = {
   kode_mk: string;
   versi: number;
   status: string;
+  generate_session_id?: number | null;
+  editing_in_generator?: boolean;
+  can_reopen?: boolean;
   bahasa: string;
   kode_dokumen?: string | null;
   created_by?: number | null;
@@ -369,7 +374,7 @@ export type RpsVersion = {
 export type RpsApprovalLog = {
   id: number;
   rps_version_id: number;
-  aksi: "ajukan" | "setujui" | "revisi" | "tarik";
+  aksi: "ajukan" | "setujui" | "revisi" | "tarik" | "buka_draf";
   dari_status: string | null;
   ke_status: string;
   catatan: string | null;
@@ -699,12 +704,13 @@ export type TemplateRps = {
 export type PromptTemplate = {
   id: number;
   jenis_output: string;
-  jenis_mk: string | null;
+  jenis_mk: "murni" | "praktikum" | null;
   institusi_id: number | null;
   sistem_prompt: string;
   skema_output: string | null;
   versi: number | null;
   aktif: boolean;
+  use_default: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -714,7 +720,13 @@ export type PromptSlot = {
   group: string;
   default_system: string;
   default_schema: string;
+  jenis_mk: PromptTemplate["jenis_mk"];
+  institusi_id: number | null;
+  effective_system: string;
+  effective_schema: string;
   sumber_efektif: "default" | "override";
+  selection: Pick<PromptTemplate, "id" | "versi" | "institusi_id" | "jenis_mk" | "use_default"> | null;
+  can_edit: boolean;
   override: PromptTemplate | null;
 };
 

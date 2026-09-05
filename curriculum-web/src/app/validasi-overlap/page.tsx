@@ -4,7 +4,6 @@ import { PindaiButton, AnalisisButton, ReviewButton } from "./forms";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 const basePath = "/validasi-overlap";
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "danger"> = {
@@ -32,7 +31,6 @@ export default async function ValidasiOverlapPage({ searchParams }: { searchPara
   const page = sp.page ?? "1";
 
   const res = await apiGet<Paginated<ValidasiOverlap>>("/validasi-overlap", {
-    institusi_id: DEFAULT_INSTITUSI,
     sort,
     dir,
     page,

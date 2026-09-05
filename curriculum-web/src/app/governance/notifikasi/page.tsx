@@ -4,7 +4,6 @@ import { TandaiDibacaButton } from "./buttons";
 
 type SearchParams = Promise<{ status?: string; page?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 const basePath = "/governance/notifikasi";
 
 const STATUS_FILTER = [
@@ -27,7 +26,6 @@ export default async function NotifikasiPage({ searchParams }: { searchParams: S
   const page = sp.page ?? "1";
 
   const res = await apiGet<Paginated<Notifikasi>>("/governance/notifikasi", {
-    institusi_id: DEFAULT_INSTITUSI,
     status: sp.status,
     page,
     per_page: 20,

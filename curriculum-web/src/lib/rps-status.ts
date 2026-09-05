@@ -19,6 +19,17 @@ export function rpsStatusTone(status: string): Tone {
   return RPS_STATUS[status]?.tone ?? "neutral";
 }
 
+/**
+ * Deteksi baris evaluasi dari teks materi. Wajib word-boundary: substring "uas"
+ * ada di kata biasa (menstruasi, evaluasi) dan memicu salah label band kuning.
+ */
+export function deteksiUjian(materi: string | null | undefined): "uts" | "uas" | null {
+  const t = (materi ?? "").toLowerCase();
+  if (/\buts\b|ujian tengah|evaluasi tengah/.test(t)) return "uts";
+  if (/\buas\b|ujian akhir|evaluasi akhir/.test(t)) return "uas";
+  return null;
+}
+
 /** Aksi persetujuan yang tersedia untuk sebuah status. */
 export function aksiTersedia(status: string): {
   ajukan: boolean;

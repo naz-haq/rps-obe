@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiGet, BACKEND_PROXY, type Single, type RpsDetail, type RpsTraceability, type RpsApprovalLog } from "@/lib/api";
-import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
+import { rpsStatusLabel, rpsStatusTone, deteksiUjian } from "@/lib/rps-status";
 import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState, BulletCell } from "@/components/ui";
 import { ApprovalActions } from "./approval";
+import { ReopenButton } from "../../generator/reopen-button";
 
 const AKSI_LABEL: Record<string, string> = {
   ajukan: "Diajukan untuk tinjauan",
   setujui: "Disetujui",
   revisi: "Diminta revisi",
   tarik: "Pengajuan ditarik",
+  buka_draf: "Dikembalikan ke draf generator",
 };
 
 export default async function RpsDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,10 +41,11 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
     <div>
       <PageHeader
         title={`${rps.kode_mk} · v${rps.versi}`}
-        subtitle="Dokumen RPS resmi dengan rantai keterlacakan CPL → CPMK → Sub-CPMK → Minggu."
         actions={
           <div className="flex items-center gap-3">
-            <ApprovalActions id={rps.id} status={rps.status} />
+            {!rps.editing_in_generator && <ApprovalActions id={rps.id} status={rps.status} />}
+            {rps.can_reopen && rps.generate_session_id && <ReopenButton sessionId={rps.generate_session_id} navigate />}
+            {rps.editing_in_generator && rps.generate_session_id && <Link href={`/generator/${rps.generate_session_id}`} className="text-sm text-brand-700 underline">Lanjutkan penyuntingan draf</Link>}
             <a
               href={`${BACKEND_PROXY}/rps-versions/${id}/cetak`}
               target="_blank"
@@ -69,6 +72,8 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
           <span className="font-semibold">Catatan revisi dari peninjau:</span> {rps.catatan_review}
         </div>
       )}
+
+      {rps.editing_in_generator && <p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Dokumen ini menampilkan commit terakhir. Draf sedang disunting; commit ulang diperlukan sebelum pengajuan.</p>}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Minggu" value={minggu.length} />
@@ -247,10 +252,9 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
             </thead>
             <tbody>
               {minggu.map((m) => {
-                const materiLower = (m.materi_pustaka ?? "").toLowerCase();
-                const isUts = materiLower.includes("uts") || materiLower.includes("ujian tengah");
-                const isUas = materiLower.includes("uas") || materiLower.includes("ujian akhir");
-                if (isUts || isUas) {
+                const ujian = deteksiUjian(m.materi_pustaka);
+                const isUts = ujian === "uts";
+                if (ujian) {
                   return (
                     <tr key={m.minggu_ke} className="bg-amber-50">
                       <Td className="text-right font-medium tabular-nums">{m.minggu_ke}</Td>

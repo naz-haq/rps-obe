@@ -303,7 +303,7 @@ export function AiTextArea({
             type="button"
             onClick={() => setMenuOpen((o) => !o)}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 transition hover:bg-brand-100 disabled:opacity-50"
+            className={buttonClass("ai", "xs")}
           >
             {busy ? "Memproses…" : "✨ Bantu AI"}
           </button>

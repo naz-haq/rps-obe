@@ -2,11 +2,13 @@
 
 namespace App\Services\Ai;
 
+use App\Models\AiBudgetReservation;
 use App\Models\AiInteraksi;
 use App\Models\AiKredensial;
 use App\Models\AiPengaturan;
 use App\Services\Ai\Exceptions\AiBudgetException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 
@@ -52,12 +54,25 @@ class AiService
         if (! $modelCfg) {
             throw new InvalidArgumentException("Model AI tidak dikenal: {$modelKey}");
         }
+        if (! ($modelCfg['price_known'] ?? true) && ! $this->isFreeProvider($modelCfg['provider'])) {
+            throw new InvalidArgumentException(
+                "Harga model '{$modelKey}' tidak dikenal. Daftarkan model di katalog harga sebelum digunakan."
+            );
+        }
 
         $this->assertCrossProvider($task, $modelCfg['provider'], $institusiId);
 
         $cred = $this->resolveCredentials($modelCfg, $institusiId, $userId, $context);
-
-        $this->assertBudget($cred['kredensial'] ?? null, $institusiId);
+        if (($cred['model'] ?? null) !== ($modelCfg['model'] ?? null)) {
+            $effectivePricing = $this->livePricing($cred['provider'], $cred['model']);
+            if ($effectivePricing === null && ! $this->isFreeProvider($cred['provider'])) {
+                throw new InvalidArgumentException(
+                    "Harga model '{$cred['provider']}::{$cred['model']}' tidak dikenal. Daftarkan model di katalog harga sebelum digunakan."
+                );
+            }
+            $cred['model_array']['pricing'] = $effectivePricing ?? ['input' => 0.0, 'output' => 0.0, 'cache_read' => 0.0, 'cache_write' => 0.0];
+            $modelCfg['price_known'] = $effectivePricing !== null || $this->isFreeProvider($cred['provider']);
+        }
 
         $params = [
             'temperature' => $context['temperature'] ?? $taskCfg['temperature'] ?? config('ai.default_params.temperature'),
@@ -73,7 +88,7 @@ class AiService
         // beda kunci → tetap generate baru.
         $ttl = (int) config('ai.cache.ttl', 0);
         $cacheKey = ($ttl > 0 && empty($context['no_cache']) && $cred['provider'] !== 'mock')
-            ? $this->promptCacheKey($task, $cred, $system, $prompt, $params)
+            ? $this->promptCacheKey($task, $cred, $system, $prompt, $params, $context)
             : null;
 
         $cached = $cacheKey ? Cache::get($cacheKey) : null;
@@ -83,51 +98,70 @@ class AiService
         $requestedProvider = $cred['provider'];
         $requestedModel = $cred['model'] ?? ($cred['model_array']['model'] ?? null);
         $fallbackReason = null;
+        $reservationId = $fromCache ? null : $this->reserveBudget(
+            $cred['kredensial'] ?? null,
+            $institusiId,
+            $this->estimatedMaximumCost($cred['model_array']['pricing'], $system, $prompt, (int) $params['max_tokens']),
+        );
 
-        if ($fromCache) {
-            $result = $this->resultFromCache($cached);
-        } else {
-            $result = $driver->run($cred['model_array'], $system, $prompt, $params);
-
-            // Fallback RUNTIME ke mock: bila provider NYATA gagal (mis. kuota gratis
-            // Gemini Flash-Lite habis -> 503/429 setelah retry) dan fallback_to_mock
-            // aktif, ulangi lewat MockDriver agar alur (CPMK/Sub-CPMK/matriks/RPS)
-            // tetap selesai tanpa biaya saat pengembangan. Beda dengan fallback
-            // kredensial di resolveCredentials() yang hanya menangani ketiadaan key.
-            // Default produksi: nonaktif (kegagalan tampil sebagai kegagalan) — §4.4.
-            if ($result->failed() && $cred['provider'] !== 'mock' && config('ai.fallback_to_mock')) {
-                $fallbackReason = 'provider gagal → mock: ' . mb_strimwidth((string) $result->error, 0, 200, '…');
-                $cred = $this->mockCredentials();
-                $driver = $this->drivers->make('mock');
+        try {
+            if ($fromCache) {
+                $result = $this->resultFromCache($cached);
+            } else {
                 $result = $driver->run($cred['model_array'], $system, $prompt, $params);
+
+                // Fallback RUNTIME ke mock: bila provider NYATA gagal (mis. kuota gratis
+                // Gemini Flash-Lite habis -> 503/429 setelah retry) dan fallback_to_mock
+                // aktif, ulangi lewat MockDriver agar alur (CPMK/Sub-CPMK/matriks/RPS)
+                // tetap selesai tanpa biaya saat pengembangan. Beda dengan fallback
+                // kredensial di resolveCredentials() yang hanya menangani ketiadaan key.
+                // Default produksi: nonaktif (kegagalan tampil sebagai kegagalan) — §4.4.
+                if ($result->failed() && $cred['provider'] !== 'mock' && config('ai.fallback_to_mock')) {
+                    $fallbackReason = 'provider gagal → mock: ' . mb_strimwidth((string) $result->error, 0, 200, '…');
+                    $cred = $this->mockCredentials();
+                    $driver = $this->drivers->make('mock');
+                    $result = $driver->run($cred['model_array'], $system, $prompt, $params);
+                }
+
+                // Simpan ke cache HANYA hasil sukses dari provider nyata (bukan mock/gagal).
+                // Disimpan sebagai ARRAY (objek LlmResult jadi __PHP_Incomplete_Class saat
+                // unserialize dari file/db cache) lalu direkonstruksi saat baca.
+                if ($cacheKey && ! $result->failed() && $cred['provider'] !== 'mock') {
+                    Cache::put($cacheKey, $this->resultToCache($result), now()->addSeconds($ttl));
+                }
             }
 
-            // Simpan ke cache HANYA hasil sukses dari provider nyata (bukan mock/gagal).
-            // Disimpan sebagai ARRAY (objek LlmResult jadi __PHP_Incomplete_Class saat
-            // unserialize dari file/db cache) lalu direkonstruksi saat baca.
-            if ($cacheKey && ! $result->failed() && $cred['provider'] !== 'mock') {
-                Cache::put($cacheKey, $this->resultToCache($result), now()->addSeconds($ttl));
+            // Biaya dihitung dari harga efektif yang benar-benar dijalankan (0 bila
+            // fallback ke mock ATAU disajikan dari cache — tak ada panggilan nyata).
+            $biaya = $fromCache ? 0.0 : $this->cost->usd($cred['model_array']['pricing'], $result);
+
+            if ($fromCache) {
+                $context['mode'] = ($context['mode'] ?? $task) . ' (cache)';
+            }
+
+            $meta = [
+                'requested_provider' => $requestedProvider,
+                'requested_model'    => $requestedModel,
+                'fallback_reason'    => $fallbackReason,
+                'billing_status'     => $this->classifyBilling($fromCache, $cred['provider'], $modelCfg['price_known'] ?? true),
+            ];
+
+            $interaksi = DB::transaction(function () use ($task, $cred, $result, $biaya, $context, $meta, $reservationId) {
+                $logged = $this->log($task, $cred, $result, $biaya, $context, $meta);
+                if ($reservationId !== null) {
+                    AiBudgetReservation::query()->whereKey($reservationId)->delete();
+                }
+
+                return $logged;
+            });
+            $reservationId = null;
+
+            return new AiOutcome($result, $biaya, $interaksi);
+        } finally {
+            if ($reservationId !== null) {
+                AiBudgetReservation::query()->whereKey($reservationId)->delete();
             }
         }
-
-        // Biaya dihitung dari harga efektif yang benar-benar dijalankan (0 bila
-        // fallback ke mock ATAU disajikan dari cache — tak ada panggilan nyata).
-        $biaya = $fromCache ? 0.0 : $this->cost->usd($cred['model_array']['pricing'], $result);
-
-        if ($fromCache) {
-            $context['mode'] = ($context['mode'] ?? $task) . ' (cache)';
-        }
-
-        $meta = [
-            'requested_provider' => $requestedProvider,
-            'requested_model'    => $requestedModel,
-            'fallback_reason'    => $fallbackReason,
-            'billing_status'     => $this->classifyBilling($fromCache, $cred['provider'], $modelCfg['price_known'] ?? true),
-        ];
-
-        $interaksi = $this->log($task, $cred, $result, $biaya, $context, $meta);
-
-        return new AiOutcome($result, $biaya, $interaksi);
     }
 
     /**
@@ -155,9 +189,13 @@ class AiService
      * seluruh isi permintaan (system+prompt+params) sehingga perubahan konteks
      * apa pun menghasilkan kunci berbeda (tak ada tabrakan lintas MK/model).
      */
-    private function promptCacheKey(string $task, array $cred, string $system, string $prompt, array $params): string
+    private function promptCacheKey(string $task, array $cred, string $system, string $prompt, array $params, array $context = []): string
     {
         return 'ai:gen:' . hash('sha256', implode('|', [
+            (string) ($context['institusi_id'] ?? 'global'),
+            (string) ($context['prompt_version'] ?? config('ai.cache.prompt_version', 'v1')),
+            (string) ($context['schema_version'] ?? config('ai.cache.schema_version', 'v1')),
+            (string) ($context['source_version'] ?? config('ai.cache.source_version', 'v1')),
             $task,
             $cred['provider'] ?? '',
             $cred['model_array']['model'] ?? '',
@@ -652,22 +690,49 @@ class AiService
         ];
     }
 
-    /**
-     * Tegakkan kuota biaya tenant (jumlah biaya AI_INTERAKSI vs anggaran).
-     */
-    private function assertBudget(?AiKredensial $kredensial, ?int $institusiId): void
+    /** Cadangkan biaya maksimum sebelum request agar panggilan paralel mematuhi kuota. */
+    private function reserveBudget(?AiKredensial $kredensial, ?int $institusiId, float $amount): ?int
     {
-        if (! $kredensial || $kredensial->anggaran === null || ! $institusiId) {
-            return;
+        if (! $kredensial || $kredensial->anggaran === null || ! $institusiId || $amount <= 0) {
+            return null;
         }
 
-        $terpakai = (float) AiInteraksi::where('institusi_id', $institusiId)->sum('biaya');
+        return DB::transaction(function () use ($kredensial, $institusiId, $amount) {
+            $locked = AiKredensial::query()->lockForUpdate()->findOrFail($kredensial->id);
+            AiBudgetReservation::query()->where('expires_at', '<=', now())->delete();
 
-        if ($terpakai >= (float) $kredensial->anggaran) {
-            throw new AiBudgetException(
-                "Anggaran AI tenant terlampaui: terpakai \${$terpakai} dari kuota \${$kredensial->anggaran}."
-            );
-        }
+            $terpakai = (float) AiInteraksi::query()->where('institusi_id', $institusiId)->sum('biaya');
+            $dicadangkan = (float) AiBudgetReservation::query()
+                ->where('institusi_id', $institusiId)
+                ->where('expires_at', '>', now())
+                ->sum('amount');
+            $anggaran = (float) $locked->anggaran;
+
+            if ($terpakai + $dicadangkan + $amount > $anggaran) {
+                throw new AiBudgetException(
+                    "Anggaran AI tenant tidak mencukupi: terpakai \${$terpakai}, dicadangkan \${$dicadangkan}, kuota \${$anggaran}."
+                );
+            }
+
+            return AiBudgetReservation::create([
+                'ai_kredensial_id' => $locked->id,
+                'institusi_id' => $institusiId,
+                'amount' => $amount,
+                'expires_at' => now()->addSeconds(max(120, (int) config('ai.http.timeout', 90) * (int) config('ai.http.max_attempts', 2) + 60)),
+            ])->id;
+        });
+    }
+
+    /** Estimasi konservatif berdasarkan batas output dan seluruh percobaan HTTP. */
+    private function estimatedMaximumCost(array $pricing, string $system, string $prompt, int $maxTokens): float
+    {
+        $inputTokens = (int) ceil((strlen($system) + strlen($prompt)) / 3);
+        $attempts = max(1, (int) config('ai.http.max_attempts', 2));
+
+        return $attempts * (
+            ($inputTokens / 1_000_000) * (float) ($pricing['input'] ?? 0)
+            + ($maxTokens / 1_000_000) * (float) ($pricing['output'] ?? 0)
+        );
     }
 
     private function log(string $task, array $cred, LlmResult $result, float $biaya, array $context, array $meta = []): AiInteraksi

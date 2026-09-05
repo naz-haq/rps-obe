@@ -116,6 +116,54 @@ class ReferensiController extends Controller
     }
 
     /**
+     * Saran deskripsi singkat MK via AI — DRAFT yang wajib ditinjau dosen;
+     * tidak menyimpan apa pun.
+     */
+    public function suggestDeskripsi(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'institusi_id' => ['required', 'integer'],
+            'kode_mk'      => ['nullable', 'string', 'max:50'],
+            'nama'         => ['required', 'string', 'max:200'],
+            'jenis'        => ['nullable', 'string', 'max:50'],
+            'sks_teori'    => ['nullable', 'integer'],
+            'sks_praktik'  => ['nullable', 'integer'],
+            'deskripsi'    => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $system = 'Anda perancang kurikulum OBE farmasi/kesehatan berbahasa Indonesia. '
+            . 'Tulis DESKRIPSI SINGKAT mata kuliah: SATU paragraf 3-5 kalimat (sekitar 60-120 kata) berisi cakupan materi utama, '
+            . 'kompetensi yang dibangun, dan relevansinya bagi profil lulusan. Bahasa formal akademik, tanpa bullet, tanpa menyebut jumlah SKS. '
+            . 'JANGAN mengarang fakta spesifik di luar konteks yang diberikan. Bila ada deskripsi_saat_ini, perbaiki dan pertajam tanpa mengubah maksudnya. '
+            . 'Balas HANYA teks paragraf deskripsi, tanpa judul, tanpa pagar markdown.';
+
+        $fakta = array_filter([
+            'nama_mk'            => $data['nama'],
+            'kode_mk'            => $data['kode_mk'] ?? null,
+            'jenis_mk'           => $data['jenis'] ?? null,
+            'sks_teori'          => $data['sks_teori'] ?? null,
+            'sks_praktik'        => $data['sks_praktik'] ?? null,
+            'deskripsi_saat_ini' => $data['deskripsi'] ?? null,
+        ], fn($v) => $v !== null && $v !== '');
+        $prompt = "Mata kuliah:\n" . json_encode($fakta, JSON_UNESCAPED_UNICODE)
+            . "\n\nDeskripsi singkat MK:";
+
+        $outcome = $this->ai->run('asistif', $system, $prompt, [
+            'institusi_id' => (int) $data['institusi_id'],
+            'entity_type'  => 'mk_deskripsi_suggest',
+            'mode'         => 'deskripsi:suggest',
+        ]);
+
+        if ($outcome->failed()) {
+            return response()->json(['message' => 'Layanan AI tidak tersedia saat ini.'], 503);
+        }
+
+        $text = trim((string) preg_replace('/^```(?:\w+)?\s*|\s*```$/', '', trim($outcome->text())));
+
+        return response()->json(['data' => ['deskripsi' => $text]]);
+    }
+
+    /**
      * Ekstrak array {tipe, sitasi} dari keluaran model (toleran terhadap pagar
      * markdown / teks pembungkus). Kembalikan hanya item valid.
      *

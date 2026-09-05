@@ -15,15 +15,16 @@ class InstitusiController extends Controller
 {
     private const JENIS = ['universitas', 'fakultas', 'prodi'];
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $data = Institusi::query()
+            ->when($request->user()?->institusi_id, fn($query, $institusiId) => $query->whereKey($institusiId))
             ->with('parent:id,nama')
             ->withCount([
                 'mataKuliah',
                 'users as dosen_count' => fn($q) => $q->whereHas('roles', fn($r) => $r->where('name', 'dosen')),
             ])
-            ->orderByRaw("FIELD(jenis, 'universitas', 'fakultas', 'prodi')")
+            ->orderByRaw("CASE jenis WHEN 'universitas' THEN 1 WHEN 'fakultas' THEN 2 WHEN 'prodi' THEN 3 ELSE 4 END")
             ->orderBy('nama')
             ->get()
             ->map(fn(Institusi $i) => $this->format($i) + [

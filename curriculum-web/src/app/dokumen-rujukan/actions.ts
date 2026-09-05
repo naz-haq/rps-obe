@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { apiPostForm, apiDelete, apiPost, apiPatch } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 const PATH = "/dokumen-rujukan";
 
 export async function uploadDokumen(formData: FormData) {
@@ -12,7 +11,6 @@ export async function uploadDokumen(formData: FormData) {
     return { ok: false, status: 422, message: "Pilih berkas terlebih dahulu." };
   }
   const form = new FormData();
-  form.set("institusi_id", String(DEFAULT_INSTITUSI));
   form.set("jenis", (formData.get("jenis") as string) || "kpt");
   const judul = (formData.get("judul") as string) || "";
   if (judul) form.set("judul", judul);
@@ -53,7 +51,6 @@ export async function deleteDokumen(formData: FormData) {
 // ---- Badan Rujukan ----
 export async function createBadan(formData: FormData) {
   const body = {
-    institusi_id: DEFAULT_INSTITUSI,
     nama: formData.get("nama") as string,
     jenis: (formData.get("jenis") as string) || "asosiasi",
     disiplin: (formData.get("disiplin") as string) || null,

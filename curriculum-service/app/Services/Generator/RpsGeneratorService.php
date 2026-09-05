@@ -18,6 +18,7 @@ use App\Models\ProfilLulusan;
 use App\Models\Referensi;
 use App\Models\RpsMinggu;
 use App\Models\RpsVersion;
+use App\Models\RpsApprovalLog;
 use App\Models\Rubrik;
 use App\Models\RubrikKriteria;
 use App\Models\SubCpmk;
@@ -31,6 +32,7 @@ use App\Services\Generator\Exceptions\GeneratorException;
 use App\Services\Generator\Exceptions\RevisiConflictException;
 use App\Services\Rps\EstimasiWaktuService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 /**
@@ -60,6 +62,40 @@ class RpsGeneratorService
         'mingguan'  => 'minggu',
         'penilaian' => 'komponen',
     ];
+
+    /** Field yang sah per item tahap (selaras validateCandidateItem). */
+    private const ITEM_FIELDS = [
+        'cpmk'      => ['kode', 'deskripsi', 'cpl_kode', 'taksonomi_kode'],
+        'sub_cpmk'  => ['kode', 'cpmk_kode', 'deskripsi', 'taksonomi_kode', 'indikator'],
+        'mingguan'  => ['minggu_ke', 'sub_cpmk_kode', 'indikator', 'kriteria_penilaian', 'metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar', 'materi_pustaka', 'bobot_penilaian'],
+        'penilaian' => ['nama', 'jenis', 'instrumen', 'bobot_persen', 'sub_cpmk_kode', 'minggu_ke', 'rubrik'],
+    ];
+
+    /** @return array{max_sub_cpmk:int,total_weeks:int,learning_weeks:int,pola:string} */
+    public function generationLimits(?MataKuliah $mk): array
+    {
+        return $this->contract()->limits($mk);
+    }
+
+    private function contract(): GenerationContract
+    {
+        return new GenerationContract($this->estimasi);
+    }
+
+    private function assertContract(string $stage, array $data, GenerateSession $session, ?MataKuliah $mk, bool $strict = false): void
+    {
+        $errors = $this->contract()->violations($stage, $data, $session, $mk, $strict);
+        if ($errors !== []) {
+            throw new GeneratorException('Kontrak generator: ' . implode(' ', $errors));
+        }
+    }
+
+    private function assertSubPrerequisiteLimit(GenerateSession $session, string $stage, ?MataKuliah $mk): void
+    {
+        if ($stage === 'sub_cpmk') {
+            $this->assertContract('cpmk', $session->draf['cpmk'] ?? [], $session, $mk);
+        }
+    }
 
     /**
      * Mulai sesi penyusunan untuk satu mata kuliah.
@@ -92,11 +128,15 @@ class RpsGeneratorService
         $stageCfg = $this->stageConfig($stage);
         $this->assertPrerequisites($session, $stage, $stageCfg);
         $this->assertNotLocked($session, $stage);
+        $this->assertNoPinnedItems($session, $stage);
+        $baseRevisi = (int) $session->revisi;
 
         $mk = $session->mataKuliah;
         if (! $mk) {
             throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
         }
+
+        $this->assertSubPrerequisiteLimit($session, $stage, $mk);
 
         // Prasyarat matriks: penurunan CPL->CPMK menuntut MK sudah dipetakan ke
         // minimal satu CPL (matriks CPL x MK). Tanpa itu keterunutan kehilangan
@@ -116,24 +156,24 @@ class RpsGeneratorService
 
         for ($percobaan = 0; $percobaan <= $maks; $percobaan++) {
             $outcome = $this->runGenerate($session, $stage, $stageCfg, $mk, $koreksi, $reGenerate);
-            $data = $this->parseJson($outcome->text(), $stage);
-
-            // Normalisasi kode CPL keluaran AI ke kode kanonik kurikulum
-            // (model kerap meniru format contoh skema, mis. "CPL01" vs "CPL-01").
-            if (($stageCfg['jenis_output'] ?? '') === 'cpmk') {
-                $data = $this->normalisasiCplKode($mk, $data);
-            }
-
-            // Jaring pengaman cakupan "tidak bertuan": tiap tahap punya rantai
-            // keterunutan wajib (CPL→CPMK→Sub-CPMK→mingguan/penilaian). Model
-            // tertentu (mis. gpt-4o) melewatkan entitas — deteksi deterministik
-            // lalu ulangi dengan instruksi koreksi eksplisit.
-            if ($percobaan < $maks) {
-                $bertuan = $this->entitasTakBertuan($stage, $session, $data, $mk);
-                if (($bertuan['hilang'] ?? []) !== []) {
-                    $koreksi[] = $bertuan['pesan'];
-                    continue;
+            try {
+                $data = $this->parseJson($outcome->text(), $stage);
+                // Validate raw types/IDs, never coerce or deduplicate invalid AI data.
+                $this->assertContract($stage, $data, $session, $mk, true);
+                if ($stage === 'mingguan') {
+                    $rowCount = count($data['minggu']);
+                    $data = $this->terapkanEvaluasiMingguan($mk, $data, $session->draf['penilaian'] ?? null);
+                    if (count($data['minggu']) < $rowCount) {
+                        throw new GeneratorException('Penempatan evaluasi akan menghapus baris. Kembalikan satu baris per pekan reguler dengan UTS/UAS pada slot yang benar.');
+                    }
+                    // Placement can move/remove an exam-labelled row: coverage must
+                    // still hold on the final persisted result, even on the last try.
+                    $this->assertContract($stage, $data, $session, $mk, true);
                 }
+            } catch (GeneratorException $e) {
+                if ($percobaan >= $maks) throw $e;
+                $koreksi[] = $e->getMessage();
+                continue;
             }
 
             $validasi = $this->validateStage($session, $stage, $data, $outcome);
@@ -152,10 +192,10 @@ class RpsGeneratorService
         }
 
         $draf = $session->draf ?? [];
-        $draf[$stage] = $this->assignItemIds($stage, $data);
-        if ($stage === 'mingguan') {
-            $draf[$stage] = $this->terapkanEvaluasiMingguan($mk, $draf[$stage], $draf['penilaian'] ?? null);
+        foreach ($draf[$stage][self::ITEM_KEY[$stage]] ?? [] as $oldItem) {
+            $draf = $this->tandaiHilirPerluTinjau($draf, $stage, $oldItem);
         }
+        $draf[$stage] = $this->assignItemIds($stage, $data);
         $status = $session->status_bagian ?? [];
         $status[$stage] = 'draft';
 
@@ -163,6 +203,8 @@ class RpsGeneratorService
             'draf'          => $draf,
             'status_bagian' => $status,
             'tahap'         => $stage,
+            'status'        => 'berjalan',
+            'revisi'        => $baseRevisi + 1,
         ];
 
         if ($validasi !== null) {
@@ -171,7 +213,16 @@ class RpsGeneratorService
             $update['catatan_validasi'] = $catatan;
         }
 
-        $session->update($update);
+        DB::transaction(function () use ($session, $stage, $baseRevisi, $update) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->assertNotLocked($locked, $stage);
+            if ((int) $locked->revisi !== $baseRevisi) {
+                throw new RevisiConflictException('Draf berubah selama AI bekerja. Hasil tidak menimpa perubahan terbaru.');
+            }
+            $this->assertContract($stage, $update['draf'][$stage], $locked, $locked->mataKuliah, true);
+            $locked->update($update);
+        });
+        $session->refresh();
 
         return $outcome;
     }
@@ -306,7 +357,7 @@ class RpsGeneratorService
 
     private function autoRevisiMaks(): int
     {
-        return max(0, (int) config('ai.grounding.auto_revisi_maks', 1));
+        return min(3, max(0, (int) config('ai.grounding.auto_revisi_maks', 1)));
     }
 
     /**
@@ -314,32 +365,60 @@ class RpsGeneratorService
      */
     public function acceptStage(GenerateSession $session, string $stage, ?array $edited = null): GenerateSession
     {
-        $this->stageConfig($stage);
-        $status = $session->status_bagian ?? [];
+        return DB::transaction(function () use ($session, $stage, $edited) {
+            $session = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->stageConfig($stage);
+            $this->assertNotLocked($session, $stage);
+            $status = $session->status_bagian ?? [];
 
-        $draf = $session->draf ?? [];
-        if ($edited !== null) {
-            // Penyimpanan manual/suntingan: diperbolehkan meski tahap belum
-            // pernah di-generate AI (pengguna mengisi sendiri kolom).
-            $draf[$stage] = $this->assignItemIds($stage, $edited);
-            $status[$stage] = 'edited';
-        } else {
-            if (($status[$stage] ?? 'pending') === 'pending') {
-                throw new GeneratorException("Tahap '{$stage}' belum di-generate, tak bisa disetujui.");
+            $draf = $session->draf ?? [];
+            // Manual editing and JSON import share acceptance. Validate only the
+            // stage being changed, so an oversized legacy Sub-CPMK remains repairable.
+            $this->assertContract($stage, $edited ?? ($draf[$stage] ?? []), $session, $session->mataKuliah);
+            if ($edited !== null) {
+                $key = self::ITEM_KEY[$stage];
+                foreach ($draf[$stage][$key] ?? [] as $old) {
+                    if (! ($old['_pin'] ?? false)) continue;
+                    $replacement = collect($edited[$key] ?? [])->firstWhere('_id', $old['_id']);
+                    if ($replacement !== $old) {
+                        throw new GeneratorException('Butir disematkan tidak boleh diubah atau dihapus. Lepas sematan dahulu.');
+                    }
+                }
+                // Penyimpanan manual/suntingan: diperbolehkan meski tahap belum
+                // pernah di-generate AI (pengguna mengisi sendiri kolom).
+                $draf[$stage] = $this->assignItemIds($stage, $edited);
+                $beforeItems = collect($session->draf[$stage][self::ITEM_KEY[$stage]] ?? [])->keyBy('_id');
+                $afterItems = collect($draf[$stage][self::ITEM_KEY[$stage]] ?? [])->keyBy('_id');
+                foreach ($beforeItems->keys()->merge($afterItems->keys())->unique() as $id) {
+                    $before = $beforeItems->get($id);
+                    $after = $afterItems->get($id);
+                    if ($before && $after && $this->tanpaMeta($before) == $this->tanpaMeta($after)) continue;
+                    if ($before) $draf = $this->tandaiHilirPerluTinjau($draf, $stage, $before);
+                    if ($after) $draf = $this->tandaiHilirPerluTinjau($draf, $stage, $after);
+                }
+                $status[$stage] = 'edited';
+            } else {
+                if (($status[$stage] ?? 'pending') === 'pending') {
+                    throw new GeneratorException("Tahap '{$stage}' belum di-generate, tak bisa disetujui.");
+                }
+                $status[$stage] = 'accepted';
             }
-            $status[$stage] = 'accepted';
-        }
 
-        $next = $this->nextPendingStage($status);
+            foreach ($draf[$stage][self::ITEM_KEY[$stage]] ?? [] as $index => $item) {
+                unset($draf[$stage][self::ITEM_KEY[$stage]][$index]['_needs_review']);
+            }
+            $next = $this->nextPendingStage($status);
 
-        $session->update([
-            'draf'          => $draf,
-            'status_bagian' => $status,
-            'tahap'         => $next ?? $stage,
-            'status'        => $this->allLocked($status) ? 'selesai' : 'berjalan',
-        ]);
+            $session->update([
+                'draf'          => $draf,
+                'status_bagian' => $status,
+                'tahap'         => $next ?? $stage,
+                'status'        => $this->allLocked($status) ? 'selesai' : 'berjalan',
+                'revisi'        => (int) $session->revisi + 1,
+            ]);
 
-        return $session->refresh();
+            return $session->refresh();
+        });
     }
 
     /**
@@ -347,17 +426,21 @@ class RpsGeneratorService
      */
     public function rejectStage(GenerateSession $session, string $stage): GenerateSession
     {
-        $this->stageConfig($stage);
-        $this->assertNotLocked($session, $stage);
+        return DB::transaction(function () use ($session, $stage) {
+            $session = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->stageConfig($stage);
+            $this->assertNotLocked($session, $stage);
+            $this->assertNoPinnedItems($session, $stage);
 
-        $draf = $session->draf ?? [];
-        unset($draf[$stage]);
-        $status = $session->status_bagian ?? [];
-        $status[$stage] = 'pending';
+            $draf = $session->draf ?? [];
+            unset($draf[$stage]);
+            $status = $session->status_bagian ?? [];
+            $status[$stage] = 'pending';
 
-        $session->update(['draf' => $draf, 'status_bagian' => $status, 'status' => 'berjalan']);
+            $session->update(['draf' => $draf, 'status_bagian' => $status, 'status' => 'berjalan', 'revisi' => (int) $session->revisi + 1]);
 
-        return $session->refresh();
+            return $session->refresh();
+        });
     }
 
     /**
@@ -365,17 +448,110 @@ class RpsGeneratorService
      */
     public function pinStage(GenerateSession $session, string $stage): GenerateSession
     {
-        $this->stageConfig($stage);
-        $status = $session->status_bagian ?? [];
+        return DB::transaction(function () use ($session, $stage) {
+            $session = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->stageConfig($stage);
+            $this->assertSessionEditable($session);
+            $status = $session->status_bagian ?? [];
 
-        if (($status[$stage] ?? 'pending') === 'pending') {
-            throw new GeneratorException("Tahap '{$stage}' belum ada isinya untuk dikunci.");
+            if (($status[$stage] ?? 'pending') === 'pending') {
+                throw new GeneratorException("Tahap '{$stage}' belum ada isinya untuk dikunci.");
+            }
+
+            $this->assertContract($stage, $session->draf[$stage] ?? [], $session, $session->mataKuliah);
+            $status[$stage] = 'pinned';
+            $session->update(['status_bagian' => $status, 'revisi' => (int) $session->revisi + 1]);
+
+            return $session->refresh();
+        });
+    }
+
+    public function updateKonteks(GenerateSession $session, array $konteks): void
+    {
+        DB::transaction(function () use ($session, $konteks) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->assertSessionEditable($locked);
+            $locked->update(['konteks_tambahan' => $konteks ?: null, 'revisi' => (int) $locked->revisi + 1]);
+        });
+    }
+
+    private function assertNoPinnedItems(GenerateSession $session, string $stage): void
+    {
+        foreach ($session->draf[$stage][self::ITEM_KEY[$stage]] ?? [] as $item) {
+            if ($item['_pin'] ?? false) {
+                throw new GeneratorException('Tahap memiliki butir disematkan. Gunakan AI per butir, atau lepas sematan sebelum mengganti seluruh tahap.');
+            }
         }
+    }
 
-        $status[$stage] = 'pinned';
-        $session->update(['status_bagian' => $status]);
+    private function hasApprovedCourse(GenerateSession $session): bool
+    {
+        return RpsVersion::where('institusi_id', $session->institusi_id)
+            ->where('kode_mk', $session->mataKuliah->kode_mk)
+            ->where(fn($q) => $q->where('status', 'approved')->orWhereNotNull('approved_at')
+                ->orWhereHas('approvalLogs', fn($logs) => $logs->where('aksi', 'setujui')))->exists();
+    }
 
-        return $session->refresh();
+    public function unpinStage(GenerateSession $session, string $stage): GenerateSession
+    {
+        $this->stageConfig($stage);
+        return DB::transaction(function () use ($session, $stage) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->assertSessionEditable($locked);
+            $status = $locked->status_bagian ?? [];
+            if (($status[$stage] ?? '') === 'pinned') {
+                $status[$stage] = 'accepted';
+                $locked->update(['status_bagian' => $status, 'revisi' => (int) $locked->revisi + 1]);
+            }
+            return $locked;
+        });
+    }
+
+    /** Buka staging kembali; dokumen dan audit lama tetap tersimpan sampai commit ulang. */
+    public function reopen(GenerateSession $session, array $actor): GenerateSession
+    {
+        return DB::transaction(function () use ($session, $actor) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $rps = RpsVersion::query()->lockForUpdate()->find($locked->rps_version_id);
+            if (! $rps || $locked->status !== 'committed') {
+                throw new GeneratorException('Sesi ini bukan RPS yang sudah di-commit.');
+            }
+            if (
+                ! in_array($rps->status, ['draft', 'review', 'revisi'], true)
+                || $rps->pernahDisetujui()
+            ) {
+                throw new GeneratorException('RPS yang sudah disetujui prodi tidak dapat dikembalikan ke draf.');
+            }
+            $from = $rps->status;
+            $rps->update(['status' => 'draft', 'submitted_at' => null]);
+            $locked->update(['status' => 'berjalan', 'revisi' => (int) $locked->revisi + 1]);
+            RpsApprovalLog::create([
+                'institusi_id' => $rps->institusi_id,
+                'rps_version_id' => $rps->id,
+                'aksi' => 'buka_draf',
+                'dari_status' => $from,
+                'ke_status' => 'draft',
+                'catatan' => $actor['catatan'],
+                'actor_id' => $actor['id'],
+                'actor_nama' => $actor['nama'],
+            ]);
+            return $locked;
+        });
+    }
+
+    public function assertSessionEditable(GenerateSession $session): void
+    {
+        if ($session->status === 'committed') {
+            throw new GeneratorException('RPS sudah di-commit. Kembalikan ke draf sebelum menyunting.');
+        }
+        if ($session->rps_version_id) {
+            $rps = $session->rpsVersion()->first();
+            if (
+                ! $rps || ! in_array($rps->status, ['draft', 'revisi'], true) || $rps->pernahDisetujui()
+            ) {
+                throw new GeneratorException('RPS sedang ditinjau atau telah disetujui prodi; perubahan ditolak.');
+            }
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -392,12 +568,13 @@ class RpsGeneratorService
     public function regenerateItem(GenerateSession $session, string $stage, string $itemId, array $opts = []): array
     {
         $stageCfg = $this->stageConfig($stage);
+        $this->assertNotLocked($session, $stage);
         $mk = $session->mataKuliah;
         if (! $mk) {
             throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
         }
 
-        $this->backfillItemIds($session);
+        $this->assertSubPrerequisiteLimit($session, $stage, $mk);
         [,, $item] = $this->locateItem($session, $stage, $itemId);
 
         if (($item['_pin'] ?? false) === true) {
@@ -406,28 +583,55 @@ class RpsGeneratorService
 
         [$system, $prompt] = $this->buildItemPrompt($session, $stage, $stageCfg, $mk, $item, $opts);
 
-        $outcome = $this->ai->run('generate', $system, $prompt, [
-            'institusi_id' => $session->institusi_id,
-            'user_id'      => $session->user_id,
-            'entity_type'  => 'GenerateSession',
-            'entity_id'    => $session->id,
-            'mode'         => "revisi_item:{$stage}",
-            'max_tokens'   => $stageCfg['max_tokens'] ?? null,
-            'no_cache'     => true,
-        ]);
+        $maks = $this->autoRevisiMaks();
+        $outcome = null;
+        $after = null;
+        for ($attempt = 0; $attempt <= $maks; $attempt++) {
+            $outcome = $this->ai->run('generate', $system, $prompt, [
+                'institusi_id' => $session->institusi_id,
+                'user_id'      => $session->user_id,
+                'entity_type'  => 'GenerateSession',
+                'entity_id'    => $session->id,
+                'mode'         => "revisi_item:{$stage}",
+                'max_tokens'   => $stageCfg['max_tokens'] ?? null,
+                'no_cache'     => true,
+            ]);
 
-        if ($outcome->failed()) {
-            throw new GeneratorException('Panggilan AI gagal: ' . ($outcome->result->error ?? 'tidak diketahui'));
+            if ($outcome->failed()) {
+                throw new GeneratorException('Panggilan AI gagal: ' . ($outcome->result->error ?? 'tidak diketahui'));
+            }
+
+            try {
+                $data = $this->parseJson($outcome->text(), $stage);
+                $key = self::ITEM_KEY[$stage];
+                if (array_keys($data) !== [$key] || ! is_array($data[$key]) || ! array_is_list($data[$key]) || count($data[$key]) !== 1 || ! is_array($data[$key][0])) {
+                    throw new GeneratorException('AI harus mengembalikan tepat satu item, tanpa menambah jumlah.');
+                }
+                // Identitas (kode/pemetaan) dipulihkan diam-diam oleh normalisasi —
+                // sama seperti applyItem; AI yang mengganti kode tidak membatalkan usulan.
+                $usulan = $this->normalisasiItemBaru($stage, $item, $data[$key][0]);
+                try {
+                    $usulan = $this->validateCandidateItem($stage, $usulan);
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                    throw new GeneratorException('Item usulan tidak valid: '
+                        . implode(' ', array_merge(...array_values($e->errors()))));
+                }
+                // Gerbang setara applyItem (non-strict): batas jumlah tahap tetap
+                // ditegakkan tanpa memblokir draf lama yang item lainnya belum rapi.
+                [$key, $index] = $this->locateItem($session, $stage, $itemId);
+                $candidate = $session->draf[$stage];
+                $candidate[$key][$index] = array_replace($usulan, array_intersect_key($item, array_flip(['_id', '_pin'])));
+                $this->assertContract($stage, $candidate, $session, $mk);
+                $after = $usulan;
+                break;
+            } catch (GeneratorException $e) {
+                if ($attempt >= $maks) throw $e;
+                $prompt .= "\nKOREKSI WAJIB: " . $e->getMessage();
+            }
         }
-
-        $data = $this->parseJson($outcome->text(), $stage);
-        $key = self::ITEM_KEY[$stage];
-        $baru = $this->ekstrakItemTunggal($data, $key);
-        if (! is_array($baru)) {
-            throw new GeneratorException('AI tidak mengembalikan item yang valid.');
+        if ($outcome === null || $after === null) {
+            throw new GeneratorException('Tidak ada kandidat yang memenuhi kontrak.');
         }
-
-        $after = $this->normalisasiItemBaru($stage, $item, $baru);
 
         return [
             'stage'       => $stage,
@@ -444,63 +648,227 @@ class RpsGeneratorService
     }
 
     /**
+     * Lengkapi field kosong SATU item dari editor manual — TANPA menyentuh draf.
+     * Field yang sudah diisi dosen (pilihan CPL/CPMK/Sub-CPMK, kode, dsb.)
+     * dipertahankan apa adanya; AI hanya mengisi sisanya.
+     */
+    public function suggestItem(GenerateSession $session, string $stage, array $partial, ?string $instruction = null): array
+    {
+        $stageCfg = $this->stageConfig($stage);
+        $this->assertSessionEditable($session);
+        $mk = $session->mataKuliah;
+        if (! $mk) {
+            throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
+        }
+
+        $allowed = self::ITEM_FIELDS[$stage] ?? null;
+        if ($allowed === null) {
+            throw new GeneratorException("Tahap '{$stage}' tak mendukung pengisian per item.");
+        }
+        $partial = array_intersect_key($this->tanpaMeta($partial), array_flip($allowed));
+        $terisi = array_filter($partial, fn($v) => ! ($v === null || $v === '' || $v === []));
+        $kosong = array_values(array_diff($allowed, array_keys($terisi)));
+        $skeleton = [];
+        foreach ($allowed as $f) {
+            $skeleton[$f] = $terisi[$f] ?? null;
+        }
+
+        [$system, $base] = $this->buildPrompt($session, $stage, $stageCfg, $mk);
+        $key = self::ITEM_KEY[$stage];
+        $arahan = [
+            "\n===================",
+            'MODE LENGKAPI SATU ITEM (WAJIB DIPATUHI, UTAMAKAN ARAHAN INI):',
+            '- ABAIKAN perintah membuat banyak item di atas. Fokus HANYA melengkapi SATU item di bawah.',
+            "- Kembalikan HANYA JSON {\"{$key}\": [ <satu item lengkap> ]} — TEPAT satu item dengan SEMUA field pada ITEM PARSIAL.",
+            '- Field yang SUDAH TERISI adalah pilihan dosen: SALIN APA ADANYA, JANGAN diubah.',
+            '- Field bernilai null pada ITEM PARSIAL WAJIB kamu isi dengan usulan berkualitas yang konsisten dengan konteks & field terisi'
+                . ($kosong === [] ? '.' : ' — yaitu: ' . implode(', ', $kosong) . '.'),
+        ];
+        $instruction = trim((string) $instruction);
+        if ($instruction !== '') {
+            $arahan[] = '- Instruksi tambahan dari dosen: ' . $instruction;
+        }
+        $arahan[] = 'ITEM PARSIAL (isi field bernilai null):';
+        $arahan[] = json_encode($skeleton, JSON_UNESCAPED_UNICODE);
+        $prompt = $base . "\n" . implode("\n", $arahan);
+
+        $maks = $this->autoRevisiMaks();
+        $outcome = null;
+        $item = null;
+        for ($attempt = 0; $attempt <= $maks; $attempt++) {
+            $outcome = $this->ai->run('generate', $system, $prompt, [
+                'institusi_id' => $session->institusi_id,
+                'user_id'      => $session->user_id,
+                'entity_type'  => 'GenerateSession',
+                'entity_id'    => $session->id,
+                'mode'         => "isi_item:{$stage}",
+                'max_tokens'   => $stageCfg['max_tokens'] ?? null,
+                'no_cache'     => true,
+            ]);
+
+            if ($outcome->failed()) {
+                throw new GeneratorException('Panggilan AI gagal: ' . ($outcome->result->error ?? 'tidak diketahui'));
+            }
+
+            try {
+                $data = $this->parseJson($outcome->text(), $stage);
+                $usulan = $this->ekstrakItemTunggal($data, $key);
+                if ($usulan === null) {
+                    throw new GeneratorException('AI harus mengembalikan tepat satu item, tanpa menambah jumlah.');
+                }
+                // Field terisi dosen menang; buang field liar di luar skema.
+                $usulan = array_replace(array_intersect_key($usulan, array_flip($allowed)), $terisi);
+                try {
+                    $item = $this->validateCandidateItem($stage, $usulan);
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                    throw new GeneratorException('Item usulan tidak valid: '
+                        . implode(' ', array_merge(...array_values($e->errors()))));
+                }
+                break;
+            } catch (GeneratorException $e) {
+                if ($attempt >= $maks) throw $e;
+                $prompt .= "\nKOREKSI WAJIB: " . $e->getMessage();
+            }
+        }
+        if ($outcome === null || $item === null) {
+            throw new GeneratorException('Tidak ada usulan yang memenuhi kontrak.');
+        }
+
+        return [
+            'stage' => $stage,
+            'item'  => $item,
+            'usage' => [
+                'model'         => $outcome->interaksi?->model,
+                'provider'      => $outcome->interaksi?->provider,
+                'estimated_usd' => round($outcome->biaya, 6),
+            ],
+        ];
+    }
+
+    /**
      * Terapkan usulan satu item ke draf (optimistic locking). Item lain tetap.
      * Menaikkan revisi & menandai item hilir yang terpengaruh "perlu tinjau".
      */
     public function applyItem(GenerateSession $session, string $stage, string $itemId, array $after, int $baseRevisi): GenerateSession
     {
         $this->stageConfig($stage);
-        $this->backfillItemIds($session);
+        $after = $this->validateCandidateItem($stage, $after);
 
-        if ((int) ($session->revisi ?? 0) !== $baseRevisi) {
-            throw new RevisiConflictException('Draf sudah berubah sejak usulan dibuat. Tinjau ulang perbedaan terbaru sebelum menerapkan.');
-        }
+        return DB::transaction(function () use ($session, $stage, $itemId, $after, $baseRevisi) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->assertNotLocked($locked, $stage);
+            $this->backfillItemIds($locked);
 
-        [$key, $index, $item] = $this->locateItem($session, $stage, $itemId);
-        if (($item['_pin'] ?? false) === true) {
-            throw new GeneratorException('Item disematkan (pin) — lepas sematan sebelum menerapkan perubahan.');
-        }
+            if ((int) ($locked->revisi ?? 0) !== $baseRevisi) {
+                throw new RevisiConflictException('Draf sudah berubah sejak usulan dibuat. Tinjau ulang perbedaan terbaru sebelum menerapkan.');
+            }
 
-        $after = $this->tanpaMeta($after);
-        $after['_id'] = $item['_id'];
-        if (isset($item['_pin'])) {
-            $after['_pin'] = $item['_pin'];
-        }
+            [$key, $index, $item] = $this->locateItem($locked, $stage, $itemId);
+            if (($item['_pin'] ?? false) === true) {
+                throw new GeneratorException('Item disematkan (pin) — lepas sematan sebelum menerapkan perubahan.');
+            }
 
-        $draf = $session->draf ?? [];
-        $draf[$stage][$key][$index] = $after;
-        $draf = $this->tandaiHilirPerluTinjau($draf, $stage, $after);
+            $after = $this->normalisasiItemBaru($stage, $item, $after);
+            $after['_id'] = $item['_id'];
+            if (isset($item['_pin'])) {
+                $after['_pin'] = $item['_pin'];
+            }
 
-        $status = $session->status_bagian ?? [];
-        if (($status[$stage] ?? 'pending') === 'pending') {
-            $status[$stage] = 'edited';
-        }
+            $draf = $locked->draf ?? [];
+            $draf[$stage][$key][$index] = $after;
+            $this->assertContract($stage, $draf[$stage], $locked, $locked->mataKuliah);
+            $draf = $this->tandaiHilirPerluTinjau($draf, $stage, $after);
 
-        $session->update([
-            'draf'          => $draf,
-            'status_bagian' => $status,
-            'revisi'        => (int) ($session->revisi ?? 0) + 1,
-        ]);
+            $status = $locked->status_bagian ?? [];
+            if (($status[$stage] ?? 'pending') === 'pending') {
+                $status[$stage] = 'edited';
+            }
 
-        return $session->refresh();
+            $locked->update([
+                'draf'          => $draf,
+                'status_bagian' => $status,
+                'revisi'        => (int) ($locked->revisi ?? 0) + 1,
+            ]);
+
+            return $locked->refresh();
+        });
+    }
+
+    /** Validasi struktur kandidat agar draf tidak dapat diisi bentuk data arbitrer. */
+    private function validateCandidateItem(string $stage, array $after): array
+    {
+        $rules = match ($stage) {
+            'cpmk' => [
+                'after' => ['required', 'array:kode,deskripsi,cpl_kode,taksonomi_kode'],
+                'after.kode' => ['required', 'string', 'max:100'],
+                'after.deskripsi' => ['required', 'string', 'max:5000'],
+                'after.cpl_kode' => ['sometimes', 'array'],
+                'after.cpl_kode.*' => ['string', 'max:100', 'distinct'],
+                'after.taksonomi_kode' => ['sometimes', 'array'],
+                'after.taksonomi_kode.*' => ['string', 'max:100', 'distinct'],
+            ],
+            'sub_cpmk' => [
+                'after' => ['required', 'array:kode,cpmk_kode,deskripsi,taksonomi_kode,indikator'],
+                'after.kode' => ['required', 'string', 'max:100'],
+                'after.cpmk_kode' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'after.deskripsi' => ['required', 'string', 'max:5000'],
+                'after.taksonomi_kode' => ['sometimes', 'array'],
+                'after.taksonomi_kode.*' => ['string', 'max:100', 'distinct'],
+                'after.indikator' => ['sometimes', 'array'],
+                'after.indikator.*' => ['string', 'max:2000'],
+            ],
+            'mingguan' => [
+                'after' => ['required', 'array:minggu_ke,sub_cpmk_kode,indikator,kriteria_penilaian,metode_pembelajaran,bentuk_luring,bentuk_daring,pengalaman_belajar,materi_pustaka,bobot_penilaian'],
+                'after.minggu_ke' => ['required', 'integer', 'min:1', 'max:60'],
+                'after.sub_cpmk_kode' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'after.indikator' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.kriteria_penilaian' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.metode_pembelajaran' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.bentuk_luring' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.bentuk_daring' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.pengalaman_belajar' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.materi_pustaka' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.bobot_penilaian' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            ],
+            'penilaian' => [
+                'after' => ['required', 'array:nama,jenis,instrumen,bobot_persen,sub_cpmk_kode,minggu_ke,rubrik'],
+                'after.nama' => ['required', 'string', 'max:500'],
+                'after.jenis' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'after.instrumen' => ['sometimes', 'nullable', 'string', 'max:2000'],
+                'after.bobot_persen' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+                'after.sub_cpmk_kode' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'after.minggu_ke' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:60'],
+                'after.rubrik' => ['sometimes', 'nullable', 'array:jenis,jumlah_level_skala,label_skala,kriteria'],
+                'after.rubrik.jenis' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'after.rubrik.jumlah_level_skala' => ['sometimes', 'integer', 'min:2', 'max:10'],
+                'after.rubrik.label_skala' => ['sometimes', 'array'],
+                'after.rubrik.label_skala.*' => ['string', 'max:200'],
+                'after.rubrik.kriteria' => ['sometimes', 'array'],
+                'after.rubrik.kriteria.*' => ['array:kriteria,bobot,deskriptor'],
+                'after.rubrik.kriteria.*.kriteria' => ['required', 'string', 'max:1000'],
+                'after.rubrik.kriteria.*.bobot' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+                'after.rubrik.kriteria.*.deskriptor' => ['sometimes', 'array'],
+                'after.rubrik.kriteria.*.deskriptor.*' => ['string', 'max:2000'],
+            ],
+        };
+
+        return Validator::make(['after' => $after], $rules)->validate()['after'];
     }
 
     /** Sematkan/lepas sematan satu item (item tersemat tak diubah AI/apply). */
     public function setItemPin(GenerateSession $session, string $stage, string $itemId, bool $pinned): GenerateSession
     {
         $this->stageConfig($stage);
-        $this->backfillItemIds($session);
-        [$key, $index] = $this->locateItem($session, $stage, $itemId);
-
-        $draf = $session->draf ?? [];
-        if ($pinned) {
-            $draf[$stage][$key][$index]['_pin'] = true;
-        } else {
-            unset($draf[$stage][$key][$index]['_pin']);
-        }
-        $session->update(['draf' => $draf]);
-
-        return $session->refresh();
+        return DB::transaction(function () use ($session, $stage, $itemId, $pinned) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $this->assertNotLocked($locked, $stage);
+            $this->backfillItemIds($locked);
+            [$key, $index] = $this->locateItem($locked, $stage, $itemId);
+            $draf = $locked->draf ?? [];
+            $draf[$stage][$key][$index]['_pin'] = $pinned;
+            $locked->update(['draf' => $draf, 'revisi' => (int) $locked->revisi + 1]);
+            return $locked;
+        });
     }
 
     /** Assign _id stabil ke tiap item tahap yang belum punya (non-destruktif). */
@@ -532,20 +900,28 @@ class RpsGeneratorService
      */
     public function ensureEvaluasiMingguan(GenerateSession $session): void
     {
-        if ((($session->status_bagian ?? [])['mingguan'] ?? 'pending') !== 'draft') {
-            return;
-        }
-        $mk   = $session->mataKuliah;
-        $draf = $session->draf ?? [];
-        if (! $mk || ! isset($draf['mingguan']) || ! is_array($draf['mingguan'])) {
-            return;
-        }
-        $hasil = $this->terapkanEvaluasiMingguan($mk, $draf['mingguan'], $draf['penilaian'] ?? null);
-        if ($hasil !== $draf['mingguan']) {
-            $draf['mingguan'] = $hasil;
-            $session->update(['draf' => $draf]);
-            $session->refresh();
-        }
+        DB::transaction(function () use ($session) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $session->setRawAttributes($locked->getAttributes(), true);
+            if ($session->status === 'committed') return;
+            foreach ($session->draf['mingguan']['minggu'] ?? [] as $item) {
+                if ($item['_pin'] ?? false) return;
+            }
+            if ((($session->status_bagian ?? [])['mingguan'] ?? 'pending') !== 'draft') {
+                return;
+            }
+            $mk   = $session->mataKuliah;
+            $draf = $session->draf ?? [];
+            if (! $mk || ! isset($draf['mingguan']) || ! is_array($draf['mingguan'])) {
+                return;
+            }
+            $hasil = $this->terapkanEvaluasiMingguan($mk, $draf['mingguan'], $draf['penilaian'] ?? null);
+            if ($hasil !== $draf['mingguan']) {
+                $draf['mingguan'] = $hasil;
+                $session->update(['draf' => $draf, 'revisi' => (int) $session->revisi + 1]);
+                $session->refresh();
+            }
+        });
     }
 
     /**
@@ -580,9 +956,10 @@ class RpsGeneratorService
                 continue;
             }
             $t = strtolower((string) ($m['materi_pustaka'] ?? ''));
-            if (str_contains($t, 'uts') || str_contains($t, 'ujian tengah')) {
+            // Word-boundary: substring 'uas' ada di kata biasa (menstruasi, evaluasi).
+            if (preg_match('/\buts\b|ujian tengah|evaluasi tengah/', $t)) {
                 $barisUts ??= $m;
-            } elseif (str_contains($t, 'uas') || str_contains($t, 'ujian akhir')) {
+            } elseif (preg_match('/\buas\b|ujian akhir|evaluasi akhir/', $t)) {
                 $barisUas ??= $m;
             } else {
                 $belajar[] = $m;
@@ -638,8 +1015,8 @@ class RpsGeneratorService
         foreach (($penilaian['komponen'] ?? []) as $k) {
             $nama  = strtolower((string) (is_array($k) ? ($k['nama'] ?? '') : ''));
             $cocok = $jenis === 'uts'
-                ? (str_contains($nama, 'uts') || str_contains($nama, 'tengah'))
-                : (str_contains($nama, 'uas') || str_contains($nama, 'akhir'));
+                ? (bool) preg_match('/\buts\b|tengah/', $nama)
+                : (bool) preg_match('/\buas\b|akhir/', $nama);
             if ($cocok && is_numeric($k['bobot_persen'] ?? null)) {
                 return (float) $k['bobot_persen'];
             }
@@ -651,17 +1028,22 @@ class RpsGeneratorService
     /** Pastikan seluruh item pada draf punya _id; simpan bila ada yang ditambah. */
     private function backfillItemIds(GenerateSession $session): void
     {
-        $draf = $session->draf ?? [];
-        $before = json_encode($draf);
-        foreach (array_keys(self::ITEM_KEY) as $stage) {
-            if (isset($draf[$stage]) && is_array($draf[$stage])) {
-                $draf[$stage] = $this->assignItemIds($stage, $draf[$stage]);
+        DB::transaction(function () use ($session) {
+            $locked = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $session->setRawAttributes($locked->getAttributes(), true);
+            if ($session->status === 'committed') return;
+            $draf = $session->draf ?? [];
+            $before = json_encode($draf);
+            foreach (array_keys(self::ITEM_KEY) as $stage) {
+                if (isset($draf[$stage]) && is_array($draf[$stage])) {
+                    $draf[$stage] = $this->assignItemIds($stage, $draf[$stage]);
+                }
             }
-        }
-        if (json_encode($draf) !== $before) {
-            $session->update(['draf' => $draf]);
-            $session->refresh();
-        }
+            if (json_encode($draf) !== $before) {
+                $session->update(['draf' => $draf, 'revisi' => (int) $session->revisi + 1]);
+                $session->refresh();
+            }
+        });
     }
 
     /**
@@ -720,8 +1102,8 @@ class RpsGeneratorService
      */
     private function normalisasiItemBaru(string $stage, array $lama, array $baru): array
     {
-        $baru = $this->tanpaMeta($baru);
-        foreach (['kode', 'cpmk_kode', 'minggu_ke', 'sub_cpmk_kode'] as $idKey) {
+        $baru = array_replace($this->tanpaMeta($lama), $this->tanpaMeta($baru));
+        foreach (['kode', 'cpl_kode', 'cpmk_kode', 'minggu_ke', 'sub_cpmk_kode'] as $idKey) {
             if (array_key_exists($idKey, $lama)) {
                 $baru[$idKey] = $lama[$idKey];
             }
@@ -749,6 +1131,18 @@ class RpsGeneratorService
             $kode = $item['kode'] ?? null;
             if ($kode !== null && isset($draf['sub_cpmk']['sub_cpmk'])) {
                 $draf['sub_cpmk']['sub_cpmk'] = $tandai($draf['sub_cpmk']['sub_cpmk'], fn($it) => ($it['cpmk_kode'] ?? null) === $kode);
+                $subCodes = array_values(array_filter(array_map(
+                    fn($it) => is_array($it) && ($it['cpmk_kode'] ?? null) === $kode ? ($it['kode'] ?? null) : null,
+                    $draf['sub_cpmk']['sub_cpmk'],
+                )));
+                foreach (['mingguan' => 'minggu', 'penilaian' => 'komponen'] as $childStage => $key) {
+                    if (isset($draf[$childStage][$key])) {
+                        $draf[$childStage][$key] = $tandai(
+                            $draf[$childStage][$key],
+                            fn($it) => in_array($it['sub_cpmk_kode'] ?? null, $subCodes, true),
+                        );
+                    }
+                }
             }
         } elseif ($stage === 'sub_cpmk') {
             $kode = $item['kode'] ?? null;
@@ -758,6 +1152,14 @@ class RpsGeneratorService
                         $draf[$st][$k] = $tandai($draf[$st][$k], fn($it) => ($it['sub_cpmk_kode'] ?? null) === $kode);
                     }
                 }
+            }
+        } elseif ($stage === 'mingguan') {
+            $mingguKe = $item['minggu_ke'] ?? null;
+            if ($mingguKe !== null && isset($draf['penilaian']['komponen'])) {
+                $draf['penilaian']['komponen'] = $tandai(
+                    $draf['penilaian']['komponen'],
+                    fn($it) => (int) ($it['minggu_ke'] ?? 0) === (int) $mingguKe,
+                );
             }
         }
 
@@ -808,6 +1210,12 @@ class RpsGeneratorService
 
     public function readyToCommit(GenerateSession $session): bool
     {
+        foreach (self::ITEM_KEY as $stage => $key) {
+            if ($this->contract()->violations($stage, $session->draf[$stage] ?? [], $session, $session->mataKuliah, false) !== []) return false;
+            foreach ($session->draf[$stage][$key] ?? [] as $item) {
+                if ($item['_needs_review'] ?? false) return false;
+            }
+        }
         return $this->allLocked($session->status_bagian ?? []);
     }
 
@@ -818,26 +1226,26 @@ class RpsGeneratorService
      */
     public function commit(GenerateSession $session): RpsVersion
     {
-        if ($session->status === 'committed' || $session->rps_version_id) {
-            throw new GeneratorException('Sesi sudah pernah di-commit.');
-        }
-
-        if (! $this->readyToCommit($session)) {
-            throw new GeneratorException('Semua tahap harus disetujui sebelum commit.');
-        }
-
-        $mk = $session->mataKuliah;
-        if (! $mk) {
-            throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
-        }
-
-        $draf = $session->draf ?? [];
-
-        return DB::transaction(function () use ($session, $mk, $draf) {
+        return DB::transaction(function () use ($session) {
+            $mk = MataKuliah::query()->lockForUpdate()->find($session->mk_id);
+            if (! $mk) {
+                throw new GeneratorException('Sesi generate tidak terkait mata kuliah.');
+            }
+            $session = GenerateSession::query()->lockForUpdate()->findOrFail($session->id);
+            $rps = $session->rps_version_id
+                ? RpsVersion::query()->lockForUpdate()->findOrFail($session->rps_version_id) : null;
+            $this->assertSessionEditable($session);
+            foreach (array_keys(self::ITEM_KEY) as $stage) {
+                $this->assertContract($stage, $session->draf[$stage] ?? [], $session, $mk);
+            }
+            if (! $this->readyToCommit($session)) {
+                throw new GeneratorException('Semua tahap dan butir yang perlu ditinjau harus disetujui sebelum commit.');
+            }
+            $draf = $session->draf ?? [];
             $cpmkMap = $this->commitCpmk($session, $mk, $draf['cpmk']['cpmk'] ?? []);
             $subMap  = $this->commitSubCpmk($session, $cpmkMap, $draf['sub_cpmk']['sub_cpmk'] ?? []);
 
-            $rps = RpsVersion::create([
+            $rps ??= RpsVersion::create([
                 'institusi_id' => $session->institusi_id,
                 'kode_mk'      => $mk->kode_mk,
                 'versi'        => $this->nextRpsVersi($session->institusi_id, $mk->kode_mk),
@@ -846,10 +1254,13 @@ class RpsGeneratorService
                 'created_by'   => $session->user_id,
             ]);
 
+            // Staging tidak menulis dokumen sampai commit; penggantian atomik tanpa duplikasi.
+            $rps->minggu()->delete();
+            $rps->komponenPenilaian()->delete();
             $this->commitMinggu($rps, $subMap, $draf['mingguan']['minggu'] ?? [], $mk);
             $this->commitKomponen($rps, $subMap, $draf['penilaian']['komponen'] ?? []);
 
-            $session->update(['rps_version_id' => $rps->id, 'status' => 'committed']);
+            $session->update(['rps_version_id' => $rps->id, 'status' => 'committed', 'revisi' => (int) $session->revisi + 1]);
 
             return $rps;
         });
@@ -865,19 +1276,19 @@ class RpsGeneratorService
         $map = [];
         foreach ($items as $item) {
             $kodeList = $this->normalizeTaksonomiKode($item['taksonomi_kode'] ?? null);
-            $cpmk = Cpmk::updateOrCreate(
+            $cpmk = Cpmk::firstOrNew(
                 [
                     'institusi_id' => $session->institusi_id,
                     'kode_mk'      => $mk->kode_mk,
                     'kode'         => $item['kode'] ?? '',
-                ],
-                [
-                    'deskripsi'      => $item['deskripsi'] ?? '',
-                    'bobot_persen'   => $item['bobot_persen'] ?? null,
-                    'taksonomi_id'   => $this->findTaksonomiId($session->institusi_id, $kodeList[0] ?? null),
-                    'taksonomi_kode' => $kodeList ?: null,
                 ]
             );
+            $cpmk->fill([
+                'deskripsi'      => $item['deskripsi'] ?? '',
+                'bobot_persen'   => $item['bobot_persen'] ?? null,
+                'taksonomi_id'   => $this->findTaksonomiId($session->institusi_id, $kodeList[0] ?? null),
+                'taksonomi_kode' => $kodeList ?: null,
+            ]);
 
             $cplSync = [];
             foreach ($item['cpl_kode'] ?? [] as $cplKode) {
@@ -886,7 +1297,16 @@ class RpsGeneratorService
                     $cplSync[$cpl->id] = ['institusi_id' => $session->institusi_id];
                 }
             }
-            $cpmk->cpl()->sync($cplSync);
+            if ($cpmk->exists && $this->hasApprovedCourse($session)) {
+                $old = $cpmk->cpl()->pluck('cpl.id')->sort()->values()->all();
+                $new = collect(array_keys($cplSync))->sort()->values()->all();
+                if ($cpmk->isDirty() || $old !== $new) {
+                    throw new GeneratorException('CPMK ini digunakan RPS yang telah disetujui. Perubahan capaian bersama ditolak agar dokumen lama tetap utuh.');
+                }
+            } else {
+                $cpmk->save();
+                $cpmk->cpl()->sync($cplSync);
+            }
 
             if (($item['kode'] ?? '') !== '') {
                 $map[$item['kode']] = $cpmk;
@@ -910,19 +1330,30 @@ class RpsGeneratorService
             }
 
             $subKodeList = $this->normalizeTaksonomiKode($item['taksonomi_kode'] ?? null);
-            $sub = SubCpmk::updateOrCreate(
+            $sub = SubCpmk::firstOrNew(
                 [
                     'institusi_id' => $session->institusi_id,
                     'cpmk_id'      => $cpmk->id,
                     'kode'         => $item['kode'] ?? '',
-                ],
-                [
-                    'deskripsi'      => $item['deskripsi'] ?? '',
-                    'bobot_persen'   => $item['bobot_persen'] ?? null,
-                    'taksonomi_id'   => $this->findTaksonomiId($session->institusi_id, $subKodeList[0] ?? null),
-                    'taksonomi_kode' => $subKodeList ?: null,
                 ]
             );
+            $sub->fill([
+                'deskripsi'      => $item['deskripsi'] ?? '',
+                'bobot_persen'   => $item['bobot_persen'] ?? null,
+                'taksonomi_id'   => $this->findTaksonomiId($session->institusi_id, $subKodeList[0] ?? null),
+                'taksonomi_kode' => $subKodeList ?: null,
+            ]);
+
+            if ($sub->exists && $this->hasApprovedCourse($session)) {
+                $old = $sub->indikator()->orderBy('id')->pluck('deskripsi')->all();
+                $new = array_values(array_filter($item['indikator'] ?? [], fn($v) => trim((string) $v) !== ''));
+                if ($sub->isDirty() || $old !== $new) {
+                    throw new GeneratorException('Sub-CPMK ini digunakan RPS yang telah disetujui. Perubahan capaian bersama ditolak agar dokumen lama tetap utuh.');
+                }
+                $map[$item['kode']] = $sub;
+                continue;
+            }
+            $sub->save();
 
             // Segarkan indikator: hapus lama lalu tulis ulang agar tidak menumpuk.
             $sub->indikator()->delete();
@@ -1267,6 +1698,7 @@ class RpsGeneratorService
 
     private function assertNotLocked(GenerateSession $session, string $stage): void
     {
+        $this->assertSessionEditable($session);
         $status = $session->status_bagian ?? [];
         if (($status[$stage] ?? 'pending') === 'pinned') {
             throw new GeneratorException("Tahap '{$stage}' terkunci (pinned); lepas kunci sebelum regenerasi.");
@@ -1310,6 +1742,9 @@ class RpsGeneratorService
      */
     public function generatePertemuan(RpsVersion $rps, array $opts = []): array
     {
+        if ($rps->pernahDisetujui()) {
+            throw new GeneratorException('RPS yang sudah disetujui prodi bersifat final; rincian pertemuan tidak dapat diubah.');
+        }
         $mk = MataKuliah::query()
             ->where('institusi_id', $rps->institusi_id)
             ->where('kode_mk', $rps->kode_mk)
@@ -1459,10 +1894,10 @@ class RpsGeneratorService
     private function buildPrompt(GenerateSession $session, string $stage, array $stageCfg, MataKuliah $mk, array $koreksi = []): array
     {
         $prompt = $this->prompts->resolve($stageCfg['jenis_output'], $session->institusi_id, $mk->jenis_mk);
-        $system = $prompt['system'];
+        $system = $prompt['system'] . "\n" . $this->contract()->systemDirective($mk);
         $schema = $prompt['schema'];
 
-        $bagian = [];
+        $bagian = [$this->contract()->userDirective($mk)];
         $bagian[] = 'DATA MATA KULIAH:';
         $bagian[] = json_encode(array_filter([
             'kode_mk'     => $mk->kode_mk,
@@ -1477,8 +1912,7 @@ class RpsGeneratorService
             'deskripsi'   => $mk->deskripsi_singkat,
         ], fn($v) => $v !== null && $v !== ''), JSON_UNESCAPED_UNICODE);
 
-        // Jenjang program (dari level KKNI CPL) → lantai taksonomi agar CPMK/Sub-CPMK
-        // tidak berada di bawah level yang layak (mis. profesi minimal C4 dominan).
+        // Jenjang memberi konteks kedalaman, bukan hard floor taksonomi tiap Sub-CPMK.
         $jenjang = $this->jenjangDirective($mk);
         if ($jenjang !== '') {
             $bagian[] = "\n" . $jenjang;
@@ -1569,7 +2003,7 @@ class RpsGeneratorService
         }
 
         if ($koreksi !== []) {
-            $bagian[] = "\nKOREKSI WAJIB (keluaran sebelumnya tak sesuai bukti; perbaiki agar selaras konteks sahih berikut):";
+            $bagian[] = "\nKOREKSI WAJIB (keluaran sebelumnya melanggar kontrak struktur atau bukti; perbaiki sesuai catatan berikut tanpa melampaui batas jumlah):";
             foreach ($koreksi as $k) {
                 $bagian[] = '- ' . $k;
             }
@@ -1582,8 +2016,8 @@ class RpsGeneratorService
     }
 
     /**
-     * Direktif jenjang program: level KKNI tertinggi dari CPL kurikulum → lantai
-     * level taksonomi CPMK/Sub-CPMK. Kosong bila CPL tak mencantumkan level_kkni.
+     * Direktif jenjang program: konteks kedalaman, bukan konversi KKNI→Bloom.
+     * Kosong bila CPL tak mencantumkan level_kkni.
      */
     private function jenjangDirective(MataKuliah $mk): string
     {
@@ -1604,15 +2038,16 @@ class RpsGeneratorService
         }
 
         $aturan = match (true) {
-            $level >= 8 => 'CPMK dominan C5-C6 (mengevaluasi/mencipta); JANGAN ada CPMK di bawah C4. Sub-CPMK paling rendah C3.',
-            $level >= 7 => 'jenjang PROFESI — CPMK dominan C4-C6 disertai keterampilan P3+ (penerapan nyata di lapangan/klinik/wahana); JANGAN ada CPMK di bawah C3; Sub-CPMK C1-C2 hanya boleh sebagai pengantar paling awal.',
-            $level >= 6 => 'jenjang SARJANA — CPMK dominan C3-C5; JANGAN ada CPMK level C1-C2 (level rendah hanya boleh pada Sub-CPMK pengantar).',
+            $level >= 8 => 'pertimbangkan evaluasi (C5) dan kreasi (C6) sesuai CPL dan skop MK.',
+            $level >= 7 => 'jenjang PROFESI: utamakan penerapan, analisis, evaluasi dan keterampilan nyata di wahana sesuai CPL dan taksonomi yang digunakan.',
+            $level >= 6 => 'jenjang SARJANA: pertimbangkan penerapan, analisis dan evaluasi sesuai CPL dan skop MK.',
             default     => "sesuaikan kedalaman dengan level KKNI {$level}.",
         };
 
         return "JENJANG PROGRAM (WAJIB DIPATUHI):\n"
             . "- Level KKNI tertinggi pada CPL kurikulum ini: {$level}.\n"
-            . "- Aturan level taksonomi: {$aturan}";
+            . "- Konteks kedalaman: {$aturan}\n"
+            . '- KKNI tidak otomatis menjadi lantai Bloom untuk setiap capaian. Scaffolding Sub-CPMK boleh di bawah target; rangkaian secara agregat mencapai CPMK induk.';
     }
 
     /**
@@ -1637,12 +2072,12 @@ class RpsGeneratorService
         $praktik = (int) ($mk->sks_praktik ?? 0);
         if ($mk->jenis_mk === 'praktikum') {
             return "RANAH KETERAMPILAN (WAJIB DIPATUHI):\n"
-                . "- MK ini PRAKTIKUM: CPMK/Sub-CPMK WAJIB dominan ranah PSIKOMOTORIK (P2-P4) dengan KKO keterampilan (mendemonstrasikan, mengoperasikan, melakukan, mengukur, merakit, mengkalibrasi); kognitif hanya pendukung.\n"
+                . "- MK ini PRAKTIKUM: utamakan ranah PSIKOMOTORIK sesuai taksonomi pada konteks, bukan rentang P universal; gunakan KKO keterampilan (mendemonstrasikan, mengoperasikan, mengukur, mengkalibrasi), dengan kognitif pendukung.\n"
                 . '- Indikator & asesmen berbasis UNJUK KERJA yang teramati (observasi/laporan/demonstrasi), bukan hafalan.';
         }
         if ($praktik > 0) {
             return "RANAH KETERAMPILAN (WAJIB DIPATUHI):\n"
-                . "- MK ini memuat {$praktik} SKS PRAKTIK di samping teorinya: sertakan CPMK/Sub-CPMK ranah psikomotorik (P2+) untuk komponen praktiknya, proporsional dengan bobot SKS praktik, di samping capaian kognitifnya.";
+                . "- MK ini memuat {$praktik} SKS PRAKTIK di samping teorinya: sertakan CPMK/Sub-CPMK ranah psikomotorik sesuai taksonomi pada konteks, proporsional dengan bobot SKS praktik, di samping capaian kognitifnya.";
         }
 
         return '';
@@ -1752,9 +2187,10 @@ class RpsGeneratorService
 
         return "PARAMETER RENCANA MINGGUAN (WAJIB DIPATUHI):\n"
             . "- Gunakan TEPAT {$n} pekan (minggu_ke hanya boleh bernilai 1..{$n}); JANGAN membuat pekan di luar rentang itu.\n"
-            . "- SEMUA Sub-CPMK WAJIB tercakup, masing-masing minimal SATU baris. Jumlah BARIS boleh LEBIH dari jumlah pekan: "
-            . "bila jumlah pekan lebih sedikit dari jumlah Sub-CPMK (mis. blok {$n} pekan dengan banyak pertemuan), "
-            . "buat BEBERAPA BARIS dengan minggu_ke yang SAMA — satu baris per Sub-CPMK, berurutan sesuai skenario pembelajaran.\n"
+            . "- SEMUA Sub-CPMK WAJIB tercakup, masing-masing minimal SATU baris.\n"
+            . ($pola === 'reguler'
+                ? "- Satu baris dengan SATU Sub-CPMK utama per pekan belajar, dipetakan BERURUTAN dari Sub-CPMK-1 pada pekan belajar pertama; setiap Sub-CPMK muncul tepat satu kali sebagai target utama, dan pekan setelah UTS langsung melanjutkan Sub-CPMK berikutnya. Pekan ujian memakai sub_cpmk_kode null, tidak memperkenalkan konsep baru. Jangan menumpuk beberapa kemampuan pada satu pekan.\n"
+                : "- Blok/profesi boleh BEBERAPA BARIS dengan minggu_ke SAMA — satu kemampuan utama per baris/pertemuan, berurutan sesuai skenario pembelajaran.\n")
             . "- Pola pelaksanaan: {$pola}.\n"
             . $beban
             . "- {$evaluasi}";

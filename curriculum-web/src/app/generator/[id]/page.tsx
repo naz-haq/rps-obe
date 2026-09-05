@@ -36,7 +36,7 @@ export default async function GeneratorDetailPage({ params }: { params: Promise<
   // Daftar taksonomi (global + tenant) untuk dropdown level taksonomi CPMK/Sub-CPMK.
   let taksonomiList: Taksonomi[] = [];
   try {
-    const tak = await apiGet<{ data: Taksonomi[] }>("/taksonomi", { institusi_id: 1, per_page: 200 });
+    const tak = await apiGet<{ data: Taksonomi[] }>("/taksonomi", { institusi_id: session.institusi_id, per_page: 200 });
     taksonomiList = tak.data;
   } catch {
     taksonomiList = [];
@@ -45,7 +45,7 @@ export default async function GeneratorDetailPage({ params }: { params: Promise<
   // Konfigurasi aturan yang menjadi keterkaitan generate (konversi SKS, minggu, bobot).
   let aturan: KonfigurasiAturan[] = [];
   try {
-    const res = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", { institusi_id: 1 });
+    const res = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", { institusi_id: session.institusi_id });
     aturan = res.data;
   } catch {
     aturan = [];

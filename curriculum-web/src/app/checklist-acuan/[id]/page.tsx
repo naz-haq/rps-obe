@@ -4,7 +4,6 @@ import { apiGet, type Single, type ChecklistDetail, type ButirKategori } from "@
 import { PageHeader, Card, Stat, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { CreateButirButton, EditButirButton, DeleteButirButton, StatusControl } from "../forms";
 
-const DEFAULT_INSTITUSI = 1;
 
 const KATEGORI_LABEL: Record<ButirKategori, string> = {
   profil_lulusan: "Profil Lulusan",
@@ -20,7 +19,7 @@ export default async function ChecklistDetailPage({ params }: { params: Promise<
 
   let detail: ChecklistDetail;
   try {
-    const res = await apiGet<Single<ChecklistDetail>>(`/kerangka-acuan/${id}`, { institusi_id: DEFAULT_INSTITUSI });
+    const res = await apiGet<Single<ChecklistDetail>>(`/kerangka-acuan/${id}`);
     detail = res.data;
   } catch {
     notFound();

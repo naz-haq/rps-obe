@@ -198,6 +198,10 @@ return [
         'pricing'    => ['input' => (float) env('PRICE_EMBED_IN', 0.02), 'output' => 0.0],
     ],
 
+    // TTL dalam detik; 0 menonaktifkan cache terkait. Berlaku per identitas model.
+    'embedding_cache_ttl' => (int) env('AI_EMBED_CACHE_TTL', 86400),
+    'embedding_retrieval_cache_ttl' => (int) env('AI_EMBED_RETRIEVAL_CACHE_TTL', 300),
+
     'embedding_models' => [
         'openai::text-embedding-3-small' => [
             'provider' => 'openai',
@@ -284,6 +288,9 @@ return [
     */
     'cache' => [
         'ttl' => (int) env('AI_CACHE_TTL', 0),
+        'prompt_version' => env('AI_PROMPT_VERSION', 'v1'),
+        'schema_version' => env('AI_SCHEMA_VERSION', 'v1'),
+        'source_version' => env('AI_SOURCE_VERSION', 'v1'),
     ],
 
     /*

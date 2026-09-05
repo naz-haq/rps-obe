@@ -3,12 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPut, type ApiResult, type PindaiOverlapRingkasan } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 
 /** Jalankan deteksi overlap deterministik. */
 export async function pindaiOverlap(kurikulumId?: number): Promise<ApiResult<{ data: PindaiOverlapRingkasan }>> {
   const res = await apiPost<{ data: PindaiOverlapRingkasan }>("/validasi-overlap/pindai", {
-    institusi_id: DEFAULT_INSTITUSI,
     kurikulum_id: kurikulumId ?? null,
   });
   revalidatePath("/validasi-overlap");

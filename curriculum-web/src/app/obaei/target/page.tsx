@@ -4,7 +4,6 @@ import { TambahTarget, EditTarget, HapusTarget } from "./forms";
 
 type SearchParams = Promise<{ sort?: string; dir?: string; page?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 const basePath = "/obaei/target";
 
 function fmt(n: number | null): string {
@@ -20,13 +19,12 @@ export default async function TargetCplPage({ searchParams }: { searchParams: Se
 
   const [res, cplRes] = await Promise.all([
     apiGet<Paginated<TargetCpl>>("/target-cpl", {
-      institusi_id: DEFAULT_INSTITUSI,
       sort,
       dir,
       page,
       per_page: 15,
     }).catch(() => null),
-    apiGet<Paginated<Cpl>>("/cpl", { institusi_id: DEFAULT_INSTITUSI, per_page: 200 }).catch(() => null),
+    apiGet<Paginated<Cpl>>("/cpl", { per_page: 200 }).catch(() => null),
   ]);
 
   const cplOptions = (cplRes?.data ?? []).map((c) => ({

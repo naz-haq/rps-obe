@@ -7,7 +7,7 @@ const LOGIN_PATH = "/login";
  * Proteksi rute: tanpa token → /login; sudah login tapi buka /login → /dashboard.
  * Menyisipkan header x-pathname agar layout dapat mendeteksi halaman aktif.
  */
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const hasToken = Boolean(req.cookies.get(TOKEN_COOKIE)?.value);
 
@@ -15,9 +15,7 @@ export function middleware(req: NextRequest) {
   requestHeaders.set("x-pathname", pathname);
 
   if (pathname === LOGIN_PATH) {
-    if (hasToken) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+    // Keberadaan cookie bukan bukti token valid; layout memverifikasi profil.
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 

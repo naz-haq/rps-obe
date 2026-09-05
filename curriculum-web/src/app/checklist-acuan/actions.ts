@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPut, apiDelete } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 const LIST = "/checklist-acuan";
 
 export async function createKerangka(formData: FormData) {
@@ -79,7 +78,6 @@ export async function deleteButir(formData: FormData) {
 export async function setPemenuhan(formData: FormData) {
   const kerangkaId = formData.get("kerangka_id") as string;
   const body = {
-    institusi_id: DEFAULT_INSTITUSI,
     butir_acuan_id: Number(formData.get("butir_acuan_id")),
     status: formData.get("status") as string,
     catatan: (formData.get("catatan") as string) || null,

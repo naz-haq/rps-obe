@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPut, apiDelete, type ApiResult } from "@/lib/api";
 
-const DEFAULT_INSTITUSI = 1;
 
 export async function simpanTarget(input: {
   id?: number;
@@ -21,7 +20,7 @@ export async function simpanTarget(input: {
 
   const res = input.id
     ? await apiPut(`/target-cpl/${input.id}`, body)
-    : await apiPost("/target-cpl", { institusi_id: DEFAULT_INSTITUSI, ...body });
+    : await apiPost("/target-cpl", body);
 
   revalidatePath("/obaei/target");
   revalidatePath("/obaei");

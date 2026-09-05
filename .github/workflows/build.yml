@@ -66,6 +66,14 @@ jobs:
         working-directory: ./curriculum-web
         run: npm run build
 
+      - name: Install browser E2E
+        working-directory: ./curriculum-web
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke E2E
+        working-directory: ./curriculum-web
+        run: npm run test:e2e
+
       - name: Audit produksi (kerentanan)
         working-directory: ./curriculum-web
         run: npm audit --omit=dev --audit-level=high

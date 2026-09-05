@@ -27,6 +27,7 @@ export default async function RootLayout({
   const pathname = (await headers()).get("x-pathname") ?? "";
   const isLogin = pathname === "/login";
   const user = await getCurrentUser();
+  if (user && isLogin) redirect("/dashboard");
 
   // Token ada tapi tidak valid (user null) di halaman terproteksi → paksa login.
   if (!user && !isLogin) {

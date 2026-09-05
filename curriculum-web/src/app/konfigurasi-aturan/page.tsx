@@ -6,7 +6,7 @@ export default async function KonfigurasiAturanPage() {
   let list: KonfigurasiAturan[] = [];
   let error: string | null = null;
   try {
-    const res = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", { institusi_id: 1 });
+    const res = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan");
     list = res.data;
   } catch {
     error = "Tidak dapat memuat konfigurasi aturan. Pastikan backend berjalan di :8100.";

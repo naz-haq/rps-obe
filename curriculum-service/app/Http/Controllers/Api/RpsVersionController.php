@@ -44,6 +44,11 @@ class RpsVersionController extends Controller
      */
     public function destroy(RpsVersion $rpsVersion)
     {
+        if ($rpsVersion->pernahDisetujui()) {
+            return response()->json([
+                'message' => 'RPS yang sudah disetujui prodi bersifat final dan tidak dapat dihapus.',
+            ], 422);
+        }
         $rpsVersion->delete();
 
         return response()->json(['message' => 'Dokumen RPS dihapus.']);

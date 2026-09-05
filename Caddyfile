@@ -2,8 +2,15 @@
 # dengan domain (mis. https://rps.contoh.ac.id). Untuk uji tanpa domain: ":80".
 {$SITE_ADDRESS} {
 	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
 
 	# Semua trafik browser masuk ke Next.js. Frontend yang meneruskan
-	# /backend/* ke Laravel (api) secara internal via rewrites.
+	# /backend/* ke Laravel (api) melalui route handler terautentikasi.
 	reverse_proxy web:3010
 }

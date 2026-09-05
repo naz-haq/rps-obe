@@ -3,7 +3,6 @@ import { PageHeader, Card, CardBody, Table, Th, Td, Badge, EmptyState, Stat } fr
 
 type SearchParams = Promise<{ angkatan?: string }>;
 
-const DEFAULT_INSTITUSI = 1;
 
 const STATUS_TONE: Record<ObaeiStatus, "ok" | "warn" | "danger" | "neutral"> = {
   tercapai: "ok",
@@ -28,7 +27,6 @@ export default async function ObaeiDashboardPage({ searchParams }: { searchParam
   const angkatan = sp.angkatan ?? "";
 
   const res = await apiGet<Single<ObaeiAgregasi>>("/obaei/agregasi", {
-    institusi_id: DEFAULT_INSTITUSI,
     angkatan: angkatan || undefined,
   }).catch(() => null);
 

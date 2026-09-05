@@ -8,7 +8,6 @@ export async function saveAturan(input: {
   nilai: Record<string, unknown>;
 }): Promise<ApiResult> {
   const res = await apiPost("/konfigurasi-aturan/upsert", {
-    institusi_id: 1,
     jenis_aturan: input.jenis_aturan,
     nilai: input.nilai,
   });

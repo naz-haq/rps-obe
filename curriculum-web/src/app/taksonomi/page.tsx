@@ -19,7 +19,7 @@ export default async function TaksonomiPage() {
   let list: Taksonomi[] = [];
   let error: string | null = null;
   try {
-    const res = await apiGet<{ data: Taksonomi[] }>("/taksonomi", { institusi_id: 1, per_page: 200 });
+    const res = await apiGet<{ data: Taksonomi[] }>("/taksonomi", { per_page: 200 });
     list = res.data;
   } catch {
     error = "Tidak dapat memuat taksonomi. Pastikan backend berjalan di :8100.";

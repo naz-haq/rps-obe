@@ -144,7 +144,7 @@ export function ItemRefine({
             type="button"
             disabled={pending || pinned}
             onClick={() => setOpen((v) => !v)}
-            className={buttonClass("secondary", "sm")}
+            className={buttonClass("ai", "sm")}
             title={pinned ? "Lepas sematan dulu untuk memperbaiki" : "Perbaiki item ini dengan AI"}
           >
             ✨ Perbaiki

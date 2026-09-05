@@ -1,4 +1,5 @@
 import { apiGet, type PromptSlot } from "@/lib/api";
+import Link from "next/link";
 import { PageHeader, Card, CardBody, Badge } from "@/components/ui";
 import { OverrideButton, EditOverrideButton, ResetOverrideButton } from "./forms";
 
@@ -7,11 +8,21 @@ export const metadata = { title: "Prompt AI · Curriculum Service" };
 const GROUP_LABEL: Record<string, string> = {
   generator: "Generator RPS Bertahap",
   validasi: "Validasi Anti-Halusinasi",
+  audit: "Audit RPS",
+  konsultan: "Konsultan Kurikulum",
   lain: "Lainnya",
 };
 
-export default async function PromptsPage() {
-  const { data: slots } = await apiGet<{ data: PromptSlot[] }>("/prompts/catalog");
+export default async function PromptsPage({ searchParams }: {
+  searchParams: Promise<{ jenis_mk?: string; institusi_id?: string }>;
+}) {
+  const params = await searchParams;
+  const jenisMk = params.jenis_mk ?? "";
+  const query = new URLSearchParams();
+  if (jenisMk) query.set("jenis_mk", jenisMk);
+  if (params.institusi_id) query.set("institusi_id", params.institusi_id);
+  const { data: slots } = await apiGet<{ data: PromptSlot[] }>(`/prompts/catalog?${query}`);
+  const context = jenisMk === "praktikum" ? "Praktikum" : jenisMk === "murni" ? "Teori (murni)" : "Semua jenis MK (umum)";
 
   const groups = slots.reduce<Record<string, PromptSlot[]>>((acc, s) => {
     (acc[s.group] ??= []).push(s);
@@ -24,7 +35,6 @@ export default async function PromptsPage() {
     <div>
       <PageHeader
         title="Prompt AI"
-        subtitle="Pusat kendali semua prompt sistem. Teks default aman di kode; buat override bila ingin menyesuaikan tanpa deploy."
         actions={
           <Badge tone={overrideCount ? "warn" : "neutral"}>
             {overrideCount ? `${overrideCount} override aktif` : "Semua default"}
@@ -32,13 +42,30 @@ export default async function PromptsPage() {
         }
       />
 
+      <nav aria-label="Jenis mata kuliah" className="mb-3 flex flex-wrap gap-2">
+        {[["", "Semua"], ["murni", "Teori (murni)"], ["praktikum", "Praktikum"]].map(([value, label]) => {
+          const filter = new URLSearchParams(query);
+          if (value) filter.set("jenis_mk", value);
+          else filter.delete("jenis_mk");
+          return <Link key={value} href={`/prompts?${filter}`} aria-current={jenisMk === value ? "page" : undefined}
+            className={`rounded-lg border px-3 py-2 text-sm ${jenisMk === value ? "border-brand-500 bg-brand-50 text-brand-700" : "border-border text-muted"}`}>
+            {label}
+          </Link>;
+        })}
+      </nav>
+      <p className="mb-6 text-xs text-muted" role="status">
+        Konteks: {context} · {slots[0]?.institusi_id != null ? `Institusi #${slots[0].institusi_id}` : "Global"}.
+        {jenisMk ? " Reset hanya mengubah slot dan jenis MK ini." : " Semua menampilkan konteks umum, bukan gabungan semua jenis; override khusus Teori/Praktikum tetap berlaku."}
+        {" Reset memakai default kode terbaru, melewati override lama/global, tanpa menghapus riwayat."}
+      </p>
+
       <div className="space-y-8">
         {Object.entries(groups).map(([group, items]) => (
           <section key={group}>
             <h2 className="mb-3 text-sm font-semibold text-muted">{GROUP_LABEL[group] ?? group}</h2>
             <div className="space-y-4">
               {items.map((slot) => (
-                <SlotCard key={slot.slot} slot={slot} />
+                <SlotCard key={`${slot.slot}:${slot.jenis_mk ?? "all"}:${slot.institusi_id ?? "global"}`} slot={slot} />
               ))}
             </div>
           </section>
@@ -51,8 +78,8 @@ export default async function PromptsPage() {
 function SlotCard({ slot }: { slot: PromptSlot }) {
   const isOverride = slot.sumber_efektif === "override";
   const ov = slot.override;
-  const effectiveSystem = isOverride && ov ? ov.sistem_prompt : slot.default_system;
-  const effectiveSchema = isOverride && ov ? ov.skema_output : slot.default_schema;
+  const effectiveSystem = slot.effective_system;
+  const effectiveSchema = slot.effective_schema;
 
   return (
     <Card>
@@ -65,22 +92,17 @@ function SlotCard({ slot }: { slot: PromptSlot }) {
                 {slot.slot}
               </code>
               {isOverride ? (
-                <Badge tone="warn">Override{ov?.jenis_mk ? ` · ${ov.jenis_mk}` : ""}</Badge>
+                <Badge tone="warn">Override · {ov?.institusi_id == null ? "Global" : "Institusi"} · {ov?.jenis_mk ?? "Umum"} · v{ov?.versi}</Badge>
               ) : (
                 <Badge tone="ok">Default</Badge>
               )}
-              {isOverride && ov && !ov.aktif && <Badge tone="neutral">Nonaktif</Badge>}
+              {slot.selection?.use_default && <Badge tone="neutral">Default dipilih · v{slot.selection.versi}</Badge>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {isOverride && ov ? (
-              <>
-                <EditOverrideButton slot={slot} />
-                <ResetOverrideButton id={ov.id} />
-              </>
-            ) : (
-              <OverrideButton slot={slot} />
-            )}
+          <div className="flex flex-wrap items-center gap-2">
+            {slot.can_edit && <EditOverrideButton slot={slot} />}
+            <OverrideButton slot={slot} />
+            <ResetOverrideButton slot={slot} />
           </div>
         </div>
 
@@ -91,19 +113,19 @@ function SlotCard({ slot }: { slot: PromptSlot }) {
           </pre>
         </div>
 
-        {effectiveSchema && (
+        {effectiveSchema ? (
           <div>
             <p className="mb-1 text-xs font-medium text-muted">Skema keluaran</p>
             <pre className="overflow-auto rounded-lg border border-border bg-gray-50 p-3 font-mono text-[11px] leading-relaxed text-gray-700">
               {effectiveSchema}
             </pre>
           </div>
-        )}
+        ) : <p className="text-xs text-muted">Keluaran teks bebas — tanpa skema JSON.</p>}
 
-        {isOverride && (
+        {isOverride && !slot.can_edit && (
           <p className="text-xs text-muted">
-            Prompt bawaan masih tersimpan di kode — klik &ldquo;Kembalikan default&rdquo; untuk
-            memulihkannya.
+            Prompt diwarisi. Pilih &ldquo;Override prompt&rdquo; untuk membuat versi pada konteks ini,
+            atau kembalikan ke default tanpa mengubah prompt sumber.
           </p>
         )}
       </CardBody>
