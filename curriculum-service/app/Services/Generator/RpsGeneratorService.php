@@ -153,6 +153,9 @@ class RpsGeneratorService
 
         $draf = $session->draf ?? [];
         $draf[$stage] = $this->assignItemIds($stage, $data);
+        if ($stage === 'mingguan') {
+            $draf[$stage] = $this->terapkanEvaluasiMingguan($mk, $draf[$stage], $draf['penilaian'] ?? null);
+        }
         $status = $session->status_bagian ?? [];
         $status[$stage] = 'draft';
 
@@ -520,6 +523,129 @@ class RpsGeneratorService
     public function ensureItemIds(GenerateSession $session): void
     {
         $this->backfillItemIds($session);
+    }
+
+    /**
+     * Publik: tegakkan penempatan UTS/UAS deterministik pada draf mingguan sesi lama
+     * (dipakai saat sesi dibaca). Hanya menyentuh tahap berstatus 'draft' murni hasil AI;
+     * tahap yang sudah diedit manusia/disetujui tidak diubah diam-diam.
+     */
+    public function ensureEvaluasiMingguan(GenerateSession $session): void
+    {
+        if ((($session->status_bagian ?? [])['mingguan'] ?? 'pending') !== 'draft') {
+            return;
+        }
+        $mk   = $session->mataKuliah;
+        $draf = $session->draf ?? [];
+        if (! $mk || ! isset($draf['mingguan']) || ! is_array($draf['mingguan'])) {
+            return;
+        }
+        $hasil = $this->terapkanEvaluasiMingguan($mk, $draf['mingguan'], $draf['penilaian'] ?? null);
+        if ($hasil !== $draf['mingguan']) {
+            $draf['mingguan'] = $hasil;
+            $session->update(['draf' => $draf]);
+            $session->refresh();
+        }
+    }
+
+    /**
+     * Penempatan UTS/UAS deterministik untuk pola REGULER: pekan minggu_uts/minggu_uas
+     * dari konfigurasi aturan (fallback tengah/akhir) menjadi baris evaluasi murni,
+     * pekan belajar dipetakan ulang ke slot tersisa 1..n. Idempoten; pola blok/profesi
+     * tidak disentuh (aturan evaluasinya berbeda).
+     */
+    private function terapkanEvaluasiMingguan(MataKuliah $mk, array $stageData, ?array $penilaian): array
+    {
+        if (($mk->pola ?: 'reguler') !== 'reguler') {
+            return $stageData;
+        }
+        $rows = $stageData['minggu'] ?? null;
+        if (! is_array($rows) || $rows === []) {
+            return $stageData;
+        }
+
+        $n   = $this->estimasi->jumlahMingguUntuk($mk);
+        $p   = $this->estimasi->pekanEvaluasi($mk->institusi_id, $n);
+        $uts = $p['uts'];
+        $uas = $p['uas'];
+        if ($uts === $uas) {
+            return $stageData;
+        }
+
+        $belajar  = [];
+        $barisUts = null;
+        $barisUas = null;
+        foreach ($rows as $m) {
+            if (! is_array($m)) {
+                continue;
+            }
+            $t = strtolower((string) ($m['materi_pustaka'] ?? ''));
+            if (str_contains($t, 'uts') || str_contains($t, 'ujian tengah')) {
+                $barisUts ??= $m;
+            } elseif (str_contains($t, 'uas') || str_contains($t, 'ujian akhir')) {
+                $barisUas ??= $m;
+            } else {
+                $belajar[] = $m;
+            }
+        }
+
+        // Slot pekan belajar = 1..n tanpa pekan ujian; pekan lama dipetakan berurutan,
+        // pekan berlebih menumpuk di slot terakhir (baris ber-minggu_ke sama itu sah).
+        $slots = array_values(array_filter(range(1, $n), fn ($w) => $w !== $uts && $w !== $uas));
+        $lama  = array_values(array_unique(array_map(fn ($m) => (int) ($m['minggu_ke'] ?? 0), $belajar)));
+        sort($lama);
+        $peta = [];
+        foreach ($lama as $i => $w) {
+            $peta[$w] = $slots[min($i, count($slots) - 1)];
+        }
+        foreach ($belajar as $i => $m) {
+            $belajar[$i]['minggu_ke'] = $peta[(int) ($m['minggu_ke'] ?? 0)] ?? $slots[0];
+        }
+
+        $barisUts = array_merge($barisUts ?? $this->barisEvaluasi('uts', $this->bobotKomponen($penilaian, 'uts')), ['minggu_ke' => $uts]);
+        $barisUas = array_merge($barisUas ?? $this->barisEvaluasi('uas', $this->bobotKomponen($penilaian, 'uas')), ['minggu_ke' => $uas]);
+
+        $semua = array_merge($belajar, [$barisUts, $barisUas]);
+        usort($semua, fn ($a, $b) => ((int) ($a['minggu_ke'] ?? 0)) <=> ((int) ($b['minggu_ke'] ?? 0)));
+
+        $stageData['minggu'] = array_values($semua);
+
+        return $this->assignItemIds('mingguan', $stageData);
+    }
+
+    /** Baris evaluasi (UTS/UAS) baku; teks materi memicu band kuning di UI/PDF/DOCX. */
+    private function barisEvaluasi(string $jenis, ?float $bobot): array
+    {
+        $uts = $jenis === 'uts';
+
+        return [
+            'minggu_ke'           => 0,
+            'sub_cpmk_kode'       => null,
+            'indikator'           => $uts ? 'Ketercapaian Sub-CPMK paruh pertama semester' : 'Ketercapaian seluruh Sub-CPMK',
+            'kriteria_penilaian'  => 'Ujian tulis sesuai kisi-kisi',
+            'bentuk_luring'       => $uts ? 'Ujian Tengah Semester' : 'Ujian Akhir Semester',
+            'bentuk_daring'       => null,
+            'metode_pembelajaran' => null,
+            'pengalaman_belajar'  => null,
+            'materi_pustaka'      => $uts ? 'Evaluasi Tengah Semester (UTS)' : 'Evaluasi Akhir Semester (UAS)',
+            'bobot_penilaian'     => $bobot,
+        ];
+    }
+
+    /** Bobot komponen penilaian yang namanya cocok UTS/UAS, bila tahap penilaian sudah ada. */
+    private function bobotKomponen(?array $penilaian, string $jenis): ?float
+    {
+        foreach (($penilaian['komponen'] ?? []) as $k) {
+            $nama  = strtolower((string) (is_array($k) ? ($k['nama'] ?? '') : ''));
+            $cocok = $jenis === 'uts'
+                ? (str_contains($nama, 'uts') || str_contains($nama, 'tengah'))
+                : (str_contains($nama, 'uas') || str_contains($nama, 'akhir'));
+            if ($cocok && is_numeric($k['bobot_persen'] ?? null)) {
+                return (float) $k['bobot_persen'];
+            }
+        }
+
+        return null;
     }
 
     /** Pastikan seluruh item pada draf punya _id; simpan bila ada yang ditambah. */
