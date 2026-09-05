@@ -591,8 +591,8 @@ class RpsGeneratorService
 
         // Slot pekan belajar = 1..n tanpa pekan ujian; pekan lama dipetakan berurutan,
         // pekan berlebih menumpuk di slot terakhir (baris ber-minggu_ke sama itu sah).
-        $slots = array_values(array_filter(range(1, $n), fn ($w) => $w !== $uts && $w !== $uas));
-        $lama  = array_values(array_unique(array_map(fn ($m) => (int) ($m['minggu_ke'] ?? 0), $belajar)));
+        $slots = array_values(array_filter(range(1, $n), fn($w) => $w !== $uts && $w !== $uas));
+        $lama  = array_values(array_unique(array_map(fn($m) => (int) ($m['minggu_ke'] ?? 0), $belajar)));
         sort($lama);
         $peta = [];
         foreach ($lama as $i => $w) {
@@ -606,7 +606,7 @@ class RpsGeneratorService
         $barisUas = array_merge($barisUas ?? $this->barisEvaluasi('uas', $this->bobotKomponen($penilaian, 'uas')), ['minggu_ke' => $uas]);
 
         $semua = array_merge($belajar, [$barisUts, $barisUas]);
-        usort($semua, fn ($a, $b) => ((int) ($a['minggu_ke'] ?? 0)) <=> ((int) ($b['minggu_ke'] ?? 0)));
+        usort($semua, fn($a, $b) => ((int) ($a['minggu_ke'] ?? 0)) <=> ((int) ($b['minggu_ke'] ?? 0)));
 
         $stageData['minggu'] = array_values($semua);
 

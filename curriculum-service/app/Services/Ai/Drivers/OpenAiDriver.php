@@ -32,12 +32,21 @@ class OpenAiDriver implements Driver
         $payload = [
             'model'       => $model['model'],
             'temperature' => $params['temperature'],
-            'max_tokens'  => $params['max_tokens'],
             'messages'    => [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => $prompt],
             ],
         ];
+
+        // Model reasoning OpenAI (gpt-5*, o1/o3/o4*) menolak 'max_tokens'
+        // (wajib 'max_completion_tokens') dan 'temperature' selain default.
+        $reasoningOpenAi = ($model['provider'] ?? null) === 'openai'
+            && preg_match('/^(gpt-5|o\d)/', (string) $model['model']) === 1;
+
+        $payload[$reasoningOpenAi ? 'max_completion_tokens' : 'max_tokens'] = $params['max_tokens'];
+        if ($reasoningOpenAi) {
+            unset($payload['temperature']);
+        }
 
         // Gemini 2.5 mengaktifkan "thinking" secara default; token reasoning
         // ikut menghabiskan max_tokens sehingga pada keluaran besar (mis. tahap

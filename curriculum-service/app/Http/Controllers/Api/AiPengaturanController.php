@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AiPengaturan;
+use App\Services\Ai\EmbeddingService;
 use App\Services\Ai\AiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ use Illuminate\Validation\ValidationException;
  */
 class AiPengaturanController extends Controller
 {
-    public function __construct(private AiService $ai) {}
+    public function __construct(private AiService $ai, private EmbeddingService $embedding) {}
 
     /** Profil efektif + daftar profil & pemetaan model per-tugas (untuk UI). */
     public function show(Request $request): JsonResponse
@@ -46,6 +47,28 @@ class AiPengaturanController extends Controller
             ])->values();
 
         $globalOverride = (array) (AiPengaturan::whereNull('institusi_id')->value('model_override') ?? []);
+        $embedding = $this->embedding->effectiveConfiguration($institusiId);
+        $embeddingModels = collect(config('ai.embedding_models', []))
+            ->map(fn($model, $key) => [
+                'key' => $key,
+                'provider' => $model['provider'],
+                'model' => $model['model'],
+                'dimensions' => (int) $model['dimensions'],
+                'tersedia' => (bool) ($availability[$model['provider']] ?? false),
+            ])->values();
+
+        // Konfigurasi aktif (mis. dari env) bisa di luar katalog — sisipkan
+        // agar dropdown UI selalu menampilkan pilihan yang sedang berlaku.
+        $activeKey = "{$embedding['provider']}::{$embedding['model']}";
+        if (! $embeddingModels->contains(fn($m) => $m['key'] === $activeKey)) {
+            $embeddingModels->prepend([
+                'key' => $activeKey,
+                'provider' => $embedding['provider'],
+                'model' => $embedding['model'],
+                'dimensions' => (int) $embedding['dimensions'],
+                'tersedia' => (bool) ($availability[$embedding['provider']] ?? false),
+            ]);
+        }
 
         return response()->json([
             'data' => [
@@ -63,6 +86,8 @@ class AiPengaturanController extends Controller
                 'tasks'            => $tasks,
                 'model_override'   => $globalOverride,
                 'model_efektif'    => $this->ai->effectiveModelMap($institusiId),
+                'embedding'        => $embedding,
+                'embedding_models' => $embeddingModels,
             ],
         ]);
     }
@@ -220,6 +245,41 @@ class AiPengaturanController extends Controller
                 'model_override' => $record->model_override ?? [],
                 'model_efektif'  => $this->ai->effectiveModelMap($institusiId),
             ],
+        ]);
+    }
+
+    /** Simpan model embedding tervalidasi; perubahan dimensi perlu re-index dokumen. */
+    public function updateEmbedding(Request $request): JsonResponse
+    {
+        $models = (array) config('ai.embedding_models', []);
+        $data = $request->validate([
+            'embedding_model' => ['required', 'string', Rule::in(array_keys($models))],
+            'institusi_id' => ['nullable', 'integer', 'exists:institusi,id'],
+            'diubah_oleh' => ['nullable', 'integer'],
+        ]);
+
+        $model = $models[$data['embedding_model']];
+        $institusiId = $data['institusi_id'] ?? null;
+        $availability = $this->ai->providerAvailability($institusiId);
+        if (! ($availability[$model['provider']] ?? false)) {
+            throw ValidationException::withMessages([
+                'embedding_model' => "Provider '{$model['provider']}' tidak punya API key aktif.",
+            ]);
+        }
+
+        $record = AiPengaturan::firstOrNew(['institusi_id' => $institusiId]);
+        $record->profil ??= $this->ai->activeProfile($institusiId);
+        $record->embedding_provider = $model['provider'];
+        $record->embedding_model = $model['model'];
+        $record->embedding_dimensions = (int) $model['dimensions'];
+        if (array_key_exists('diubah_oleh', $data)) {
+            $record->diubah_oleh = $data['diubah_oleh'];
+        }
+        $record->save();
+
+        return response()->json([
+            'message' => 'Model embedding tersimpan. Indeks ulang dokumen bila model atau dimensi berubah.',
+            'data' => ['embedding' => $this->embedding->effectiveConfiguration($institusiId)],
         ]);
     }
 

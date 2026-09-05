@@ -105,6 +105,7 @@ Route::get('ai/pengaturan', [AiPengaturanController::class, 'show']);
 Route::get('ai/pengaturan/model-live', [AiPengaturanController::class, 'modelsLive']);
 Route::put('ai/pengaturan', [AiPengaturanController::class, 'update']);
 Route::put('ai/pengaturan/model', [AiPengaturanController::class, 'updateModel']);
+Route::put('ai/pengaturan/embedding', [AiPengaturanController::class, 'updateEmbedding']);
 
 // AI Asistif inline (perbaiki/parafrase/ringkas satu field)
 Route::post('ai/asistif', [AiAsistifController::class, 'asistif']);

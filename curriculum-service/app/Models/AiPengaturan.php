@@ -12,6 +12,7 @@ class AiPengaturan extends Model
 
     protected $casts = [
         'model_override' => 'array',
+        'embedding_dimensions' => 'integer',
     ];
 
     public function institusi(): BelongsTo

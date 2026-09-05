@@ -21,6 +21,12 @@ export async function setModelOverride(
   return res;
 }
 
+export async function setEmbeddingModel(embeddingModel: string): Promise<ApiResult> {
+  const res = await apiPut("/ai/pengaturan/embedding", { embedding_model: embeddingModel });
+  revalidatePath("/pengaturan-ai");
+  return res;
+}
+
 /** Ambil daftar model LIVE per-provider (ditarik dari API key aktif). */
 export async function fetchLiveModels(): Promise<AiLiveModels> {
   try {

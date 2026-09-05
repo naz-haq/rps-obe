@@ -617,6 +617,15 @@ export type AiTaskInfo = {
 export type AiEfektif = { model: string; provider: string | null; sumber: string };
 /** Model live per-provider (ditarik dari API key): { nvidia: ["openai/gpt-oss-120b", ...] } */
 export type AiLiveModels = Record<string, string[]>;
+export type AiEmbeddingInfo = {
+  provider: string;
+  model: string;
+  dimensions: number;
+};
+export type AiEmbeddingModel = AiEmbeddingInfo & {
+  key: string;
+  tersedia: boolean;
+};
 export type AiPengaturan = {
   profil_aktif: string;
   default_env: string;
@@ -630,6 +639,8 @@ export type AiPengaturan = {
   tasks?: AiTaskInfo[];
   model_override?: Record<string, string>;
   model_efektif?: Record<string, AiEfektif>;
+  embedding: AiEmbeddingInfo;
+  embedding_models: AiEmbeddingModel[];
 };
 
 // ---- Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional) ----

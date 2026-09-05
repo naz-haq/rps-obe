@@ -75,7 +75,7 @@ Kunci penting (selain DB/APP standar Laravel):
 | `AI_FALLBACK_MOCK` | Jika `true`, panggilan gagal jatuh ke MockDriver | `false` (prod) |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `NVIDIA_API_KEY` | Kredensial provider (env atau BYOK per‑tenant) | — |
 | `NVIDIA_BASE_URL` | Endpoint NVIDIA NIM (kompatibel OpenAI) | `https://integrate.api.nvidia.com/v1` |
-| `AI_EMBED_PROVIDER` / `AI_EMBED_MODEL` / `AI_EMBED_DIMENSIONS` | Provider & model embedding RAG | `nvidia` / `nvidia/nv-embedqa-e5-v5` / `1024` |
+| `AI_EMBED_PROVIDER` / `AI_EMBED_MODEL` / `AI_EMBED_DIMENSIONS` | Provider & model embedding RAG | `openai` / `text-embedding-3-small` / `1536` |
 | `AI_GROUNDING_MIN_SCORE` | Ambang cosine minimal bukti grounding | `0.4` |
 
 > Di produksi, hanya variabel yang **terdaftar eksplisit** di blok `environment:` [`docker-compose.prod.yml`](../docker-compose.prod.yml) yang sampai ke kontainer. Kunci AI baru **wajib** ditambahkan di sana.

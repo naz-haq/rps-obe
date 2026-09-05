@@ -4,6 +4,7 @@ namespace App\Services\Ai;
 
 use App\Models\AiInteraksi;
 use App\Models\AiKredensial;
+use App\Models\AiPengaturan;
 use App\Models\DokumenChunk;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -25,9 +26,9 @@ class EmbeddingService
      */
     public function embed(string $text, array $context = []): array
     {
-        $cfg = config('ai.embedding');
         $institusiId = $context['institusi_id'] ?? null;
         $userId = $context['user_id'] ?? null;
+        $cfg = $this->effectiveConfiguration($institusiId);
 
         $cred = $this->resolveCredentials($cfg, $institusiId, $userId);
 
@@ -74,15 +75,17 @@ class EmbeddingService
         $data = $resp->json();
         $vec = $data['data'][0]['embedding'] ?? null;
 
-        if (! is_array($vec)) {
+        if ($resp->failed() || ! is_array($vec)) {
             $this->log($context, $provider, $model, 0, 0.0, true);
             if (config('ai.fallback_to_mock')) {
                 $vec = $this->mockVector($text, (int) $cfg['dimensions']);
 
                 return ['embedding' => $vec, 'tokens' => $this->estimateTokens($text), 'biaya' => 0.0, 'provider' => 'mock', 'model' => $cfg['model'] . '-mock', 'mock' => true];
             }
-            $msg = is_array($data['error'] ?? null) ? ($data['error']['message'] ?? 'error') : 'respons embedding tidak valid';
-            throw new RuntimeException("Gagal embedding: {$msg}");
+            $msg = is_array($data['error'] ?? null)
+                ? ($data['error']['message'] ?? 'error')
+                : 'respons embedding tidak valid';
+            throw new RuntimeException("Gagal embedding (HTTP {$resp->status()}): {$msg}");
         }
 
         $tokens = (int) ($data['usage']['prompt_tokens'] ?? $this->estimateTokens($text));
@@ -90,6 +93,47 @@ class EmbeddingService
         $this->log($context, $provider, $model, $tokens, $biaya, false);
 
         return ['embedding' => $vec, 'tokens' => $tokens, 'biaya' => $biaya, 'provider' => $provider, 'model' => $model, 'mock' => false];
+    }
+
+    /**
+     * Konfigurasi embedding efektif: tenant -> global -> environment.
+     *
+     * @return array{provider:string,model:string,dimensions:int,pricing:array}
+     */
+    public function effectiveConfiguration(?int $institusiId = null): array
+    {
+        $cfg = (array) config('ai.embedding');
+        $records = AiPengaturan::query()
+            ->whereNull('institusi_id')
+            ->when($institusiId, fn($q) => $q->orWhere('institusi_id', $institusiId))
+            ->orderByRaw('institusi_id IS NULL DESC')
+            ->get();
+
+        foreach ($records as $record) {
+            if (! $record->embedding_provider || ! $record->embedding_model || ! $record->embedding_dimensions) {
+                continue;
+            }
+
+            $cfg = [
+                'provider' => $record->embedding_provider,
+                'model' => $record->embedding_model,
+                'dimensions' => (int) $record->embedding_dimensions,
+                'pricing' => $this->embeddingPricing($record->embedding_provider, $record->embedding_model, $cfg['pricing'] ?? []),
+            ];
+        }
+
+        return $cfg;
+    }
+
+    private function embeddingPricing(string $provider, string $model, array $fallback): array
+    {
+        foreach ((array) config('ai.embedding_models', []) as $option) {
+            if (($option['provider'] ?? null) === $provider && ($option['model'] ?? null) === $model) {
+                return (array) ($option['pricing'] ?? $fallback);
+            }
+        }
+
+        return $fallback;
     }
 
     /**

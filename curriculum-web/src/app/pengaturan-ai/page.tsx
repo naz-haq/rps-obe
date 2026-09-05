@@ -1,6 +1,7 @@
 import { apiGet, type AiPengaturan } from "@/lib/api";
 import { PageHeader, Card, CardBody, Badge, Table, Th, Td } from "@/components/ui";
 import { setProfil } from "./actions";
+import { EmbeddingPicker } from "./embedding-picker";
 import { ModelPicker } from "./model-picker";
 
 const TASK_LABEL: Record<string, string> = {
@@ -113,6 +114,15 @@ export default async function PengaturanAiPage() {
         </div>
         <CardBody>
           <ModelPicker cfg={cfg} />
+        </CardBody>
+      </Card>
+
+      <Card className="mt-6 animate-fade-up">
+        <div className="border-b border-border px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-ink">Embedding RAG</h2>
+        </div>
+        <CardBody>
+          <EmbeddingPicker cfg={cfg} />
         </CardBody>
       </Card>
 

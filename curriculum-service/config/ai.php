@@ -198,6 +198,21 @@ return [
         'pricing'    => ['input' => (float) env('PRICE_EMBED_IN', 0.02), 'output' => 0.0],
     ],
 
+    'embedding_models' => [
+        'openai::text-embedding-3-small' => [
+            'provider' => 'openai',
+            'model' => 'text-embedding-3-small',
+            'dimensions' => 1536,
+            'pricing' => ['input' => 0.02, 'output' => 0.0],
+        ],
+        'openai::text-embedding-3-large' => [
+            'provider' => 'openai',
+            'model' => 'text-embedding-3-large',
+            'dimensions' => 3072,
+            'pricing' => ['input' => 0.13, 'output' => 0.0],
+        ],
+    ],
+
     /*
     | Provider yang biayanya SAH bernilai 0 (trial/BYOK gratis). Untuk model LIVE
     | provider ini, harga 0 = benar (billing_status 'free'). Provider berbayar di
