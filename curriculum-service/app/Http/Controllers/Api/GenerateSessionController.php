@@ -46,6 +46,8 @@ class GenerateSessionController extends Controller
 
     public function show(GenerateSession $generateSession)
     {
+        $this->generator->ensureItemIds($generateSession);
+
         return new GenerateSessionResource($generateSession->load('mataKuliah'));
     }
 

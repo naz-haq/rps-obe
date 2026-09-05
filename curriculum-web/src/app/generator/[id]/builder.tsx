@@ -33,7 +33,6 @@ import { CplCpmkMatrix } from "./matrix";
 import { FloatingAiChat } from "./floating-ai";
 import { ItemRefine } from "./item-refine";
 import { QualityStrip, stageSummary, stageCount, stageReviewCount } from "./quality";
-import { GeneratorWorkspace } from "./workspace";
 import { useConfirm } from "@/components/confirm";
 
 const STAGES = [
@@ -516,10 +515,8 @@ function StageBody({
             />
           )}
         </>
-      ) : committed ? (
-        <LockedView stage={stage} draf={draf} estimasiWaktu={estimasiWaktu} sessionId={sessionId} revisi={revisi} committed={committed} />
       ) : (
-        <GeneratorWorkspace stage={stage} draf={draf} sessionId={sessionId} revisi={revisi} />
+        <LockedView stage={stage} draf={draf} estimasiWaktu={estimasiWaktu} sessionId={sessionId} revisi={revisi} committed={committed} />
       )}
 
       {!committed && issues.length > 0 && (
@@ -625,6 +622,7 @@ function LockedView({
 }) {
   const cpmkMap = new Map(getCpmk(draf).map((c) => [c.kode, c]));
   const subMap = new Map(getSubCpmk(draf).map((s) => [s.kode, s]));
+  const [openMinggu, setOpenMinggu] = useState<string | null>(null);
 
   if (stage === "cpmk") {
     return (
@@ -694,6 +692,7 @@ function LockedView({
               <th className="px-2 py-1.5">Bentuk Pembelajaran — Daring</th>
               <th className="px-2 py-1.5">Materi Pembelajaran [Pustaka]</th>
               <th className="px-2 py-1.5 text-right">Bobot (%)</th>
+              <th className="px-2 py-1.5 text-center">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -707,7 +706,7 @@ function LockedView({
                 return (
                   <tr key={i} className="bg-amber-50">
                     <td className="px-2 py-1.5 text-center font-medium tabular-nums">{m.minggu_ke}</td>
-                    <td className="px-2 py-1.5 text-center font-semibold text-amber-900" colSpan={7}>
+                    <td className="px-2 py-1.5 text-center font-semibold text-amber-900" colSpan={8}>
                       {isUts ? "Evaluasi Tengah Semester (UTS)" : "Evaluasi Akhir Semester (UAS)"}
                       {m.indikator ? ` — ${m.indikator}` : ""}
                     </td>
@@ -749,11 +748,24 @@ function LockedView({
                   <td className="px-2 py-1.5 text-right tabular-nums">
                     {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
                   </td>
+                  <td className="px-2 py-1.5 text-center">
+                    {!committed && m._id && (
+                      <button
+                        type="button"
+                        onClick={() => setOpenMinggu(openMinggu === m._id ? null : m._id!)}
+                        className={`rounded-md border px-1.5 py-1 text-xs ${openMinggu === m._id ? "border-brand-400 bg-brand-100" : "border-border hover:bg-brand-50"}`}
+                        title="Perbaiki baris ini dengan AI"
+                      >
+                        ✨
+                      </button>
+                    )}
+                    {m._pin && <span title="Tersemat" className="ml-1">📌</span>}
+                  </td>
                 </tr>
-                {!committed && m._id && (
-                  <tr>
-                    <td colSpan={8} className="px-2 pb-2">
-                      <ItemRefine sessionId={sessionId} stage="mingguan" itemId={m._id} pinned={m._pin} needsReview={m._needs_review} baseRevisi={revisi} />
+                {!committed && m._id && openMinggu === m._id && (
+                  <tr className="bg-brand-50/20">
+                    <td colSpan={9} className="px-2 pb-3 pt-1">
+                      <ItemRefine embedded sessionId={sessionId} stage="mingguan" itemId={m._id} pinned={m._pin} needsReview={m._needs_review} baseRevisi={revisi} />
                     </td>
                   </tr>
                 )}

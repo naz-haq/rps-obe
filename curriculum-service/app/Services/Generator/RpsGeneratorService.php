@@ -516,6 +516,12 @@ class RpsGeneratorService
         return $data;
     }
 
+    /** Publik: pastikan sesi lama punya _id di semua tahap (dipakai saat sesi dibaca). */
+    public function ensureItemIds(GenerateSession $session): void
+    {
+        $this->backfillItemIds($session);
+    }
+
     /** Pastikan seluruh item pada draf punya _id; simpan bila ada yang ditambah. */
     private function backfillItemIds(GenerateSession $session): void
     {

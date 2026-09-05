@@ -78,6 +78,7 @@ export function ItemRefine({
   pinned = false,
   needsReview = false,
   baseRevisi,
+  embedded = false,
 }: {
   sessionId: number;
   stage: string;
@@ -85,6 +86,7 @@ export function ItemRefine({
   pinned?: boolean;
   needsReview?: boolean;
   baseRevisi: number;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -135,17 +137,19 @@ export function ItemRefine({
     });
 
   return (
-    <div className="mt-1.5">
+    <div className={embedded ? "" : "mt-1.5"}>
       <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          disabled={pending || pinned}
-          onClick={() => setOpen((v) => !v)}
-          className={buttonClass("secondary", "sm")}
-          title={pinned ? "Lepas sematan dulu untuk memperbaiki" : "Perbaiki item ini dengan AI"}
-        >
-          ✨ Perbaiki
-        </button>
+        {!embedded && (
+          <button
+            type="button"
+            disabled={pending || pinned}
+            onClick={() => setOpen((v) => !v)}
+            className={buttonClass("secondary", "sm")}
+            title={pinned ? "Lepas sematan dulu untuk memperbaiki" : "Perbaiki item ini dengan AI"}
+          >
+            ✨ Perbaiki
+          </button>
+        )}
         <button
           type="button"
           disabled={pending}
@@ -162,7 +166,11 @@ export function ItemRefine({
         )}
       </div>
 
-      {open && !pinned && (
+      {embedded && pinned && (
+        <p className="mt-2 text-xs text-muted">Item disematkan agar tak berubah. Lepas sematan untuk memperbaiki dengan AI.</p>
+      )}
+
+      {((embedded && !pinned) || (open && !pinned)) && (
         <div className="mt-2 rounded-lg border border-brand-200 bg-brand-50/40 p-3">
           <div className="flex flex-wrap gap-1.5">
             {ACTIONS.map((a) => (
