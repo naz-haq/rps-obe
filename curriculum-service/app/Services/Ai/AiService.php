@@ -757,6 +757,7 @@ class AiService
             'biaya'        => round($biaya, 6),
             'billing_status' => $meta['billing_status'] ?? null,
             'status'       => $result->failed() ? 'gagal' : 'sukses',
+            'error'        => $result->failed() ? mb_strimwidth((string) $result->error, 0, 500, '…') : null,
         ]);
     }
 }
