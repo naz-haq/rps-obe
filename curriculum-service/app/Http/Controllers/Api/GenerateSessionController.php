@@ -173,7 +173,7 @@ class GenerateSessionController extends Controller
         try {
             $rps = $this->generator->commit($generateSession);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         $rps->loadCount(['minggu', 'komponenPenilaian']);
@@ -199,7 +199,7 @@ class GenerateSessionController extends Controller
         try {
             $result = $this->generator->suggestItem($generateSession, $data['stage'], $data['item'], $data['instruction'] ?? null);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         return response()->json(['data' => $result]);
@@ -221,7 +221,7 @@ class GenerateSessionController extends Controller
                 'instruction' => $data['instruction'] ?? null,
             ]);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         return response()->json(['data' => $candidate]);
@@ -242,7 +242,7 @@ class GenerateSessionController extends Controller
         } catch (RevisiConflictException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         return new GenerateSessionResource($generateSession->fresh()->load('mataKuliah'));
@@ -260,7 +260,7 @@ class GenerateSessionController extends Controller
         try {
             $this->generator->setItemPin($generateSession, $data['stage'], $data['item_id'], (bool) $data['pinned']);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         return new GenerateSessionResource($generateSession->fresh()->load('mataKuliah'));
@@ -274,7 +274,7 @@ class GenerateSessionController extends Controller
         } catch (RevisiConflictException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         return new GenerateSessionResource($session->fresh()->load('mataKuliah'));

@@ -53,7 +53,7 @@ class RpsAiController extends Controller
         try {
             $hasil = $generator->generatePertemuan($rpsVersion);
         } catch (GeneratorException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json($e->responsePayload(), 422);
         }
 
         return response()->json([
