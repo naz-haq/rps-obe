@@ -230,7 +230,7 @@ class GeneratorLifecycleTest extends TestCase
     }
 
     #[DataProvider('approvalLocks')]
-    public function test_any_evidence_of_previous_approval_blocks_reopen(string $lock): void
+    public function test_reopening_an_approved_rps_starts_a_new_version_and_leaves_it_intact(string $lock): void
     {
         $session = $this->committedSession();
         $rps = $session->rpsVersion()->firstOrFail();
@@ -251,13 +251,26 @@ class GeneratorLifecycleTest extends TestCase
                 'actor_nama' => $this->actor->name,
             ]);
         }
-        $before = $this->snapshot();
+        $rps->refresh();
+        $approvedAttrs = $rps->getAttributes();
+        $weekIds = $rps->minggu()->pluck('id')->all();
 
-        $this->postJson($this->url($session, 'reopen'), ['catatan' => 'Tidak boleh membuka persetujuan.'])
-            ->assertUnprocessable();
-        $this->assertGeneratorRejected(fn() => $this->generator->reopen($session->fresh(), $this->actorData()));
+        // Membuka RPS yang sudah disetujui KINI diperbolehkan: bukan menyunting di
+        // tempat, melainkan memulai VERSI BARU. Versi yang disetujui tetap utuh.
+        $this->postJson($this->url($session, 'reopen'), ['catatan' => 'Revisi menjadi versi baru.'])
+            ->assertOk();
 
-        $this->assertSame($before, $this->snapshot());
+        // Versi disetujui tidak berubah sama sekali (status, timestamp, anak).
+        $this->assertSame($approvedAttrs, $rps->fresh()->getAttributes());
+        foreach ($weekIds as $id) {
+            $this->assertDatabaseHas('rps_minggu', ['id' => $id]);
+        }
+        // Sesi lepas-kait dari versi disetujui; commit berikutnya = versi baru.
+        $fresh = $session->fresh();
+        $this->assertSame('berjalan', $fresh->status);
+        $this->assertNull($fresh->rps_version_id);
+        // Log buka_draf tercatat tanpa mengubah status versi disetujui.
+        $this->assertSame('buka_draf', $rps->approvalLogs()->orderByDesc('id')->firstOrFail()->aksi);
     }
 
     public static function approvalLocks(): array
@@ -626,79 +639,45 @@ class GeneratorLifecycleTest extends TestCase
         return ['editing' => ['berjalan'], 'all stages accepted' => ['selesai']];
     }
 
-    public function test_recommit_reuses_rps_replaces_children_and_preserves_history_across_cycles(): void
+    public function test_recommit_with_changes_creates_a_new_version_and_preserves_earlier_ones(): void
     {
         $session = $this->committedSession('revisi');
-        $rps = $session->rpsVersion()->firstOrFail();
-        $identity = $rps->only(['id', 'ulid', 'versi', 'institusi_id', 'kode_mk', 'created_by', 'created_at']);
-        $this->assertCommittedGraph($rps, 1);
+        $v1 = $session->rpsVersion()->firstOrFail();
+        $this->assertSame(1, (int) $v1->versi);
+        $v1WeekIds = $v1->minggu()->pluck('id')->all();
+        $v1ComponentIds = $v1->komponenPenilaian()->pluck('id')->all();
+        $this->assertNotEmpty($v1WeekIds);
 
-        // Grow then shrink: catches append-only commits and stale child rows.
-        foreach ([2, 1] as $count) {
-            $this->postJson($this->url($session, 'reopen'), ['catatan' => "Susun ulang menjadi {$count} pertemuan."])
-                ->assertOk();
-            $history = $this->snapshot()['rps_approval_log'];
-            $oldWeekIds = $rps->minggu()->pluck('id')->all();
-            $oldComponentIds = $rps->komponenPenilaian()->pluck('id')->all();
-
-            $draft = $this->manualDraft();
-            $draft['cpmk']['cpmk'][0]['deskripsi'] = "CPMK hasil perbaikan {$count}.";
-            $draft['sub_cpmk']['sub_cpmk'][0]['indikator'] = ["Indikator hasil perbaikan {$count}."];
-            $draft['mingguan']['minggu'] = [];
-            $draft['penilaian']['komponen'] = [];
-            for ($number = 1; $number <= $count; $number++) {
-                $week = $this->manualDraft()['mingguan']['minggu'][0];
-                $week['_id'] = "week-{$number}";
-                $week['minggu_ke'] = $number;
-                $week['materi_pustaka'] = "Materi siklus {$count}, pertemuan {$number}.";
-                $week['bobot_penilaian'] = 100 / $count;
-                $draft['mingguan']['minggu'][] = $week;
-                $component = $this->manualDraft()['penilaian']['komponen'][0];
-                $component['_id'] = "assessment-{$number}";
-                $component['nama'] = "Tugas siklus {$count}-{$number}";
-                $component['minggu_ke'] = $number;
-                $component['bobot_persen'] = 100 / $count;
-                $component['rubrik']['kriteria'][0]['kriteria'] = "Kriteria siklus {$count}-{$number}";
-                $draft['penilaian']['komponen'][] = $component;
-            }
-            foreach ($draft as $stage => $edited) {
-                $this->postJson($this->url($session, 'accept'), compact('stage', 'edited'))->assertOk();
-            }
-            $this->postJson($this->url($session, 'commit'))->assertCreated()
-                ->assertJsonPath('data.rps.id', $rps->id)
-                ->assertJsonPath('data.session.status', 'committed');
-
-            $rps->refresh();
-            $this->assertEquals($identity, $rps->only(array_keys($identity)));
-            $this->assertSame($rps->id, (int) $session->fresh()->rps_version_id);
-            $this->assertSame('draft', $rps->status);
-            $this->assertNull($rps->submitted_at);
-            $this->assertSame($history, $this->snapshot()['rps_approval_log']);
-            $this->assertCommittedGraph($rps, $count);
-            foreach ($oldWeekIds as $id) {
-                $this->assertDatabaseMissing('rps_minggu', ['id' => $id]);
-            }
-            foreach ($oldComponentIds as $id) {
-                $this->assertDatabaseMissing('komponen_penilaian', ['id' => $id]);
-            }
-            $this->assertDatabaseHas('cpmk', ['kode' => 'CPMK1', 'deskripsi' => "CPMK hasil perbaikan {$count}."]);
-            $this->assertDatabaseHas('indikator', ['deskripsi' => "Indikator hasil perbaikan {$count}."]);
-            $this->assertDatabaseHas('rps_minggu', ['rps_version_id' => $rps->id, 'materi_pustaka' => "Materi siklus {$count}, pertemuan 1."]);
-            $this->assertDatabaseHas('rubrik_kriteria', ['kriteria' => "Kriteria siklus {$count}-1"]);
-
-            $before = $this->snapshot();
-            $this->postJson($this->url($session, 'commit'))->assertUnprocessable();
-            $this->assertGeneratorRejected(fn() => $this->generator->commit($session->fresh()));
-            $this->assertSame($before, $this->snapshot());
+        // Buka → UBAH draf → commit ulang menghasilkan VERSI BARU (v2); v1 utuh.
+        $this->postJson($this->url($session, 'reopen'), ['catatan' => 'Revisi materi menjadi versi kedua.'])->assertOk();
+        $draftV2 = $this->manualDraft();
+        $draftV2['mingguan']['minggu'][0]['materi_pustaka'] = 'Materi versi kedua.';
+        foreach ($draftV2 as $stage => $edited) {
+            $this->postJson($this->url($session, 'accept'), compact('stage', 'edited'))->assertOk();
         }
+        $v2Id = $this->postJson($this->url($session, 'commit'))->assertCreated()
+            ->assertJsonPath('data.session.status', 'committed')
+            ->json('data.rps.id');
 
-        // Submission becomes legal again only after the final recommit.
-        $history = $this->snapshot()['rps_approval_log'];
-        $this->postJson("/api/v1/rps-versions/{$rps->id}/ajukan", ['catatan' => 'Siap ditinjau kembali.'])->assertOk();
-        $this->assertSame('review', $rps->fresh()->status);
-        $this->assertNotNull($rps->fresh()->submitted_at);
-        $this->assertSame($history, array_slice($this->snapshot()['rps_approval_log'], 0, -1));
-        $this->assertSame('ajukan', $rps->approvalLogs()->orderByDesc('id')->firstOrFail()->aksi);
+        $this->assertNotSame($v1->id, $v2Id);
+        $v2 = RpsVersion::findOrFail($v2Id);
+        $this->assertSame(2, (int) $v2->versi);
+        $this->assertSame($v2->id, (int) $session->fresh()->rps_version_id);
+        $this->assertDatabaseCount('rps_version', 2);
+        // v1 tetap ada sebagai riwayat dengan anak-anaknya utuh.
+        foreach ($v1WeekIds as $id) {
+            $this->assertDatabaseHas('rps_minggu', ['id' => $id]);
+        }
+        foreach ($v1ComponentIds as $id) {
+            $this->assertDatabaseHas('komponen_penilaian', ['id' => $id]);
+        }
+        $this->assertDatabaseHas('rps_minggu', ['rps_version_id' => $v2->id, 'materi_pustaka' => 'Materi versi kedua.']);
+
+        // Buka lagi lalu commit TANPA perubahan → menimpa versi sama (bukan v3).
+        $this->postJson($this->url($session, 'reopen'), ['catatan' => 'Buka tanpa mengubah.'])->assertOk();
+        $sameId = $this->postJson($this->url($session, 'commit'))->assertCreated()->json('data.rps.id');
+        $this->assertSame($v2->id, $sameId);
+        $this->assertDatabaseCount('rps_version', 2);
     }
 
     #[DataProvider('protectedSharedChanges')]

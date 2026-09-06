@@ -27,9 +27,10 @@ class GenerateSessionResource extends JsonResource
             'konteks_tambahan' => $this->konteks_tambahan,
             'rps_version_id'   => $this->rps_version_id,
             'rps_status'       => $rps?->status,
+            // Boleh dibuka-ulang bila sesi committed & versi belum disetujui
+            // (suntingan di tempat), ATAU versi sudah disetujui (buka → VERSI BARU).
             'can_reopen'       => $this->status === 'committed' && $rps
-                && in_array($rps->status, ['draft', 'review', 'revisi'], true)
-                && ! $rps->pernahDisetujui(),
+                && (in_array($rps->status, ['draft', 'review', 'revisi'], true) || $rps->pernahDisetujui()),
             'user_id'          => $this->user_id,
             'created_at'       => $this->created_at,
             'updated_at'       => $this->updated_at,

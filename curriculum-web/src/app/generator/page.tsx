@@ -22,14 +22,19 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
 
   let list: Paginated<GenerateSession> | null = null;
   let mataKuliah: MataKuliah[] = [];
+  let sesiMkIds: number[] = [];
   let error: string | null = null;
   try {
-    const [sesi, mk] = await Promise.all([
+    const [sesi, mk, semuaSesi] = await Promise.all([
       apiGet<Paginated<GenerateSession>>("/generate-sessions", { sort, dir, page, status: sp.status, per_page: perPage }),
       apiGet<Paginated<MataKuliah>>("/mata-kuliah", { per_page: 200, sort: "kode_mk", dir: "asc" }),
+      apiGet<Paginated<GenerateSession>>("/generate-sessions", { per_page: 1000 }),
     ]);
     list = sesi;
     mataKuliah = mk.data;
+    // MK yang sudah punya sesi (versi manapun) — dikecualikan dari pemilih agar
+    // tidak dobel; revisi/versi baru dilakukan lewat "Kembalikan ke draf".
+    sesiMkIds = Array.from(new Set(semuaSesi.data.map((s) => s.mk_id)));
   } catch {
     error = "Tidak dapat memuat sesi generator. Pastikan backend berjalan di :8100.";
   }
@@ -41,7 +46,7 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
       <PageHeader
         title="Generator RPS"
         subtitle="Susun RPS OBE bertahap: CPMK → Sub-CPMK → Rencana Mingguan → Penilaian, dengan bantuan AI."
-        actions={<StartSessionButton mataKuliah={mataKuliah} />}
+        actions={<StartSessionButton mataKuliah={mataKuliah} excludeMkIds={sesiMkIds} />}
       />
 
       {error ? (

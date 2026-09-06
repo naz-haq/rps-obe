@@ -9,10 +9,13 @@ import { startSession } from "./actions";
 
 type State = ApiResult | null;
 
-export function StartSessionButton({ mataKuliah }: { mataKuliah: MataKuliah[] }) {
+export function StartSessionButton({ mataKuliah, excludeMkIds = [] }: { mataKuliah: MataKuliah[]; excludeMkIds?: number[] }) {
+  // Kecualikan MK yang sudah punya sesi di generator (cegah dobel).
+  const exclude = new Set(excludeMkIds);
+  const tersedia = mataKuliah.filter((m) => !exclude.has(m.id));
   return (
     <Modal trigger="+ Sesi Baru" title="Mulai Sesi Penyusunan RPS">
-      {(close) => <StartForm close={close} mataKuliah={mataKuliah} />}
+      {(close) => <StartForm close={close} mataKuliah={tersedia} />}
     </Modal>
   );
 }
@@ -33,7 +36,8 @@ function StartForm({ close, mataKuliah }: { close: () => void; mataKuliah: MataK
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted">
-          Belum ada mata kuliah. Impor mata kuliah lewat Onboarding terlebih dahulu.
+          Semua mata kuliah sudah memiliki sesi RPS di generator, atau belum ada mata kuliah.
+          Untuk merevisi/menerbitkan versi baru, buka sesi MK terkait lalu gunakan “Kembalikan ke draf”.
         </p>
         <div className="flex justify-end">
           <button type="button" onClick={close} className={buttonClass("secondary")}>

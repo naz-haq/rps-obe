@@ -104,6 +104,14 @@ class RpsGeneratorService
     {
         $pipeline = config('generator.pipeline');
 
+        // Satu MK = satu sesi AKTIF. Cegah sesi ganda untuk MK yang masih dalam
+        // penyusunan (belum commit) agar tidak muncul dobel di daftar generator;
+        // buka/lanjutkan sesi yang ada. Sesi yang sudah commit tidak menghalangi
+        // (revisi versi berikutnya dilakukan lewat "Kembalikan ke draf").
+        if (GenerateSession::where('mk_id', $mk->id)->where('status', '!=', 'committed')->exists()) {
+            throw new GeneratorException('Mata kuliah ini sudah memiliki sesi RPS yang sedang disusun di generator. Buka sesi yang ada; jangan membuat sesi ganda.');
+        }
+
         return GenerateSession::create([
             'institusi_id'  => $mk->institusi_id,
             'mk_id'         => $mk->id,
@@ -522,13 +530,34 @@ class RpsGeneratorService
             if (! $rps || $locked->status !== 'committed') {
                 throw new GeneratorException('Sesi ini bukan RPS yang sudah di-commit.');
             }
-            if (
-                ! in_array($rps->status, ['draft', 'review', 'revisi'], true)
-                || $rps->pernahDisetujui()
-            ) {
-                throw new GeneratorException('RPS yang sudah disetujui prodi tidak dapat dikembalikan ke draf.');
-            }
             $from = $rps->status;
+
+            if ($rps->pernahDisetujui()) {
+                // RPS yang sudah disetujui bersifat FINAL & tetap utuh sebagai
+                // riwayat. Membuka untuk revisi = lepas kaitan sesi dari versi itu;
+                // commit berikutnya menghasilkan VERSI BARU (draft) tanpa menyentuh
+                // versi yang disetujui.
+                $locked->update([
+                    'status'              => 'berjalan',
+                    'rps_version_id'      => null,
+                    'committed_draf_hash' => null,
+                    'revisi'              => (int) $locked->revisi + 1,
+                ]);
+                RpsApprovalLog::create([
+                    'institusi_id' => $rps->institusi_id,
+                    'rps_version_id' => $rps->id,
+                    'aksi' => 'buka_draf',
+                    'dari_status' => $from,
+                    'ke_status' => $from, // versi disetujui tidak berubah statusnya
+                    'catatan' => $actor['catatan'],
+                    'actor_id' => $actor['id'],
+                    'actor_nama' => $actor['nama'],
+                ]);
+
+                return $locked;
+            }
+
+            // Belum disetujui: kembalikan versi ini ke draf untuk disunting di tempat.
             $rps->update(['status' => 'draft', 'submitted_at' => null]);
             $locked->update(['status' => 'berjalan', 'revisi' => (int) $locked->revisi + 1]);
             RpsApprovalLog::create([
@@ -1337,14 +1366,22 @@ class RpsGeneratorService
             $cpmkMap = $this->commitCpmk($session, $mk, $draf['cpmk']['cpmk'] ?? []);
             $subMap  = $this->commitSubCpmk($session, $cpmkMap, $draf['sub_cpmk']['sub_cpmk'] ?? []);
 
-            $rps ??= RpsVersion::create([
-                'institusi_id' => $session->institusi_id,
-                'kode_mk'      => $mk->kode_mk,
-                'versi'        => $this->nextRpsVersi($session->institusi_id, $mk->kode_mk),
-                'status'       => 'draft',
-                'bahasa'       => 'id',
-                'created_by'   => $session->user_id,
-            ]);
+            // Versi baru bila belum pernah commit ATAU draf berubah sejak commit
+            // terakhir (hash). Draf identik → timpa versi sama (bukan versi baru).
+            // Versi lama tetap utuh sebagai riwayat (v1, v2, dst).
+            $hash = hash('sha256', (string) json_encode($draf));
+            $buatVersiBaru = $rps === null || (string) $session->committed_draf_hash !== $hash;
+
+            if ($buatVersiBaru) {
+                $rps = RpsVersion::create([
+                    'institusi_id' => $session->institusi_id,
+                    'kode_mk'      => $mk->kode_mk,
+                    'versi'        => $this->nextRpsVersi($session->institusi_id, $mk->kode_mk),
+                    'status'       => 'draft',
+                    'bahasa'       => $rps?->bahasa ?? 'id',
+                    'created_by'   => $session->user_id,
+                ]);
+            }
 
             // Staging tidak menulis dokumen sampai commit; penggantian atomik tanpa duplikasi.
             $rps->minggu()->delete();
@@ -1352,7 +1389,12 @@ class RpsGeneratorService
             $this->commitMinggu($rps, $subMap, $draf['mingguan']['minggu'] ?? [], $mk);
             $this->commitKomponen($rps, $subMap, $draf['penilaian']['komponen'] ?? []);
 
-            $session->update(['rps_version_id' => $rps->id, 'status' => 'committed', 'revisi' => (int) $session->revisi + 1]);
+            $session->update([
+                'rps_version_id'      => $rps->id,
+                'status'              => 'committed',
+                'committed_draf_hash' => $hash,
+                'revisi'              => (int) $session->revisi + 1,
+            ]);
 
             return $rps;
         });

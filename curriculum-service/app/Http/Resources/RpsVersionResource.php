@@ -29,8 +29,7 @@ class RpsVersionResource extends JsonResource
             'generate_session_id' => $session?->id,
             'editing_in_generator' => $session && $session->status !== 'committed',
             'can_reopen' => $session && $session->status === 'committed'
-                && in_array($this->status, ['draft', 'review', 'revisi'], true)
-                && ! $this->pernahDisetujui(),
+                && (in_array($this->status, ['draft', 'review', 'revisi'], true) || $this->pernahDisetujui()),
             'bahasa'             => $this->bahasa,
             'kode_dokumen'       => $this->kode_dokumen,
             'created_by'         => $this->created_by,
