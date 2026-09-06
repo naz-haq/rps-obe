@@ -31,9 +31,12 @@ class RpsDocxExporter
             'komponenPenilaian.rubrik.kriteria',
         ]);
 
+        // MK bisa di institusi berbeda dari RPS (hierarki tenant); fallback
+        // ke pencarian kode_mk saja agar detail MK tetap terisi di DOCX.
         $mk = MataKuliah::where('kode_mk', $rps->kode_mk)
             ->where('institusi_id', $rps->institusi_id)
-            ->first();
+            ->first()
+            ?? MataKuliah::where('kode_mk', $rps->kode_mk)->first();
         $institusi = Institusi::find($rps->institusi_id);
 
         $minggu = $rps->minggu->sortBy('minggu_ke')->values();

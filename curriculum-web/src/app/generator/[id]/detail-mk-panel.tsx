@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { buttonClass } from "@/components/ui";
 import type { MataKuliah } from "@/lib/api";
 import { ReferensiEditor } from "@/app/kurikulum/[id]/mata-kuliah/referensi-editor";
+import { PengampuEditor } from "@/app/kurikulum/[id]/mata-kuliah/pengampu-editor";
 import { DokumenTautanEditor } from "@/app/kurikulum/[id]/mata-kuliah/dokumen-tautan-editor";
 import { suggestDeskripsiMk } from "@/app/kurikulum/[id]/mata-kuliah/actions";
 import { saveDetailMk } from "../actions";
@@ -120,6 +121,8 @@ export function DetailMkPanel({ sessionId, mk, committed }: { sessionId: number;
             </label>
 
             <ReferensiEditor mk={mk} />
+
+            <PengampuEditor mk={mk} />
 
             <div className="flex justify-end">
               <button type="submit" disabled={pending} className={buttonClass("primary", "sm")}>

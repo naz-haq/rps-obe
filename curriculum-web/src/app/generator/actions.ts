@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiPost, apiPatch, apiDelete, type ApiResult, type ItemCandidate } from "@/lib/api";
+import { apiPost, apiPatch, apiDelete, apiGet, type ApiResult, type ItemCandidate, type Pengampu } from "@/lib/api";
 
 
 export async function startSession(formData: FormData): Promise<ApiResult> {
@@ -54,8 +54,40 @@ export async function saveDetailMk(sessionId: number, formData: FormData): Promi
     }
   }
 
+  // Sinkron dosen pengampu bila editor mengirim pengampu_json.
+  const rawPengampu = (formData.get("pengampu_json") as string) || "";
+  if (rawPengampu.trim() && kodeMk && institusiId) {
+    try {
+      const arr = JSON.parse(rawPengampu) as { nidn?: string; nama?: string; peran?: string }[];
+      const items = (Array.isArray(arr) ? arr : [])
+        .map((r) => ({
+          nidn: String(r.nidn ?? "").trim(),
+          nama: String(r.nama ?? "").trim(),
+          peran: r.peran === "koordinator" ? "koordinator" : "anggota",
+        }))
+        .filter((r) => r.nidn !== "" && r.nama !== "");
+      const sync = await apiPost("/pengampu/sync", { institusi_id: institusiId, kode_mk: kodeMk, items });
+      if (!sync.ok) return sync;
+    } catch {
+      // pengampu_json korup → biarkan; deskripsi sudah tersimpan
+    }
+  }
+
   revalidatePath(`/generator/${sessionId}`);
   return res;
+}
+
+/** Muat dosen pengampu satu MK untuk mengisi editor saat panel dibuka. */
+export async function listPengampu(kodeMk: string, institusiId: number): Promise<Pengampu[]> {
+  try {
+    const res = await apiGet<{ data: Pengampu[] }>("/pengampu", {
+      kode_mk: kodeMk,
+      institusi_id: String(institusiId),
+    });
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function deleteSession(formData: FormData): Promise<ApiResult> {

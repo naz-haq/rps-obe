@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\KonfigurasiAturanController;
 use App\Http\Controllers\Api\KurikulumBukuController;
 use App\Http\Controllers\Api\KurikulumController;
 use App\Http\Controllers\Api\MataKuliahController;
+use App\Http\Controllers\Api\MkPengampuController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PemenuhanAcuanController;
 use App\Http\Controllers\Api\PetaKurikulumController;
@@ -148,6 +149,10 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
     Route::post('referensi/sync', [ReferensiController::class, 'sync']);
     Route::post('referensi/suggest', [ReferensiController::class, 'suggest'])->middleware('throttle:ai');
     Route::post('mata-kuliah/deskripsi/suggest', [ReferensiController::class, 'suggestDeskripsi'])->middleware('throttle:ai');
+
+    // Dosen Pengampu per Mata Kuliah (header RPS cetak/DOCX)
+    Route::get('pengampu', [MkPengampuController::class, 'index']);
+    Route::post('pengampu/sync', [MkPengampuController::class, 'sync']);
 
     // Modul 1 — Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional)
     Route::apiResource('taksonomi', TaksonomiController::class)->parameters(['taksonomi' => 'taksonomi']);

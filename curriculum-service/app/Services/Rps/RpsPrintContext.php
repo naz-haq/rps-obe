@@ -8,6 +8,7 @@ use App\Models\Cpmk;
 use App\Models\CpmkCpl;
 use App\Models\Dosen;
 use App\Models\Institusi;
+use App\Models\Kurikulum;
 use App\Models\MataKuliah;
 use App\Models\MkBahanKajian;
 use App\Models\MkPengampu;
@@ -25,13 +26,28 @@ class RpsPrintContext
 {
     public function build(RpsVersion $rps): array
     {
-        $rps->loadMissing(['minggu.subCpmk']);
+        $rps->loadMissing(['minggu.subCpmk', 'komponenPenilaian']);
         $institusiId = $rps->institusi_id;
         $kodeMk = $rps->kode_mk;
 
-        $mk = MataKuliah::where('kode_mk', $kodeMk)
-            ->where('institusi_id', $institusiId)
-            ->first();
+        // MK bisa berada di institusi berbeda dari RPS (hierarki tenant: RPS di
+        // prodi, MK di fakultas, dst). Resolusi MK toleran, lalu kumpulkan semua
+        // institusi kandidat (RPS + MK + kurikulum MK) agar data anak (pengampu,
+        // pustaka, bahan kajian, CPMK/Sub-CPMK) yang tersimpan di institusi mana
+        // pun dalam hierarki MK ini tetap terambil lengkap ke PDF/DOCX.
+        $mk = MataKuliah::where('kode_mk', $kodeMk)->where('institusi_id', $institusiId)->first()
+            ?? MataKuliah::where('kode_mk', $kodeMk)->first();
+        $kurInstitusiId = $mk && $mk->kurikulum_id
+            ? Kurikulum::whereKey($mk->kurikulum_id)->value('institusi_id')
+            : null;
+        $instIds = array_values(array_unique(array_filter([
+            $institusiId,
+            $mk?->institusi_id,
+            $kurInstitusiId,
+        ])));
+        if ($instIds === []) {
+            $instIds = [$institusiId];
+        }
 
         // Hierarki Institusi (Prodi -> Fakultas -> Universitas), fallback bila 1 level.
         $prodi = null;
@@ -54,11 +70,11 @@ class RpsPrintContext
         }
 
         // Dosen pengampu.
-        $pengampu = MkPengampu::where('institusi_id', $institusiId)
+        $pengampu = MkPengampu::whereIn('institusi_id', $instIds)
             ->where('kode_mk', $kodeMk)
             ->get()
-            ->map(function ($p) use ($institusiId) {
-                $dosen = Dosen::where('institusi_id', $institusiId)
+            ->map(function ($p) use ($instIds) {
+                $dosen = Dosen::whereIn('institusi_id', $instIds)
                     ->where('nidn', $p->dosen_nidn)
                     ->first();
                 return [
@@ -72,13 +88,13 @@ class RpsPrintContext
         $prasyarat = null;
         if ($mk && $mk->prasyarat_kode) {
             $pm = MataKuliah::where('kode_mk', $mk->prasyarat_kode)
-                ->where('institusi_id', $institusiId)
+                ->whereIn('institusi_id', $instIds)
                 ->first();
             $prasyarat = ['kode' => $mk->prasyarat_kode, 'nama' => $pm?->nama];
         }
 
         // Bahan kajian tertaut.
-        $bahanKajian = MkBahanKajian::where('institusi_id', $institusiId)
+        $bahanKajian = MkBahanKajian::whereIn('institusi_id', $instIds)
             ->where('kode_mk', $kodeMk)
             ->with(['bahanKajian.keterampilan'])
             ->get()
@@ -102,7 +118,7 @@ class RpsPrintContext
             ->all();
 
         // Referensi.
-        $refs = Referensi::where('institusi_id', $institusiId)
+        $refs = Referensi::whereIn('institusi_id', $instIds)
             ->where('kode_mk', $kodeMk)
             ->get();
         $pustakaUtama = $refs->where('tipe', 'utama')->pluck('sitasi')->values()->all();
@@ -119,16 +135,22 @@ class RpsPrintContext
             ->toArray();
         $totalMingguAktif = array_sum($mingguPerSub);
 
-        // CPMK & Sub-CPMK MK.
-        $cpmkIds = Cpmk::where('institusi_id', $institusiId)
-            ->where('kode_mk', $kodeMk)
-            ->pluck('id');
+        // CPMK & Sub-CPMK — ISOLASI VERSI: hanya yang BENAR-BENAR dipakai versi
+        // ini (dirujuk rps_minggu / komponen_penilaian). Sisa generate lama yang
+        // sudah dihapus/tak tersemat TIDAK ikut, dan isi versi lain tidak bocor
+        // ke versi ini karena cpmk/sub_cpmk berbagi tabel per kode_mk.
+        $subIdsDipakai = $rps->minggu->pluck('sub_cpmk_id')
+            ->merge($rps->komponenPenilaian->pluck('sub_cpmk_id'))
+            ->filter()
+            ->unique()
+            ->values();
 
-        $subCpmkRaw = SubCpmk::where('institusi_id', $institusiId)
-            ->whereIn('cpmk_id', $cpmkIds)
+        $subCpmkRaw = SubCpmk::whereIn('id', $subIdsDipakai)
             ->with('cpmk')
             ->orderBy('kode')
             ->get();
+
+        $cpmkIds = $subCpmkRaw->pluck('cpmk_id')->filter()->unique()->values();
 
         // Kontribusi per CPMK (akumulasi minggu Sub-CPMK di bawahnya / total minggu aktif).
         $cpmkKontribusiMap = $subCpmkRaw

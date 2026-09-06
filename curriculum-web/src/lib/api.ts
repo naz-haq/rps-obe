@@ -173,6 +173,12 @@ export type Referensi = {
   sitasi: string;
 };
 
+export type Pengampu = {
+  nidn: string;
+  nama: string;
+  peran: "koordinator" | "anggota";
+};
+
 export type BadanRujukan = {
   id: number;
   institusi_id: number | null;

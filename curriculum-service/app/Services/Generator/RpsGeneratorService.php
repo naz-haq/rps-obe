@@ -2103,7 +2103,7 @@ class RpsGeneratorService
         if ($bk !== []) {
             $arahBk = match ((string) ($stageCfg['jenis_output'] ?? '')) {
                 'cpmk'     => 'SETIAP bahan kajian di bawah WAJIB tercermin pada minimal satu CPMK — jangan ada bahan kajian yang tidak terpetakan',
-                'sub_cpmk' => 'jabarkan bahan kajian di bawah menjadi Sub-CPMK; setiap bahan kajian terwakili minimal satu Sub-CPMK',
+                'sub_cpmk' => 'jabarkan bahan kajian di bawah menjadi Sub-CPMK; setiap bahan kajian terwakili minimal satu Sub-CPMK; rumusan Sub-CPMK WAJIB menyebut substansi/rincian SPESIFIK persis dari nama & deskripsi bahan kajian ini (bukan istilah umum) dan tidak boleh ada rincian yang hilang',
                 'mingguan' => 'WAJIB dijadikan basis materi_pustaka tiap minggu, dipilih sesuai Sub-CPMK',
                 default    => 'jadikan acuan substansi capaian',
             };
@@ -2514,9 +2514,9 @@ class RpsGeneratorService
                 'bahan_kajian_khusus' => 'substansi wajib saat merumuskan CPMK; gabungkan dengan BAHAN KAJIAN MK kurikulum',
             ],
             'sub_cpmk' => [
-                'kompetensi_khusus'   => 'jabarkan menjadi Sub-CPMK yang terukur dengan indikator operasional',
+                'kompetensi_khusus'   => 'jabarkan menjadi Sub-CPMK yang terukur dengan indikator operasional — sebut isinya eksplisit, jangan diringkas jadi istilah umum',
                 'bok'                 => 'batas cakupan keilmuan — Sub-CPMK TIDAK BOLEH keluar dari cakupan ini',
-                'bahan_kajian_khusus' => 'jadikan basis penjabaran Sub-CPMK bersama bahan kajian kurikulum',
+                'bahan_kajian_khusus' => 'basis penjabaran Sub-CPMK bersama bahan kajian kurikulum — setiap rincian di sini WAJIB muncul eksplisit pada deskripsi/indikator Sub-CPMK, DILARANG hilang atau diganti rumusan umum',
             ],
             'mingguan' => [
                 'kompetensi_khusus'   => 'aktivitas & indikator mingguan wajib melatih dan mengukur kompetensi ini',

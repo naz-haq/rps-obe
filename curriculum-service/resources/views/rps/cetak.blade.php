@@ -112,7 +112,12 @@
             .toolbar { display: none; }
             .sheet { box-shadow: none; margin: 0; max-width: none; padding: 0; }
             @page { size: A4 landscape; margin: 12mm; }
-            tr, table { break-inside: avoid; }
+            /* Hanya BARIS yang dijaga utuh; tabel besar (mingguan) BOLEH mengalir
+               antar-halaman agar tak ada halaman kosong berisi kop saja. Header
+               tabel diulang di tiap halaman. */
+            tr { break-inside: avoid; }
+            thead { display: table-header-group; }
+            .avoid-break { break-inside: avoid; }
         }
     </style>
 </head>

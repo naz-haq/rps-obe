@@ -161,9 +161,12 @@ class RpsVersionController extends Controller
             'komponenPenilaian.rubrik.kriteria',
         ]);
 
+        // MK bisa di institusi berbeda dari RPS (hierarki tenant); fallback
+        // ke pencarian kode_mk saja agar detail MK tetap terisi di PDF.
         $mk = MataKuliah::where('kode_mk', $rpsVersion->kode_mk)
             ->where('institusi_id', $rpsVersion->institusi_id)
-            ->first();
+            ->first()
+            ?? MataKuliah::where('kode_mk', $rpsVersion->kode_mk)->first();
         $institusi = Institusi::find($rpsVersion->institusi_id);
 
         $minggu = $rpsVersion->minggu->sortBy('minggu_ke')->values();
