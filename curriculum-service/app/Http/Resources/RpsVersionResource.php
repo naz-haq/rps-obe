@@ -11,9 +11,13 @@ class RpsVersionResource extends JsonResource
     public function toArray(Request $request): array
     {
         $session = \App\Models\GenerateSession::where('rps_version_id', $this->id)->latest('id')->first();
-        $namaMk = \App\Models\MataKuliah::where('institusi_id', $this->institusi_id)
-            ->where('kode_mk', $this->kode_mk)
-            ->value('nama');
+        // Nama MK: prioritas via mk_id sesi (FK andal, lintas institusi) seperti
+        // generator; fallback ke kode_mk (RPS bisa berbeda institusi dari MK
+        // pada hierarki tenant, jadi JANGAN kunci pada institusi_id).
+        $namaMk = ($session && $session->mk_id
+            ? \App\Models\MataKuliah::whereKey($session->mk_id)->value('nama')
+            : null)
+            ?? \App\Models\MataKuliah::where('kode_mk', $this->kode_mk)->value('nama');
         return [
             'id'                 => $this->id,
             'ulid'               => $this->ulid,
