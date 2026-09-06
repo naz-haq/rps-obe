@@ -145,10 +145,13 @@ class RpsPrintContext
             ->unique()
             ->values();
 
+        // Urutan NATURAL (numerik): Sub-CPMK-2 sebelum Sub-CPMK-10, bukan sortir
+        // teks. MySQL orderBy tak natural, jadi sortir di PHP.
         $subCpmkRaw = SubCpmk::whereIn('id', $subIdsDipakai)
             ->with('cpmk')
-            ->orderBy('kode')
-            ->get();
+            ->get()
+            ->sortBy('kode', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
         $cpmkIds = $subCpmkRaw->pluck('cpmk_id')->filter()->unique()->values();
 
@@ -161,8 +164,8 @@ class RpsPrintContext
             });
 
         $cpmkList = Cpmk::whereIn('id', $cpmkIds)
-            ->orderBy('kode')
             ->get()
+            ->sortBy('kode', SORT_NATURAL | SORT_FLAG_CASE)
             ->map(fn($c) => [
                 'kode'              => $c->kode,
                 'deskripsi'         => $c->deskripsi,

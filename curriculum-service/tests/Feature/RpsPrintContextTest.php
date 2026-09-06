@@ -60,4 +60,37 @@ class RpsPrintContextTest extends TestCase
         $this->assertNotContains('CPMK-LAMA', $cpmkKodes);
         $this->assertNotContains('Sub-CPMK-LAMA', $subKodes);
     }
+
+    /**
+     * Urutan Sub-CPMK di tabel matriks WAJIB natural (numerik): Sub-CPMK-2
+     * sebelum Sub-CPMK-10, bukan sortir teks (yang menaruh 10 sebelum 2).
+     */
+    public function test_sub_cpmk_diurutkan_natural_bukan_teks(): void
+    {
+        $prodi = Institusi::create(['kode' => 'PR-ORD', 'nama' => 'Prodi Ord', 'jenis' => 'prodi']);
+        $kur = Kurikulum::create(['institusi_id' => $prodi->id, 'kode' => 'KUR-ORD', 'nama' => 'Kur Ord', 'tahun' => '2026']);
+        MataKuliah::create([
+            'institusi_id' => $prodi->id,
+            'kurikulum_id' => $kur->id,
+            'kode_mk' => 'MK-ORD',
+            'nama' => 'MK Order',
+            'jenis_mk' => 'murni',
+            'sks_teori' => 2,
+            'sks_praktik' => 0,
+            'semester' => 1,
+        ]);
+        $cpmk = Cpmk::create(['institusi_id' => $prodi->id, 'kode_mk' => 'MK-ORD', 'kode' => 'CPMK-1', 'deskripsi' => 'CPMK.']);
+        $rps = RpsVersion::create(['institusi_id' => $prodi->id, 'kode_mk' => 'MK-ORD', 'versi' => 1, 'status' => 'draft', 'bahasa' => 'id']);
+
+        // Buat sengaja tak berurutan (1, 10, 2) agar sortir teks pasti keliru.
+        foreach ([1, 10, 2] as $i => $n) {
+            $sub = SubCpmk::create(['institusi_id' => $prodi->id, 'cpmk_id' => $cpmk->id, 'kode' => "Sub-CPMK-{$n}", 'deskripsi' => "Sub {$n}."]);
+            RpsMinggu::create(['rps_version_id' => $rps->id, 'minggu_ke' => $i + 1, 'sub_cpmk_id' => $sub->id]);
+        }
+
+        $konteks = app(RpsPrintContext::class)->build($rps->fresh());
+        $subKodes = array_column($konteks['sub_cpmk_list'], 'kode');
+
+        $this->assertSame(['Sub-CPMK-1', 'Sub-CPMK-2', 'Sub-CPMK-10'], $subKodes);
+    }
 }
