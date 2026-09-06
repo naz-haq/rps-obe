@@ -37,6 +37,29 @@ class Institusi extends Model
         return $ids;
     }
 
+    /**
+     * ID institusi ini beserta seluruh LELUHURnya (prodi → fakultas → universitas),
+     * urut dari paling spesifik ke paling umum. Dipakai resolusi aturan yang
+     * mewaris ke bawah: aturan universitas berlaku untuk fakultas/prodi di
+     * bawahnya bila belum ditimpa.
+     *
+     * @return list<int>
+     */
+    public static function idsHierarkiKeAtas(int $id): array
+    {
+        $indukPerId = self::query()->select('id', 'parent_id')->get()->keyBy('id');
+        $ids = [];
+        $cursor = $id;
+        $aman = 0;
+        while ($cursor !== null && ! in_array($cursor, $ids, true) && $aman++ < 20) {
+            $ids[] = (int) $cursor;
+            $cursor = $indukPerId->get($cursor)?->parent_id;
+            $cursor = $cursor !== null ? (int) $cursor : null;
+        }
+
+        return $ids;
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'institusi_id');

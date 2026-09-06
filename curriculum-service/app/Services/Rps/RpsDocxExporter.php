@@ -392,13 +392,58 @@ class RpsDocxExporter
 
             $cellLuring = $table->addCell($widths[4]);
             $cellLuring->addText($luring !== '' ? $luring : '—', ['size' => 8]);
+            if ($m->metode_pembelajaran) {
+                $cellLuring->addText('Metode: ' . $m->metode_pembelajaran, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
+            }
             if ($waktuTeks !== '') {
                 $cellLuring->addText($waktuTeks, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
             }
 
-            $this->dataCell($table, $daring !== '' ? $daring : '—', $widths[5]);
+            // Kolom Daring + Penugasan Mahasiswa (pengalaman_belajar) — sebelumnya
+            // hanya PDF yang menampilkan penugasan; DOCX menghilangkannya.
+            $cellDaring = $table->addCell($widths[5]);
+            $cellDaring->addText($daring !== '' ? $daring : '—', ['size' => 8]);
+            $penugasan = trim((string) $m->pengalaman_belajar);
+            if ($penugasan !== '') {
+                $cellDaring->addText('Penugasan: ' . $penugasan, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
+            }
+
             $this->dataCell($table, $m->materi_pustaka ?? '—', $widths[6]);
             $this->dataCell($table, $this->angka($m->bobot_penilaian), $widths[7], Jc::CENTER);
+
+            // Rincian pertemuan (blok/profesi): baris rentang di bawah baris pekan.
+            $this->addRincianPertemuanRow($table, $m, $widths, count($head));
+        }
+    }
+
+    /** Baris rincian pertemuan (topik/aktivitas/metode/durasi) bila pekan punya breakdown. */
+    private function addRincianPertemuanRow($table, $m, array $widths, int $cols): void
+    {
+        $rincian = $m->rincian_pertemuan;
+        if (! is_array($rincian) || $rincian === []) {
+            return;
+        }
+        $table->addRow();
+        $table->addCell($widths[0], ['bgColor' => 'F8FAFC'])->addText('', ['size' => 7]);
+        $cell = $table->addCell(array_sum($widths) - $widths[0], ['gridSpan' => $cols - 1, 'bgColor' => 'F8FAFC']);
+        $cell->addText('Rincian Pertemuan:', ['bold' => true, 'size' => 8]);
+        foreach ($rincian as $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+            $ke = $p['pertemuan_ke'] ?? '?';
+            $durasi = isset($p['durasi_menit']) && $p['durasi_menit'] ? ' · ' . ((int) $p['durasi_menit']) . ' menit' : '';
+            $run = $cell->addTextRun(['spaceAfter' => 20]);
+            $run->addText("Pertemuan {$ke}{$durasi}: ", ['bold' => true, 'size' => 8]);
+            $run->addText(trim((string) ($p['topik'] ?? '—')), ['size' => 8]);
+            $metode = trim((string) ($p['metode'] ?? ''));
+            $aktivitas = trim((string) ($p['aktivitas'] ?? ''));
+            if ($metode !== '') {
+                $cell->addText('  Metode: ' . $metode, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
+            }
+            if ($aktivitas !== '') {
+                $cell->addText('  Aktivitas/Penugasan: ' . $aktivitas, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
+            }
         }
     }
 

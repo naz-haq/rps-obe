@@ -43,9 +43,11 @@ export default async function GeneratorDetailPage({ params }: { params: Promise<
   }
 
   // Konfigurasi aturan yang menjadi keterkaitan generate (konversi SKS, minggu, bobot).
+  // efektif=1 → aturan diwarisi dari institusi induk (fakultas/universitas), agar
+  // banner tak salah lapor "belum diatur" saat aturan diset di tingkat atas.
   let aturan: KonfigurasiAturan[] = [];
   try {
-    const res = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", { institusi_id: session.institusi_id });
+    const res = await apiGet<{ data: KonfigurasiAturan[] }>("/konfigurasi-aturan", { institusi_id: session.institusi_id, efektif: 1 });
     aturan = res.data;
   } catch {
     aturan = [];

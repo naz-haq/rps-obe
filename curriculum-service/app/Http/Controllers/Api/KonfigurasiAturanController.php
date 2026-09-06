@@ -24,6 +24,30 @@ class KonfigurasiAturanController extends Controller
     {
         $institusiId = $request->integer('institusi_id', 1);
 
+        // Mode "efektif": kembalikan aturan yang BERLAKU untuk institusi ini
+        // dengan pewarisan ke atas (prodi → fakultas → universitas → global NULL),
+        // yang paling spesifik menang. Dipakai banner prasyarat generator agar
+        // tak salah lapor "belum diatur" saat aturan diset di tingkat atas.
+        if ($request->boolean('efektif')) {
+            $rantai = \App\Models\Institusi::idsHierarkiKeAtas($institusiId);
+            $peringkat = array_flip($rantai);
+            $rows = KonfigurasiAturan::query()
+                ->where(function ($q) use ($rantai) {
+                    $q->whereNull('institusi_id')->orWhereIn('institusi_id', $rantai);
+                })
+                ->get();
+            $terpilih = $rows
+                ->groupBy('jenis_aturan')
+                ->map(fn($grup) => $grup->sortBy(fn($r) => $r->institusi_id === null
+                    ? PHP_INT_MAX
+                    : ($peringkat[$r->institusi_id] ?? PHP_INT_MAX - 1))->first())
+                ->values();
+
+            return response()->json([
+                'data' => KonfigurasiAturanResource::collection($terpilih),
+            ]);
+        }
+
         $items = KonfigurasiAturan::where('institusi_id', $institusiId)
             ->orderBy('jenis_aturan')
             ->get();

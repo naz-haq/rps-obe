@@ -429,6 +429,23 @@
                             <td class="c">{{ $angka($m->bobot_penilaian) }}</td>
                         </tr>
 
+                        @if(is_array($m->rincian_pertemuan) && count($m->rincian_pertemuan))
+                            <tr class="xs">
+                                <td class="c muted">&nbsp;</td>
+                                <td colspan="7" style="background:#f8fafc;">
+                                    <span class="bold">Rincian Pertemuan:</span>
+                                    @foreach($m->rincian_pertemuan as $p)
+                                        @php $ke = $p['pertemuan_ke'] ?? '?'; $durasi = !empty($p['durasi_menit']) ? ' · '.(int) $p['durasi_menit'].' menit' : ''; @endphp
+                                        <div style="margin-top:2px;">
+                                            <span class="bold">Pertemuan {{ $ke }}{{ $durasi }}:</span> {{ $p['topik'] ?? '—' }}
+                                            @if(!empty($p['metode']))<div class="muted">Metode: {{ $p['metode'] }}</div>@endif
+                                            @if(!empty($p['aktivitas']))<div class="muted">Aktivitas/Penugasan: {{ $p['aktivitas'] }}</div>@endif
+                                        </div>
+                                    @endforeach
+                                </td>
+                            </tr>
+                        @endif
+
                         @php
                             $tasksHere = collect();
                             for ($mm = $entry['start']; $mm <= $entry['end']; $mm++) {

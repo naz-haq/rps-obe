@@ -40,20 +40,40 @@ class EstimasiWaktuService
     private const PROFESI_HARI_PER_MINGGU_DEFAULT = 5;
 
     /**
-     * Baca nilai (array) satu jenis aturan untuk institusi (fallback ke aturan global
-     * institusi_id NULL). Kembalikan array kosong bila tak ada.
+     * Baca nilai (array) satu jenis aturan untuk institusi. Resolusi MEWARIS ke
+     * atas: institusi ini → leluhurnya (fakultas → universitas) → aturan global
+     * (institusi_id NULL). Yang PALING SPESIFIK menang. Ini sebabnya aturan yang
+     * diset di tingkat universitas/prodi tetap terpakai oleh MK di fakultas.
+     * Kembalikan array kosong bila tak ada di seluruh rantai.
      *
      * @return array<string,mixed>
      */
     private function nilaiAturan(?int $institusiId, string $jenis): array
     {
-        $nilai = KonfigurasiAturan::query()
-            ->where('jenis_aturan', $jenis)
-            ->where(fn($q) => $q->where('institusi_id', $institusiId)->orWhereNull('institusi_id'))
-            ->orderByRaw('institusi_id IS NULL')
-            ->value('nilai');
+        $rantai = $institusiId !== null ? \App\Models\Institusi::idsHierarkiKeAtas($institusiId) : [];
 
-        return is_array($nilai) ? $nilai : [];
+        $rows = KonfigurasiAturan::query()
+            ->where('jenis_aturan', $jenis)
+            ->where(function ($q) use ($rantai) {
+                $q->whereNull('institusi_id');
+                if ($rantai !== []) {
+                    $q->orWhereIn('institusi_id', $rantai);
+                }
+            })
+            ->get(['institusi_id', 'nilai']);
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        // Peringkat: makin spesifik (indeks kecil di rantai) makin diutamakan;
+        // global (NULL) paling akhir.
+        $peringkat = array_flip($rantai);
+        $terpilih = $rows->sortBy(fn($r) => $r->institusi_id === null
+            ? PHP_INT_MAX
+            : ($peringkat[$r->institusi_id] ?? PHP_INT_MAX - 1))->first();
+
+        return is_array($terpilih?->nilai) ? $terpilih->nilai : [];
     }
 
     /**
