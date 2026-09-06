@@ -904,6 +904,43 @@ class GeneratorLifecycleTest extends TestCase
         $this->assertEquals([50, 50], array_column($rows[1]['rubrik']['kriteria'], 'bobot'));
     }
 
+    public function test_matriks_cpl_terbaca_saat_institusi_mk_beda_dari_kurikulum(): void
+    {
+        // Reproduksi bug produksi (MK 1501 FF 344): MK di institusi Fakultas,
+        // kurikulum di Prodi, matriks mk_cpl tersimpan dgn institusi_id kurikulum.
+        // Generator WAJIB tetap mendeteksi pemetaan (tak melempar "belum dipetakan").
+        $fakultas = Institusi::create(['kode' => 'FAK-MM', 'nama' => 'Fakultas MM', 'jenis' => 'fakultas']);
+        $prodi = Institusi::create(['kode' => 'PRODI-MM', 'nama' => 'Prodi MM', 'jenis' => 'prodi', 'parent_id' => $fakultas->id]);
+        $kur = Kurikulum::create(['institusi_id' => $prodi->id, 'kode' => 'KUR-MM', 'nama' => 'Kur MM', 'tahun' => '2026']);
+        $mk = MataKuliah::create([
+            'institusi_id' => $fakultas->id, // BEDA dari kurikulum (prodi)
+            'kurikulum_id' => $kur->id,
+            'kode_mk' => 'MK-MISMATCH',
+            'nama' => 'MK Beda Institusi',
+            'jenis_mk' => 'murni',
+            'sks_teori' => 2,
+            'sks_praktik' => 0,
+            'semester' => 1,
+        ]);
+        $cpl = Cpl::create(['institusi_id' => $prodi->id, 'kurikulum_id' => $kur->id, 'kode' => 'CPL-1', 'deskripsi' => 'Deskripsi CPL.']);
+        MkCpl::create(['institusi_id' => $prodi->id, 'kode_mk' => $mk->kode_mk, 'cpl_id' => $cpl->id, 'bobot' => 100]);
+
+        $session = $this->generator->start($mk, ['user_id' => $this->actor->id]);
+        $cpmkJson = json_encode(['cpmk' => [[
+            'kode' => 'CPMK1',
+            'deskripsi' => 'Menganalisis konsep dasar.',
+            'cpl_kode' => ['CPL-1'],
+            'taksonomi_kode' => ['C4'],
+        ]]], JSON_THROW_ON_ERROR);
+        $generator = $this->mockAiReturning($cpmkJson, 1);
+
+        $generator->generateStage($session, 'cpmk'); // tak boleh melempar "belum dipetakan"
+
+        $rows = $session->fresh()->draf['cpmk']['cpmk'];
+        $this->assertCount(1, $rows);
+        $this->assertSame('CPMK1', $rows[0]['kode']);
+    }
+
     private function aiStagedSession(): GenerateSession
     {
         $session = $this->generator->start($this->course, [

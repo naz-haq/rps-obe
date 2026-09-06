@@ -2341,10 +2341,12 @@ class RpsGeneratorService
         // Bila MK sudah dipetakan ke CPL tertentu (matriks CPL×MK / mk_cpl),
         // batasi ke subset itu — satu CPL disebar ke banyak MK, jadi hanya CPL
         // yang diampu MK ini yang wajib diturunkan jadi CPMK. Fallback: seluruh
-        // CPL kurikulum bila pemetaan belum diisi.
+        // CPL kurikulum bila pemetaan belum diisi. Matriks disimpan dgn
+        // institusi_id KURIKULUM (bisa beda dari MK), jadi scope lewat CPL
+        // kurikulum, bukan institusi MK.
         $cplIds = MkCpl::query()
-            ->where('institusi_id', $mk->institusi_id)
             ->where('kode_mk', $mk->kode_mk)
+            ->whereIn('cpl_id', (clone $query)->pluck('id'))
             ->pluck('cpl_id');
         if ($cplIds->isNotEmpty()) {
             $query->whereIn('id', $cplIds);
@@ -2374,9 +2376,13 @@ class RpsGeneratorService
             return;
         }
 
+        // Matriks mk_cpl disimpan dgn institusi_id KURIKULUM (bisa beda dari MK
+        // pada hierarki tenant). Scope lewat CPL milik kurikulum, bukan
+        // institusi MK, agar tautan yang sudah dicentang tetap terdeteksi.
+        $kurikulumCplIds = Cpl::where('kurikulum_id', $mk->kurikulum_id)->pluck('id');
         $terpetakan = MkCpl::query()
-            ->where('institusi_id', $mk->institusi_id)
             ->where('kode_mk', $mk->kode_mk)
+            ->whereIn('cpl_id', $kurikulumCplIds)
             ->exists();
 
         if (! $terpetakan) {

@@ -238,7 +238,11 @@ class GenerationContract
     private function cplCodes(?MataKuliah $mk): array
     {
         if (! $mk?->kurikulum_id) return [];
-        $ids = MkCpl::where('institusi_id', $mk->institusi_id)->where('kode_mk', $mk->kode_mk)->pluck('cpl_id');
+        // Matriks mk_cpl disimpan dgn institusi_id KURIKULUM (bisa beda dari
+        // institusi MK pada hierarki tenant). Scope lewat CPL milik kurikulum,
+        // bukan institusi MK, agar tautan tetap terbaca.
+        $kurikulumCplIds = Cpl::where('kurikulum_id', $mk->kurikulum_id)->pluck('id');
+        $ids = MkCpl::where('kode_mk', $mk->kode_mk)->whereIn('cpl_id', $kurikulumCplIds)->pluck('cpl_id');
         return Cpl::where('kurikulum_id', $mk->kurikulum_id)
             ->when($ids->isNotEmpty(), fn($query) => $query->whereIn('id', $ids))->pluck('kode')->all();
     }
