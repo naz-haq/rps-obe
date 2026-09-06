@@ -77,6 +77,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
     });
     Route::middleware('permission:user.manage')->group(function () {
         Route::post('users', [UserController::class, 'store']);
+        Route::post('users/import', [UserController::class, 'import']);
         Route::put('users/{user}', [UserController::class, 'update']);
         Route::delete('users/{user}', [UserController::class, 'destroy']);
     });

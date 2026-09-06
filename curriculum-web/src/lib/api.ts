@@ -26,6 +26,15 @@ export type Paginated<T> = {
 
 export type Single<T> = { data: T };
 
+/** Opsi jumlah baris per halaman yang diizinkan (selaras dengan selector Pagination). */
+export const PER_PAGE_OPTIONS = [15, 25, 50, 100] as const;
+
+/** Validasi param per_page dari URL; kembalikan default 15 bila tak sah. */
+export function resolvePerPage(value?: string): number {
+  const n = Number(value);
+  return (PER_PAGE_OPTIONS as readonly number[]).includes(n) ? n : 15;
+}
+
 // ---- Tipe entitas (cocok dengan JsonResource backend) ----
 export type Kurikulum = {
   id: number;
@@ -352,6 +361,7 @@ export type RpsVersion = {
   ulid?: string;
   institusi_id: number;
   kode_mk: string;
+  nama_mk?: string | null;
   versi: number;
   status: string;
   generate_session_id?: number | null;

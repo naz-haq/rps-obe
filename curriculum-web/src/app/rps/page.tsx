@@ -1,26 +1,27 @@
 import Link from "next/link";
-import { apiGet, type Paginated, type RpsVersion } from "@/lib/api";
+import { apiGet, resolvePerPage, type Paginated, type RpsVersion } from "@/lib/api";
 import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { DeleteRpsButton } from "./delete-button";
 
-type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
+type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string }>;
 
 export default async function RpsPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
   const sort = sp.sort ?? "created_at";
   const dir = sp.dir ?? "desc";
   const page = sp.page ?? "1";
+  const perPage = resolvePerPage(sp.per_page);
 
   let list: Paginated<RpsVersion> | null = null;
   let error: string | null = null;
   try {
-    list = await apiGet<Paginated<RpsVersion>>("/rps-versions", { sort, dir, page, status: sp.status, per_page: 15 });
+    list = await apiGet<Paginated<RpsVersion>>("/rps-versions", { sort, dir, page, status: sp.status, per_page: perPage });
   } catch {
     error = "Tidak dapat memuat dokumen RPS. Pastikan backend berjalan di :8100.";
   }
 
-  const params = { sort, dir, status: sp.status };
+  const params = { sort, dir, status: sp.status, per_page: String(perPage) };
 
   return (
     <div>
@@ -42,7 +43,7 @@ export default async function RpsPage({ searchParams }: { searchParams: SearchPa
           <Table>
             <thead>
               <tr>
-                <SortableTh label="Kode MK" column="kode_mk" sort={sort} dir={dir} basePath="/rps" params={params} />
+                <SortableTh label="Mata Kuliah" column="kode_mk" sort={sort} dir={dir} basePath="/rps" params={params} />
                 <SortableTh label="Versi" column="versi" sort={sort} dir={dir} basePath="/rps" params={params} />
                 <Th className="text-right">Minggu</Th>
                 <Th className="text-right">Komponen</Th>
@@ -54,7 +55,10 @@ export default async function RpsPage({ searchParams }: { searchParams: SearchPa
             <tbody>
               {list.data.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50">
-                  <Td className="font-medium text-ink">{r.kode_mk}</Td>
+                  <Td>
+                    <p className="font-medium text-ink">{r.nama_mk ?? r.kode_mk}</p>
+                    {r.nama_mk && <p className="text-xs text-muted">{r.kode_mk}</p>}
+                  </Td>
                   <Td><Badge tone="brand">v{r.versi}</Badge></Td>
                   <Td className="text-right tabular-nums">{r.minggu_count ?? 0}</Td>
                   <Td className="text-right tabular-nums">{r.komponen_count ?? 0}</Td>

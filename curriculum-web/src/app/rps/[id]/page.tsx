@@ -40,7 +40,8 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
   return (
     <div>
       <PageHeader
-        title={`${rps.kode_mk} · v${rps.versi}`}
+        title={rps.nama_mk ?? rps.kode_mk}
+        subtitle={`${rps.kode_mk} · v${rps.versi}`}
         actions={
           <div className="flex items-center gap-3">
             {!rps.editing_in_generator && <ApprovalActions id={rps.id} status={rps.status} />}

@@ -11,11 +11,15 @@ class RpsVersionResource extends JsonResource
     public function toArray(Request $request): array
     {
         $session = \App\Models\GenerateSession::where('rps_version_id', $this->id)->latest('id')->first();
+        $namaMk = \App\Models\MataKuliah::where('institusi_id', $this->institusi_id)
+            ->where('kode_mk', $this->kode_mk)
+            ->value('nama');
         return [
             'id'                 => $this->id,
             'ulid'               => $this->ulid,
             'institusi_id'       => $this->institusi_id,
             'kode_mk'            => $this->kode_mk,
+            'nama_mk'            => $namaMk,
             'versi'              => $this->versi,
             'status'             => $this->status,
             'generate_session_id' => $session?->id,

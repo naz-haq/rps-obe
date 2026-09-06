@@ -243,6 +243,8 @@ export function SortableTh({
 }
 
 // ---- Pagination footer ----
+const PER_PAGE_OPTIONS = [15, 25, 50, 100];
+
 export function Pagination({
   meta,
   basePath,
@@ -258,13 +260,38 @@ export function Pagination({
     qs.set("page", String(page));
     return `${basePath}?${qs.toString()}`;
   };
-  const { current_page, last_page, total } = meta;
+  const buildPerPage = (perPage: number) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+    qs.set("per_page", String(perPage));
+    qs.set("page", "1");
+    return `${basePath}?${qs.toString()}`;
+  };
+  const { current_page, last_page, total, per_page } = meta;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-muted">
-      <span>
-        Menampilkan {total === 0 ? 0 : (current_page - 1) * meta.per_page + 1}–
-        {Math.min(current_page * meta.per_page, total)} dari {total} · Halaman {current_page}/{last_page || 1}
-      </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <span>
+          Menampilkan {total === 0 ? 0 : (current_page - 1) * per_page + 1}–
+          {Math.min(current_page * per_page, total)} dari {total} · Halaman {current_page}/{last_page || 1}
+        </span>
+        <span className="flex items-center gap-1 text-xs">
+          <span className="text-muted">Per halaman:</span>
+          {PER_PAGE_OPTIONS.map((opt) => (
+            <Link
+              key={opt}
+              href={buildPerPage(opt)}
+              className={
+                opt === per_page
+                  ? "rounded-md bg-brand-600 px-2 py-0.5 font-medium text-white"
+                  : "rounded-md border border-border px-2 py-0.5 text-ink hover:bg-gray-50"
+              }
+            >
+              {opt}
+            </Link>
+          ))}
+        </span>
+      </div>
       <div className="flex gap-1.5">
         <PagerLink href={build(current_page - 1)} disabled={current_page <= 1}>
           ← Sebelumnya

@@ -41,9 +41,12 @@ async function syncReferensi(kodeMk: string, items: ReferensiItem[]) {
 }
 
 /** Muat referensi satu MK untuk mengisi editor saat modal dibuka. */
-export async function listReferensi(kodeMk: string): Promise<Referensi[]> {
+export async function listReferensi(kodeMk: string, institusiId?: number): Promise<Referensi[]> {
   try {
-    const res = await apiGet<{ data: Referensi[] }>("/referensi", { kode_mk: kodeMk });
+    const res = await apiGet<{ data: Referensi[] }>("/referensi", {
+      kode_mk: kodeMk,
+      ...(institusiId ? { institusi_id: String(institusiId) } : {}),
+    });
     return res.data ?? [];
   } catch {
     return [];

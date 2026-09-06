@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { apiGet, type Paginated, type RpsVersion } from "@/lib/api";
+import { apiGet, resolvePerPage, type Paginated, type RpsVersion } from "@/lib/api";
 import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { TinjauActions } from "./forms";
 
-type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
+type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string }>;
 
 const basePath = "/persetujuan";
 
@@ -21,16 +21,17 @@ export default async function PersetujuanPage({ searchParams }: { searchParams: 
   const sort = sp.sort ?? "submitted_at";
   const dir = sp.dir ?? "desc";
   const page = sp.page ?? "1";
+  const perPage = resolvePerPage(sp.per_page);
 
   const list = await apiGet<Paginated<RpsVersion>>("/persetujuan", {
     status,
     sort,
     dir,
     page,
-    per_page: 15,
+    per_page: perPage,
   }).catch(() => null);
 
-  const params = { status, sort, dir };
+  const params = { status, sort, dir, per_page: String(perPage) };
 
   return (
     <div>
@@ -68,7 +69,7 @@ export default async function PersetujuanPage({ searchParams }: { searchParams: 
           <Table>
             <thead>
               <tr>
-                <SortableTh label="Kode MK" column="kode_mk" sort={sort} dir={dir} basePath={basePath} params={params} />
+                <SortableTh label="Mata Kuliah" column="kode_mk" sort={sort} dir={dir} basePath={basePath} params={params} />
                 <SortableTh label="Versi" column="versi" sort={sort} dir={dir} basePath={basePath} params={params} />
                 <Th className="text-right">Minggu</Th>
                 <Th className="text-right">Komponen</Th>
@@ -81,7 +82,8 @@ export default async function PersetujuanPage({ searchParams }: { searchParams: 
               {list.data.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <Td className="font-medium text-ink">
-                    <Link href={`/rps/${r.id}`} className="text-brand-700 hover:underline">{r.kode_mk}</Link>
+                    <Link href={`/rps/${r.id}`} className="text-brand-700 hover:underline">{r.nama_mk ?? r.kode_mk}</Link>
+                    {r.nama_mk && <span className="mt-0.5 block text-xs font-normal text-muted">{r.kode_mk}</span>}
                   </Td>
                   <Td><Badge tone="brand">v{r.versi}</Badge></Td>
                   <Td className="text-right tabular-nums">{r.minggu_count ?? 0}</Td>

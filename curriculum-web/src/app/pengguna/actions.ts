@@ -40,3 +40,30 @@ export async function deleteUser(formData: FormData): Promise<ApiResult> {
   revalidatePath(PATH);
   return res;
 }
+
+export type ImportUsersRingkasan = {
+  ok: boolean;
+  message?: string;
+  dibuat: number;
+  diperbarui: number;
+  dilewati: number;
+  galat: string[];
+};
+
+/** Impor massal akun pengguna dari baris Excel/CSV (2D, baris pertama = header). */
+export async function importUsers(rows: unknown[][], institusiId?: number): Promise<ImportUsersRingkasan> {
+  const res = await apiPost<{ dibuat: number; diperbarui: number; dilewati: number; galat: string[] }>("/users/import", {
+    rows,
+    institusi_id: institusiId ?? null,
+  });
+  revalidatePath(PATH);
+  const d = res.data ?? { dibuat: 0, diperbarui: 0, dilewati: 0, galat: [] };
+  return {
+    ok: res.ok,
+    message: res.ok ? undefined : res.message ?? "Impor gagal.",
+    dibuat: d.dibuat ?? 0,
+    diperbarui: d.diperbarui ?? 0,
+    dilewati: d.dilewati ?? 0,
+    galat: d.galat ?? [],
+  };
+}

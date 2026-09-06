@@ -32,6 +32,7 @@ export async function updateKonteks(
 export async function saveDetailMk(sessionId: number, formData: FormData): Promise<ApiResult> {
   const mkId = Number(formData.get("mk_id"));
   const kodeMk = (formData.get("kode_mk") as string) || "";
+  const institusiId = Number(formData.get("institusi_id")) || 0;
 
   const res = await apiPatch(`/mata-kuliah/${mkId}`, {
     deskripsi_singkat: ((formData.get("deskripsi_singkat") as string) || "").trim() || null,
@@ -40,13 +41,13 @@ export async function saveDetailMk(sessionId: number, formData: FormData): Promi
 
   // Sinkron pustaka bila editor mengirim referensi_json.
   const raw = (formData.get("referensi_json") as string) || "";
-  if (raw.trim() && kodeMk) {
+  if (raw.trim() && kodeMk && institusiId) {
     try {
       const arr = JSON.parse(raw) as { tipe?: string; sitasi?: string }[];
       const items = (Array.isArray(arr) ? arr : [])
         .map((r) => ({ tipe: r.tipe === "pendukung" ? "pendukung" : "utama", sitasi: String(r.sitasi ?? "").trim() }))
         .filter((r) => r.sitasi !== "");
-      const sync = await apiPost("/referensi/sync", { kode_mk: kodeMk, items });
+      const sync = await apiPost("/referensi/sync", { institusi_id: institusiId, kode_mk: kodeMk, items });
       if (!sync.ok) return sync;
     } catch {
       // referensi_json korup → biarkan; deskripsi sudah tersimpan

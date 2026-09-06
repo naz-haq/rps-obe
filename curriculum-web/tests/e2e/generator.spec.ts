@@ -44,7 +44,7 @@ async function openSession(page: Page, id: number) {
   const response = await page.goto(`/generator/${id}`);
   expect(response?.status()).toBe(200);
   await expect(page).toHaveURL(`${ORIGIN}/generator/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "FIX101", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Farmakologi Fixture", exact: true })).toBeVisible();
 }
 
 async function selectStage(page: Page, label: string) {

@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { apiGet, type Paginated, type GenerateSession, type MataKuliah } from "@/lib/api";
+import { apiGet, resolvePerPage, type Paginated, type GenerateSession, type MataKuliah } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { StartSessionButton } from "./start-button";
 import { DeleteSessionButton } from "./delete-button";
 
-type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string }>;
+type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string }>;
 
 const STATUS_TONE: Record<string, "ok" | "neutral" | "warn" | "brand"> = {
   committed: "ok",
@@ -18,13 +18,14 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
   const sort = sp.sort ?? "created_at";
   const dir = sp.dir ?? "desc";
   const page = sp.page ?? "1";
+  const perPage = resolvePerPage(sp.per_page);
 
   let list: Paginated<GenerateSession> | null = null;
   let mataKuliah: MataKuliah[] = [];
   let error: string | null = null;
   try {
     const [sesi, mk] = await Promise.all([
-      apiGet<Paginated<GenerateSession>>("/generate-sessions", { sort, dir, page, status: sp.status, per_page: 15 }),
+      apiGet<Paginated<GenerateSession>>("/generate-sessions", { sort, dir, page, status: sp.status, per_page: perPage }),
       apiGet<Paginated<MataKuliah>>("/mata-kuliah", { per_page: 200, sort: "kode_mk", dir: "asc" }),
     ]);
     list = sesi;
@@ -33,7 +34,7 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
     error = "Tidak dapat memuat sesi generator. Pastikan backend berjalan di :8100.";
   }
 
-  const params = { sort, dir, status: sp.status };
+  const params = { sort, dir, status: sp.status, per_page: String(perPage) };
 
   return (
     <div>
@@ -68,8 +69,8 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
               {list.data.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <Td>
-                    <p className="font-medium text-ink">{s.kode_mk ?? `MK #${s.mk_id}`}</p>
-                    <p className="text-xs text-muted">{s.nama_mk ?? ""}</p>
+                    <p className="font-medium text-ink">{s.nama_mk ?? s.kode_mk ?? `MK #${s.mk_id}`}</p>
+                    <p className="text-xs text-muted">{s.kode_mk ?? ""}</p>
                   </Td>
                   <Td><Badge tone="neutral">{s.tahap}</Badge></Td>
                   <Td><Badge tone={STATUS_TONE[s.status] ?? "neutral"}>{s.status}</Badge></Td>

@@ -24,7 +24,7 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
   useEffect(() => {
     let aktif = true;
     if (mk?.kode_mk) {
-      listReferensi(mk.kode_mk).then((data) => {
+      listReferensi(mk.kode_mk, mk.institusi_id).then((data) => {
         if (!aktif) return;
         setRows(data.map((r) => ({ tipe: r.tipe, sitasi: r.sitasi })));
         setLoading(false);

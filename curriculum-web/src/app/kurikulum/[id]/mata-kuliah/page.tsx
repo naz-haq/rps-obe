@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { apiGet, type Single, type Paginated, type Kurikulum, type MataKuliah, type InstitusiData, type KonfigurasiAturan } from "@/lib/api";
+import { apiGet, resolvePerPage, type Single, type Paginated, type Kurikulum, type MataKuliah, type InstitusiData, type KonfigurasiAturan } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { KurikulumTabs } from "../tabs";
 import { CreateMkButton, EditMkButton, DeleteMkButton } from "./forms";
 import { ImportExcelButton } from "@/components/import-excel";
 
-type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; jenis_mk?: string; semester?: string; q?: string }>;
+type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; jenis_mk?: string; semester?: string; q?: string; per_page?: string }>;
 
 const JENIS_LABEL: Record<string, string> = { murni: "Teori", praktikum: "Praktikum" };
 
@@ -21,6 +21,7 @@ export default async function MataKuliahPage({
   const sort = sp.sort ?? "kode_mk";
   const dir = sp.dir ?? "asc";
   const page = sp.page ?? "1";
+  const perPage = resolvePerPage(sp.per_page);
 
   let kurikulum: Kurikulum;
   try {
@@ -40,7 +41,7 @@ export default async function MataKuliahPage({
       jenis_mk: sp.jenis_mk,
       semester: sp.semester,
       q: sp.q,
-      per_page: 15,
+      per_page: perPage,
     });
   } catch {
     list = null;
@@ -80,7 +81,7 @@ export default async function MataKuliahPage({
     // pakai default bila aturan belum diatur
   }
 
-  const params2 = { sort, dir, jenis_mk: sp.jenis_mk, semester: sp.semester, q: sp.q };
+  const params2 = { sort, dir, jenis_mk: sp.jenis_mk, semester: sp.semester, q: sp.q, per_page: String(perPage) };
   const basePath = `/kurikulum/${id}/mata-kuliah`;
 
   return (

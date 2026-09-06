@@ -163,8 +163,8 @@ export function Builder({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={session.kode_mk ?? `Sesi #${session.id}`}
-        subtitle={session.nama_mk ?? "Penyusunan RPS OBE bertahap"}
+        title={session.nama_mk ?? session.kode_mk ?? `Sesi #${session.id}`}
+        subtitle={session.kode_mk ?? "Penyusunan RPS OBE bertahap"}
         actions={
           <>
             <Badge tone={committed ? "ok" : "warn"}>{session.status}</Badge>

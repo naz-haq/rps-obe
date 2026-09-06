@@ -1,6 +1,7 @@
-import { apiGet, type Paginated, type UserAccount, type RoleData, type InstitusiData } from "@/lib/api";
+import { apiGet, resolvePerPage, type Paginated, type UserAccount, type RoleData, type InstitusiData } from "@/lib/api";
 import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
 import { CreateUserButton, EditUserButton, DeleteUserButton } from "./forms";
+import { ImportUsersButton } from "./import";
 
 type SearchParams = Promise<{
   sort?: string;
@@ -9,6 +10,7 @@ type SearchParams = Promise<{
   q?: string;
   role?: string;
   is_active?: string;
+  per_page?: string;
 }>;
 
 const ROLE_LABELS: Record<string, string> = {
@@ -28,6 +30,7 @@ export default async function PenggunaPage({ searchParams }: { searchParams: Sea
   const sort = sp.sort ?? "name";
   const dir = sp.dir ?? "asc";
   const page = sp.page ?? "1";
+  const perPage = resolvePerPage(sp.per_page);
 
   const [usersRes, rolesRes, institusiRes] = await Promise.all([
     apiGet<Paginated<UserAccount>>("/users", {
@@ -37,7 +40,7 @@ export default async function PenggunaPage({ searchParams }: { searchParams: Sea
       q: sp.q,
       role: sp.role,
       is_active: sp.is_active,
-      per_page: 15,
+      per_page: perPage,
     }).catch(() => null),
     apiGet<{ data: RoleData[] }>("/roles").catch(() => ({ data: [] as RoleData[] })),
     apiGet<{ data: InstitusiData[] }>("/institusi").catch(() => ({ data: [] as InstitusiData[] })),
@@ -45,7 +48,7 @@ export default async function PenggunaPage({ searchParams }: { searchParams: Sea
 
   const roles = rolesRes.data;
   const institusi = institusiRes.data;
-  const params = { sort, dir, q: sp.q, role: sp.role, is_active: sp.is_active };
+  const params = { sort, dir, q: sp.q, role: sp.role, is_active: sp.is_active, per_page: String(perPage) };
   const basePath = "/pengguna";
 
   return (
@@ -53,7 +56,12 @@ export default async function PenggunaPage({ searchParams }: { searchParams: Sea
       <PageHeader
         title="Pengguna"
         subtitle="Kelola akun pengguna, tetapkan peran, dan atur unit/institusi. Peran menentukan hak akses & menu yang tampil."
-        actions={<CreateUserButton roles={roles} institusi={institusi} />}
+        actions={
+          <>
+            <ImportUsersButton roles={roles} institusi={institusi} />
+            <CreateUserButton roles={roles} institusi={institusi} />
+          </>
+        }
       />
 
       <Card className="mb-4">
@@ -109,7 +117,7 @@ export default async function PenggunaPage({ searchParams }: { searchParams: Sea
               <tr>
                 <SortableTh label="Nama" column="name" sort={sort} dir={dir} basePath={basePath} params={params} />
                 <SortableTh label="NIDN" column="nidn" sort={sort} dir={dir} basePath={basePath} params={params} />
-                <Th>Email</Th>
+                <SortableTh label="Email" column="email" sort={sort} dir={dir} basePath={basePath} params={params} />
                 <Th>Peran</Th>
                 <Th>Unit</Th>
                 <SortableTh label="Status" column="is_active" sort={sort} dir={dir} basePath={basePath} params={params} />
