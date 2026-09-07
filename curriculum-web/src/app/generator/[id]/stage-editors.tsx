@@ -600,7 +600,7 @@ export function MingguEditor({
       </p>
       {value.map((m, i) => {
         const selectedSub = subCpmkList.find((x) => x.kode === (m.sub_cpmk_kode ?? ""));
-        const cpmkInfo = selectedSub?.cpmk_kode ? `CPMK ${selectedSub.cpmk_kode}` : "";
+        const cpmkInfo = selectedSub?.cpmk_kode ?? "";
 
         return (
           <RowShell

@@ -277,7 +277,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                         {m.sub_cpmk_deskripsi && <p className="text-xs text-muted">{m.sub_cpmk_deskripsi}</p>}
                         {m.cpmk && (
                           <p className="text-xs text-muted" title={m.cpmk_deskripsi ?? undefined}>
-                            CPMK {m.cpmk}
+                            {m.cpmk}
                           </p>
                         )}
                       </div>
@@ -343,7 +343,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                         {k.sub_cpmk_deskripsi && <p className="text-xs text-muted">{k.sub_cpmk_deskripsi}</p>}
                         {k.cpmk && (
                           <p className="text-xs text-muted" title={k.cpmk_deskripsi ?? undefined}>
-                            CPMK {k.cpmk}
+                            {k.cpmk}
                           </p>
                         )}
                       </div>

@@ -758,7 +758,7 @@ function LockedView({
                         {sub?.deskripsi && <p className="text-xs text-muted">{sub.deskripsi}</p>}
                         {sub?.cpmk_kode && (
                           <p className="text-xs text-muted" title={cpmk?.deskripsi}>
-                            CPMK {sub.cpmk_kode}
+                            {sub.cpmk_kode}
                           </p>
                         )}
                       </div>
