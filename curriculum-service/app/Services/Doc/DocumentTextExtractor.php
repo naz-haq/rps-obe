@@ -27,6 +27,13 @@ class DocumentTextExtractor
     /** @return array{text:string, pages:int} */
     private function fromPdf(string $path): array
     {
+        // pdftotext (poppler) memproses secara streaming — PDF ratusan MB tetap
+        // aman; pdfparser memuat seluruh dokumen ke memori dan mudah OOM.
+        $hasil = $this->fromPdfViaPoppler($path);
+        if ($hasil !== null) {
+            return $hasil;
+        }
+
         $parser = new \Smalot\PdfParser\Parser();
         $pdf = $parser->parseFile($path);
         $pages = $pdf->getPages();
@@ -42,6 +49,34 @@ class DocumentTextExtractor
         }
 
         return ['text' => $text, 'pages' => max(1, count($pages))];
+    }
+
+    /** @return array{text:string, pages:int}|null null bila pdftotext tak tersedia/gagal. */
+    private function fromPdfViaPoppler(string $path): ?array
+    {
+        $bin = trim((string) @shell_exec('command -v pdftotext 2>/dev/null'));
+        if ($bin === '') {
+            return null;
+        }
+
+        $out = tempnam(sys_get_temp_dir(), 'pdftxt');
+        if ($out === false) {
+            return null;
+        }
+
+        try {
+            @exec(escapeshellcmd($bin) . ' -q -enc UTF-8 ' . escapeshellarg($path) . ' ' . escapeshellarg($out), $_, $kode);
+            $text = $kode === 0 && is_readable($out) ? trim((string) file_get_contents($out)) : '';
+            if ($text === '') {
+                return null;
+            }
+
+            $halaman = substr_count($text, "\f") + 1;
+
+            return ['text' => str_replace("\f", "\n\n", $text), 'pages' => $halaman];
+        } finally {
+            @unlink($out);
+        }
     }
 
     private function fromDocx(string $path): string
