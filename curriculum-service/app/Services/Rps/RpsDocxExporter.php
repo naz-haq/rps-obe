@@ -516,11 +516,7 @@ class RpsDocxExporter
         }
 
         if ($subCpmk->cpmk) {
-            $text .= ' | CPMK ' . $subCpmk->cpmk->kode;
-            $cpmkDesc = trim((string) ($subCpmk->cpmk->deskripsi ?? ''));
-            if ($cpmkDesc !== '') {
-                $text .= ': ' . $cpmkDesc;
-            }
+            $text .= ' | ' . $subCpmk->cpmk->kode;
         }
 
         return trim($text) !== '' ? $text : '—';

@@ -408,7 +408,7 @@
                                     @endphp
                                     @if($bloomStr)<div class="muted xs">{{ $bloomStr }}</div>@endif
                                     @if($m->subCpmk->cpmk)
-                                        <div class="muted xs">{{ $m->subCpmk->cpmk->kode }}@if($m->subCpmk->cpmk->deskripsi): {{ $m->subCpmk->cpmk->deskripsi }}@endif</div>
+                                        <div class="muted xs">{{ $m->subCpmk->cpmk->kode }}</div>
                                     @endif
                                 @else
                                     —
@@ -511,7 +511,7 @@
                                 <span class="bold">{{ $k->subCpmk->kode }}</span>
                                 @if($k->subCpmk->deskripsi)<div class="xs">{{ $k->subCpmk->deskripsi }}</div>@endif
                                 @if($k->subCpmk->cpmk)
-                                    <div class="muted xs">{{ $k->subCpmk->cpmk->kode }}@if($k->subCpmk->cpmk->deskripsi): {{ $k->subCpmk->cpmk->deskripsi }}@endif</div>
+                                    <div class="muted xs">{{ $k->subCpmk->cpmk->kode }}</div>
                                 @endif
                             @else
                                 —
