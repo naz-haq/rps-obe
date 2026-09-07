@@ -203,6 +203,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
     Route::get('rps-versions/{rpsVersion}/traceability', [RpsVersionController::class, 'traceability']);
     Route::get('rps-versions/{rpsVersion}/cetak', [RpsVersionController::class, 'cetak']);
     Route::get('rps-versions/{rpsVersion}/docx', [RpsVersionController::class, 'unduhDocx']);
+    Route::put('rps-versions/{rpsVersion}/minggu/{mingguKe}/rincian', [RpsVersionController::class, 'simpanRincian']);
 
     // Modul 2 — Layanan AI di atas RPS: audit keselarasan (#6) & chat konsultan (#7)
     Route::post('generate-sessions/{generateSession}/audit', [RpsAiController::class, 'auditSession'])->middleware('throttle:ai');

@@ -4,6 +4,7 @@ import { apiGet, type Single, type RpsDetail } from "@/lib/api";
 import { PageHeader, Card, Badge, Table, Th, Td, EmptyState } from "@/components/ui";
 import { deteksiUjian } from "@/lib/rps-status";
 import { GeneratePertemuanButton } from "./generate-button";
+import { EditRincianButton } from "./rincian-editor";
 
 /**
  * Halaman rincian per-PERTEMUAN — detail operasional hasil generate lanjutan:
@@ -47,15 +48,16 @@ export default async function RincianPertemuanPage({ params }: { params: Promise
 
       {minggu.length === 0 ? (
         <EmptyState title="RPS belum memiliki rencana mingguan" />
-      ) : !adaRincian ? (
-        <Card>
-          <EmptyState
-            title="Belum ada rincian pertemuan"
-            hint="Klik “Generate Rincian Pertemuan (AI)” — MK blok/profesi dipecah jadi sesi harian; MK reguler disusunkan skenario tahapan per pertemuan."
-          />
-        </Card>
       ) : (
         <div className="space-y-5">
+          {!adaRincian && (
+            <Card>
+              <EmptyState
+                title="Belum ada rincian pertemuan"
+                hint="Klik “Generate Rincian Pertemuan (AI)” — MK blok/profesi dipecah jadi sesi harian; MK reguler disusunkan skenario tahapan per pertemuan. Atau isi mandiri lewat tombol “Edit Manual” pada tiap pekan."
+              />
+            </Card>
+          )}
           {minggu.map((m) => {
             const rincian = m.rincian_pertemuan ?? [];
             const jenisUjian = deteksiUjian(m.materi_pustaka);
@@ -69,23 +71,33 @@ export default async function RincianPertemuanPage({ params }: { params: Promise
             return (
               <Card key={m.minggu_ke}>
                 <div className={`border-b border-border px-5 py-3 ${evaluasi ? "bg-amber-50" : ""}`}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold text-ink">Pekan {m.minggu_ke}</h2>
-                    {evaluasi ? (
-                      <span className="text-sm font-medium text-amber-900">{evaluasi}</span>
-                    ) : (
-                      m.sub_cpmk && <Badge tone="brand">{m.sub_cpmk}</Badge>
-                    )}
-                    {m.estimasi_waktu?.teks && (
-                      <span className="text-[11px] italic text-muted">{m.estimasi_waktu.teks}</span>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold text-ink">Pekan {m.minggu_ke}</h2>
+                      {evaluasi ? (
+                        <span className="text-sm font-medium text-amber-900">{evaluasi}</span>
+                      ) : (
+                        m.sub_cpmk && <Badge tone="brand">{m.sub_cpmk}</Badge>
+                      )}
+                      {m.estimasi_waktu?.teks && (
+                        <span className="text-[11px] italic text-muted">{m.estimasi_waktu.teks}</span>
+                      )}
+                    </div>
+                    <EditRincianButton
+                      rpsId={rps.id}
+                      mingguKe={m.minggu_ke}
+                      rincian={rincian}
+                      estimasi={m.estimasi_waktu ?? null}
+                    />
                   </div>
                   {!evaluasi && m.materi_pustaka && (
                     <p className="mt-0.5 line-clamp-2 text-xs text-muted">{m.materi_pustaka}</p>
                   )}
                 </div>
                 {rincian.length === 0 ? (
-                  <p className="px-5 py-3 text-sm text-muted">Tidak ada rincian untuk pekan ini.</p>
+                  <p className="px-5 py-3 text-sm text-muted">
+                    Tidak ada rincian untuk pekan ini — gunakan “Edit Manual” untuk mengisi sendiri.
+                  </p>
                 ) : rincian.some((p) => (p.tahapan?.length ?? 0) > 0) ? (
                   <div className="space-y-4 px-5 py-4">
                     {rincian.map((p) => (

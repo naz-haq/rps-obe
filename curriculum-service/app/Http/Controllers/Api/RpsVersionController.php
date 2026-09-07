@@ -58,6 +58,94 @@ class RpsVersionController extends Controller
         return response()->json(['message' => 'Dokumen RPS dihapus.']);
     }
 
+    /**
+     * Simpan/edit MANUAL rincian pertemuan satu pekan — alternatif jalur AI.
+     * Menerima kedua bentuk: skenario (tahapan + PT/BM, MK reguler) maupun
+     * pemecahan sesi (topik/aktivitas/metode per pertemuan, MK blok/profesi).
+     * Kirim rincian kosong [] untuk menghapus rincian pekan tsb.
+     */
+    public function simpanRincian(Request $request, RpsVersion $rpsVersion, int $mingguKe)
+    {
+        if ($rpsVersion->pernahDisetujui()) {
+            return response()->json([
+                'message' => 'RPS yang sudah disetujui prodi bersifat final; rincian pertemuan tidak dapat diubah.',
+            ], 422);
+        }
+        $minggu = $rpsVersion->minggu()->where('minggu_ke', $mingguKe)->first();
+        if (! $minggu) {
+            return response()->json(['message' => "Pekan {$mingguKe} tidak ditemukan pada RPS ini."], 404);
+        }
+
+        $data = $request->validate([
+            'rincian'                         => ['present', 'array', 'max:12'],
+            'rincian.*.topik'                 => ['nullable', 'string', 'max:500'],
+            'rincian.*.aktivitas'             => ['nullable', 'string', 'max:2000'],
+            'rincian.*.metode'                => ['nullable', 'string', 'max:200'],
+            'rincian.*.durasi_menit'          => ['nullable', 'integer', 'min:0', 'max:1440'],
+            'rincian.*.tahapan'               => ['nullable', 'array', 'max:10'],
+            'rincian.*.tahapan.*.tahap'       => ['nullable', 'string', 'max:120'],
+            'rincian.*.tahapan.*.kegiatan'    => ['nullable', 'string', 'max:2000'],
+            'rincian.*.tahapan.*.durasi_menit' => ['nullable', 'integer', 'min:0', 'max:1440'],
+            'rincian.*.penugasan_terstruktur' => ['nullable', 'string', 'max:2000'],
+            'rincian.*.belajar_mandiri'       => ['nullable', 'string', 'max:2000'],
+            'rincian.*.pt_menit'              => ['nullable', 'integer', 'min:0', 'max:10080'],
+            'rincian.*.bm_menit'              => ['nullable', 'integer', 'min:0', 'max:10080'],
+        ]);
+
+        $bersih = [];
+        $urut = 1;
+        foreach ($data['rincian'] as $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+            $tahapan = [];
+            foreach ((array) ($p['tahapan'] ?? []) as $t) {
+                $kegiatan = trim((string) ($t['kegiatan'] ?? ''));
+                if ($kegiatan === '') {
+                    continue;
+                }
+                $tahapan[] = [
+                    'tahap'        => trim((string) ($t['tahap'] ?? '')) ?: null,
+                    'kegiatan'     => $kegiatan,
+                    'durasi_menit' => (int) ($t['durasi_menit'] ?? 0) > 0 ? (int) $t['durasi_menit'] : null,
+                ];
+            }
+
+            $topik  = trim((string) ($p['topik'] ?? '')) ?: null;
+            $durasi = (int) ($p['durasi_menit'] ?? 0) > 0 ? (int) $p['durasi_menit'] : null;
+
+            if ($tahapan !== []) {
+                $bersih[] = [
+                    'pertemuan_ke'          => $urut++,
+                    'topik'                 => $topik,
+                    'durasi_menit'          => $durasi,
+                    'tahapan'               => $tahapan,
+                    'penugasan_terstruktur' => trim((string) ($p['penugasan_terstruktur'] ?? '')) ?: null,
+                    'belajar_mandiri'       => trim((string) ($p['belajar_mandiri'] ?? '')) ?: null,
+                    'pt_menit'              => (int) ($p['pt_menit'] ?? 0) > 0 ? (int) $p['pt_menit'] : null,
+                    'bm_menit'              => (int) ($p['bm_menit'] ?? 0) > 0 ? (int) $p['bm_menit'] : null,
+                ];
+                continue;
+            }
+
+            $aktivitas = trim((string) ($p['aktivitas'] ?? '')) ?: null;
+            if ($topik === null && $aktivitas === null) {
+                continue; // entri kosong dibuang
+            }
+            $bersih[] = [
+                'pertemuan_ke' => $urut++,
+                'topik'        => $topik,
+                'aktivitas'    => $aktivitas,
+                'metode'       => trim((string) ($p['metode'] ?? '')) ?: null,
+                'durasi_menit' => $durasi,
+            ];
+        }
+
+        $minggu->update(['rincian_pertemuan' => $bersih !== [] ? $bersih : null]);
+
+        return response()->json(['data' => ['minggu_ke' => $mingguKe, 'rincian' => $bersih]]);
+    }
+
     /** Struktur RPS committed (minggu + rantai Sub-CPMK/CPMK, komponen penilaian). */
     public function show(RpsVersion $rpsVersion)
     {

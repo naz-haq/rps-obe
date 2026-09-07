@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiPost, type ApiResult } from "@/lib/api";
+import { apiPost, apiPut, type ApiResult, type RincianPertemuan } from "@/lib/api";
 
 type Aksi = "ajukan" | "setujui" | "revisi" | "tarik";
 
@@ -25,6 +25,17 @@ export async function aksiPersetujuan(input: {
 export async function generateRincianPertemuan(id: number): Promise<ApiResult> {
   const res = await apiPost(`/rps-versions/${id}/generate-pertemuan`);
   revalidatePath(`/rps/${id}`);
+  revalidatePath(`/rps/${id}/pertemuan`);
+  return res;
+}
+
+/** Simpan/edit MANUAL rincian pertemuan satu pekan (alternatif jalur AI). */
+export async function simpanRincianPertemuan(
+  id: number,
+  mingguKe: number,
+  rincian: Partial<RincianPertemuan>[],
+): Promise<ApiResult> {
+  const res = await apiPut(`/rps-versions/${id}/minggu/${mingguKe}/rincian`, { rincian });
   revalidatePath(`/rps/${id}/pertemuan`);
   return res;
 }
