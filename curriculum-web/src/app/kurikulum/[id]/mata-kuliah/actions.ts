@@ -127,6 +127,11 @@ export async function lepasTautanDokumen(dokumenId: number, kodeMk: string): Pro
   return apiDelete(`/dokumen-rujukan/${dokumenId}/mata-kuliah/${encodeURIComponent(kodeMk)}`);
 }
 
+/** Ulangi indexing dokumen (mis. setelah gagal) agar bisa dipakai grounding AI. */
+export async function reindexDokumen(dokumenId: number): Promise<ApiResult<unknown>> {
+  return apiPost(`/dokumen-rujukan/${dokumenId}/reindex`);
+}
+
 /** Unggah dokumen baru langsung tertaut ke MK; server mendeteksi duplikat via hash. */
 export async function unggahDokumenUntukMk(
   kodeMk: string,

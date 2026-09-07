@@ -79,7 +79,7 @@ function GroundingBanner({ catatan }: { catatan: Record<string, unknown> }) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
         <span>
-          <b>Grounding dilewati</b> — belum ada Dokumen Keilmuan. Capaian bersumber dari pengetahuan model, belum terverifikasi ke sumber ilmiah.
+          <b>Grounding dilewati</b> — saat tahap ini dijalankan belum ada Dokumen Keilmuan terindeks, sehingga capaian bersumber dari pengetahuan model. Bila dokumen baru diunggah, tunggu statusnya <i>terindeks</i> di Detail MK lalu <b>generate ulang tahap</b> ini; status di bawah tidak berubah sendiri.
         </span>
         <Link href="/dokumen-rujukan" className="shrink-0 font-medium text-amber-900 underline">Kelola Dokumen Rujukan →</Link>
       </div>
@@ -757,9 +757,8 @@ function LockedView({
                         <p className="font-medium text-ink">{m.sub_cpmk_kode}</p>
                         {sub?.deskripsi && <p className="text-xs text-muted">{sub.deskripsi}</p>}
                         {sub?.cpmk_kode && (
-                          <p className="text-xs text-muted">
+                          <p className="text-xs text-muted" title={cpmk?.deskripsi}>
                             CPMK {sub.cpmk_kode}
-                            {cpmk?.deskripsi ? `: ${cpmk.deskripsi}` : ""}
                           </p>
                         )}
                       </div>

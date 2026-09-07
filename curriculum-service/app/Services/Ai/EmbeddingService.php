@@ -6,6 +6,7 @@ use App\Models\AiInteraksi;
 use App\Models\AiKredensial;
 use App\Models\AiPengaturan;
 use App\Models\DokumenChunk;
+use App\Models\Institusi;
 use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -448,6 +449,9 @@ class EmbeddingService
 
     private function scopedChunks(int $institusiId, array $opts): \Illuminate\Database\Eloquent\Collection
     {
+        // Dokumen milik institusi ini ATAU leluhurnya (fakultas/universitas).
+        $institusiIds = Institusi::idsHierarkiKeAtas($institusiId);
+
         return DokumenChunk::query()
             ->with('dokumen')
             ->whereNotNull('embedding')
@@ -455,7 +459,7 @@ class EmbeddingService
             ->when(isset($opts['dokumen_id']), fn($q) => $q->where('dokumen_id', $opts['dokumen_id']))
             ->when(array_key_exists('dokumen_ids', $opts), fn($q) => $q->whereIn('dokumen_id', (array) $opts['dokumen_ids']))
             ->whereHas('dokumen', fn($q) => $q
-                ->where(fn($qq) => $qq->where('institusi_id', $institusiId)->orWhereNull('institusi_id'))
+                ->where(fn($qq) => $qq->whereIn('institusi_id', $institusiIds)->orWhereNull('institusi_id'))
                 ->when($opts['sumber_konten'] ?? false, fn($qq) => $qq->where('sumber_konten', true)))
             ->orderBy('id')
             ->get();

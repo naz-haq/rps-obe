@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\DokumenRujukanResource;
 use App\Jobs\IngestDokumenJob;
 use App\Models\DokumenRujukan;
+use App\Models\Institusi;
 use App\Models\MataKuliah;
 use App\Models\MkDokumenRujukan;
 use App\Services\Ai\EmbeddingService;
@@ -119,7 +120,7 @@ class DokumenRujukanController extends Controller
     {
         $tautan = $dokumenRujukan->mataKuliahTautan()->orderBy('kode_mk')->get();
         $nama = MataKuliah::query()
-            ->where('institusi_id', $dokumenRujukan->institusi_id)
+            ->whereIn('institusi_id', Institusi::idsHierarkiKeAtas((int) $dokumenRujukan->institusi_id))
             ->whereIn('kode_mk', $tautan->pluck('kode_mk'))
             ->pluck('nama', 'kode_mk');
 
@@ -138,7 +139,7 @@ class DokumenRujukanController extends Controller
         $data = $request->validate(['kode_mk' => ['required', 'string', 'max:64']]);
 
         $adaMk = MataKuliah::query()
-            ->where('institusi_id', $dokumenRujukan->institusi_id)
+            ->whereIn('institusi_id', Institusi::idsHierarkiKeAtas((int) $dokumenRujukan->institusi_id))
             ->where('kode_mk', $data['kode_mk'])
             ->exists();
         if (! $adaMk) {
@@ -160,8 +161,15 @@ class DokumenRujukanController extends Controller
 
     private function buatTautan(DokumenRujukan $dokumen, string $kodeMk): void
     {
+        // MK bisa berada di prodi sementara dokumen diunggah di fakultas — tautan
+        // disimpan pada institusi MK agar terbaca saat generate RPS MK tsb.
+        $mk = MataKuliah::query()
+            ->whereIn('institusi_id', Institusi::idsHierarkiKeAtas((int) $dokumen->institusi_id))
+            ->where('kode_mk', $kodeMk)
+            ->first();
+
         MkDokumenRujukan::firstOrCreate([
-            'institusi_id'       => $dokumen->institusi_id,
+            'institusi_id'       => $mk?->institusi_id ?? $dokumen->institusi_id,
             'kode_mk'            => $kodeMk,
             'dokumen_rujukan_id' => $dokumen->id,
         ]);

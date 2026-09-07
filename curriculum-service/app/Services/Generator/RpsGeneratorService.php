@@ -9,6 +9,7 @@ use App\Models\Cpmk;
 use App\Models\DokumenChunk;
 use App\Models\GenerateSession;
 use App\Models\Indikator;
+use App\Models\Institusi;
 use App\Models\KomponenPenilaian;
 use App\Models\MataKuliah;
 use App\Models\MkBahanKajian;
@@ -288,7 +289,9 @@ class RpsGeneratorService
         }
 
         $adaBukti = DokumenChunk::whereNotNull('embedding')
-            ->whereHas('dokumen', fn($q) => $q->where('institusi_id', $session->institusi_id)->where('sumber_konten', true))
+            ->whereHas('dokumen', fn($q) => $q
+                ->whereIn('institusi_id', Institusi::idsHierarkiKeAtas((int) $session->institusi_id))
+                ->where('sumber_konten', true))
             ->exists();
         if (! $adaBukti) {
             return ['bersih' => true, 'konteks' => [], 'lolos' => true, 'ditolak' => [], 'hasil' => [], 'jumlah_klaim' => 0, 'dilewati' => 'tak ada dokumen rujukan keilmuan (sumber_konten)'];
@@ -2657,10 +2660,10 @@ class RpsGeneratorService
         }
 
         // Dokumen yang DITAUTKAN ke MK ini = sumber materi utama → retrieval
-        // dibatasi ke sana. Tanpa tautan, fallback ke semua dokumen keilmuan
-        // (sumber_konten) institusi seperti sebelumnya.
+        // dibatasi ke sana. Tautan bisa dibuat di tingkat prodi maupun fakultas,
+        // jadi dicari menaik pada hierarki institusi.
         $tertaut = MkDokumenRujukan::query()
-            ->where('institusi_id', $mk->institusi_id)
+            ->whereIn('institusi_id', Institusi::idsHierarkiKeAtas((int) $mk->institusi_id))
             ->where('kode_mk', $mk->kode_mk)
             ->pluck('dokumen_rujukan_id')
             ->all();
@@ -2669,7 +2672,9 @@ class RpsGeneratorService
             ->when(
                 $tertaut !== [],
                 fn($q) => $q->whereIn('dokumen_id', $tertaut),
-                fn($q) => $q->whereHas('dokumen', fn($qq) => $qq->where('institusi_id', $institusiId)->where('sumber_konten', true)),
+                fn($q) => $q->whereHas('dokumen', fn($qq) => $qq
+                    ->whereIn('institusi_id', Institusi::idsHierarkiKeAtas($institusiId))
+                    ->where('sumber_konten', true)),
             )
             ->exists();
         if (! $ada) {

@@ -6,6 +6,7 @@ import {
   cariDokumen,
   lepasTautanDokumen,
   listDokumenTautan,
+  reindexDokumen,
   tautkanDokumen,
   unggahDokumenUntukMk,
 } from "./actions";
@@ -92,6 +93,18 @@ export function DokumenTautanEditor({ mk }: { mk?: MataKuliah }) {
     setBusy(false);
   };
 
+  const reindex = async (d: DokumenRujukan) => {
+    setBusy(true);
+    const res = await reindexDokumen(d.id);
+    if (res.ok) {
+      setPesan({ tone: "ok", text: "Indexing diulang — status berubah setelah proses latar belakang selesai." });
+      await muat(kodeMk);
+    } else {
+      setPesan({ tone: "err", text: res.message ?? "Gagal mengulang indexing." });
+    }
+    setBusy(false);
+  };
+
   const kirimKePustaka = (d: DokumenRujukan) => {
     const sitasi = d.judul ?? d.file_asal;
     if (!sitasi) return;
@@ -163,11 +176,34 @@ export function DokumenTautanEditor({ mk }: { mk?: MataKuliah }) {
             <li key={d.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-2 py-1">
               <span className="min-w-0 truncate text-xs text-ink">
                 📖 {d.judul ?? d.file_asal ?? `Dokumen #${d.id}`}
-                <span className="ml-1 text-[10px] text-muted">
-                  {d.status_indexing === "indexed" ? `(${d.chunk_count ?? 0} potongan terindeks)` : `(${d.status_indexing})`}
+                <span
+                  className={`ml-1 text-[10px] ${
+                    d.status_indexing === "indexed"
+                      ? "text-muted"
+                      : d.status_indexing === "error"
+                        ? "font-medium text-red-600"
+                        : "text-amber-700"
+                  }`}
+                >
+                  {d.status_indexing === "indexed"
+                    ? `(${d.chunk_count ?? 0} potongan terindeks)`
+                    : d.status_indexing === "error"
+                      ? "(indexing gagal — belum bisa dipakai AI)"
+                      : "(sedang di-index — belum bisa dipakai AI)"}
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
+                {d.status_indexing !== "indexed" && (
+                  <button
+                    type="button"
+                    onClick={() => reindex(d)}
+                    disabled={busy}
+                    className="text-[11px] font-medium text-amber-700 hover:underline disabled:opacity-50"
+                    title="Ulangi proses indexing dokumen ini"
+                  >
+                    Index ulang
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => kirimKePustaka(d)}
