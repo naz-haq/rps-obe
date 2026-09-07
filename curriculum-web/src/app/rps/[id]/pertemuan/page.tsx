@@ -6,8 +6,9 @@ import { deteksiUjian } from "@/lib/rps-status";
 import { GeneratePertemuanButton } from "./generate-button";
 
 /**
- * Halaman rincian per-PERTEMUAN — hasil generate lanjutan yang memecah tiap
- * pekan (MK blok/profesi dengan >1 pertemuan/pekan) menjadi sesi harian.
+ * Halaman rincian per-PERTEMUAN — detail operasional hasil generate lanjutan:
+ * MK blok/profesi = pemecahan pekan jadi sesi harian; MK reguler = skenario
+ * tahapan (pendahuluan-inti-penutup) + penugasan terstruktur & belajar mandiri.
  */
 export default async function RincianPertemuanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,7 +30,11 @@ export default async function RincianPertemuanPage({ params }: { params: Promise
     <div>
       <PageHeader
         title={`Rincian Pertemuan — ${rps.kode_mk} · v${rps.versi}`}
-        subtitle={`Pemecahan rencana mingguan menjadi sesi per pertemuan${sesiPerPekan ? ` (±${sesiPerPekan} pertemuan/pekan)` : ""}. Topik/aktivitas disusun AI dari materi pekan; durasi dihitung sistem.`}
+        subtitle={
+          sesiPerPekan
+            ? `Pemecahan rencana mingguan menjadi sesi per pertemuan (±${sesiPerPekan} pertemuan/pekan). Topik/aktivitas disusun AI dari materi pekan; durasi dihitung sistem.`
+            : "Skenario operasional tiap pertemuan: tahapan pendahuluan → inti → penutup plus penugasan terstruktur & belajar mandiri. Kegiatan disusun AI dari materi pekan; alokasi menit dihitung sistem."
+        }
         actions={
           <div className="flex items-center gap-3">
             <GeneratePertemuanButton id={rps.id} ada={adaRincian} />
@@ -46,7 +51,7 @@ export default async function RincianPertemuanPage({ params }: { params: Promise
         <Card>
           <EmptyState
             title="Belum ada rincian pertemuan"
-            hint="Klik “Generate Rincian Pertemuan (AI)” untuk memecah tiap pekan pada rencana mingguan menjadi rincian per pertemuan."
+            hint="Klik “Generate Rincian Pertemuan (AI)” — MK blok/profesi dipecah jadi sesi harian; MK reguler disusunkan skenario tahapan per pertemuan."
           />
         </Card>
       ) : (
@@ -81,6 +86,59 @@ export default async function RincianPertemuanPage({ params }: { params: Promise
                 </div>
                 {rincian.length === 0 ? (
                   <p className="px-5 py-3 text-sm text-muted">Tidak ada rincian untuk pekan ini.</p>
+                ) : rincian.some((p) => (p.tahapan?.length ?? 0) > 0) ? (
+                  <div className="space-y-4 px-5 py-4">
+                    {rincian.map((p) => (
+                      <div key={p.pertemuan_ke}>
+                        {p.topik && (
+                          <p className="mb-2 text-sm font-medium text-ink">
+                            {p.topik}
+                            {p.durasi_menit ? (
+                              <span className="ml-2 text-xs font-normal text-muted">({p.durasi_menit} menit kontak)</span>
+                            ) : null}
+                          </p>
+                        )}
+                        <Table bordered>
+                          <thead>
+                            <tr>
+                              <Th className="w-48">Tahap</Th>
+                              <Th>Kegiatan</Th>
+                              <Th className="w-24 text-right">Durasi</Th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(p.tahapan ?? []).map((t, i) => (
+                              <tr key={i} className="align-top hover:bg-gray-50">
+                                <Td className="font-medium text-ink">{t.tahap ?? "—"}</Td>
+                                <Td>{t.kegiatan ?? "—"}</Td>
+                                <Td className="text-right tabular-nums">{t.durasi_menit ? `${t.durasi_menit}’` : "—"}</Td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                        {(p.penugasan_terstruktur || p.belajar_mandiri) && (
+                          <div className="mt-2 space-y-1 text-xs text-muted">
+                            {p.penugasan_terstruktur && (
+                              <p>
+                                <span className="font-medium text-ink">
+                                  Penugasan Terstruktur{p.pt_menit ? ` (~${p.pt_menit} menit)` : ""}:
+                                </span>{" "}
+                                {p.penugasan_terstruktur}
+                              </p>
+                            )}
+                            {p.belajar_mandiri && (
+                              <p>
+                                <span className="font-medium text-ink">
+                                  Belajar Mandiri{p.bm_menit ? ` (~${p.bm_menit} menit)` : ""}:
+                                </span>{" "}
+                                {p.belajar_mandiri}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <Table bordered>
                     <thead>

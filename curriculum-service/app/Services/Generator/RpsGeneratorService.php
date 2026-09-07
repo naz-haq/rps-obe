@@ -1867,10 +1867,11 @@ class RpsGeneratorService
      * @return array{0:string,1:string} [system, prompt]
      */
     /**
-     * Generate LANJUTAN: pecah rencana mingguan RPS committed menjadi rincian
-     * per-pertemuan (untuk MK blok/profesi dengan >1 pertemuan/pekan). Satu
-     * panggilan AI; topik/aktivitas/metode dari AI, durasi per pertemuan
-     * dihitung deterministik oleh sistem dari estimasi waktu (bukan AI).
+     * Generate LANJUTAN detail operasional per pertemuan. Dua mode:
+     * - blok/profesi (>1 pertemuan/pekan): pecah pekan menjadi sesi harian;
+     * - reguler (1 pertemuan/pekan): skenario tahapan Pendahuluan→Inti→Penutup
+     *   + penugasan terstruktur & belajar mandiri per pekan.
+     * Satu panggilan AI; alokasi menit dihitung deterministik oleh sistem.
      *
      * @return array<int,array<int,array<string,mixed>>> peta minggu_ke => rincian tersimpan
      */
@@ -1894,11 +1895,10 @@ class RpsGeneratorService
 
         $est  = $this->estimasi->untukMataKuliah($mk, $rows->count());
         $sesi = max(1, (int) ($est['jumlah_pertemuan'] ?? 1));
-        if ($sesi <= 1) {
-            throw new GeneratorException('MK ini hanya 1 pertemuan/pekan — rincian pertemuan tidak diperlukan.');
-        }
+        // Reguler = skenario operasional per pertemuan, bukan pemecahan sesi.
+        $modeSkenario = $sesi <= 1;
 
-        $prompt = $this->prompts->resolve('pertemuan', $rps->institusi_id, $mk->jenis_mk);
+        $prompt = $this->prompts->resolve($modeSkenario ? 'skenario' : 'pertemuan', $rps->institusi_id, $mk->jenis_mk);
         $pola   = $mk->pola ?: 'reguler';
         $kontak = (int) ($est['tm_menit'] ?? 0) + (int) ($est['praktik_menit'] ?? 0);
 
@@ -1912,11 +1912,21 @@ class RpsGeneratorService
             'semester'  => $mk->semester,
             'deskripsi' => $mk->deskripsi_singkat,
         ], JSON_UNESCAPED_UNICODE);
-        $bagian[] = "\nPARAMETER RINCIAN PERTEMUAN (WAJIB DIPATUHI):\n"
-            . "- Susun TEPAT {$sesi} pertemuan untuk SETIAP pekan (pertemuan_ke berurutan 1..{$sesi}).\n"
-            . "- Pola pelaksanaan MK: {$pola}. Jumlah pekan: {$rows->count()}.\n"
-            . ($kontak > 0 ? "- Total waktu kontak per pekan ~{$kontak} menit; durasi per pertemuan dihitung sistem — JANGAN mengisi menit.\n" : '')
-            . '- Pekan evaluasi/ujian: rinci kegiatan ujiannya (boleh lebih sedikit pertemuan bila memang sesi ujian).';
+        if ($modeSkenario) {
+            $bagian[] = "\nPARAMETER SKENARIO PERTEMUAN (WAJIB DIPATUHI):\n"
+                . "- MK reguler 1 pertemuan/pekan; jumlah pekan: {$rows->count()}. Susun SATU skenario per pekan.\n"
+                . "- Tahapan per pertemuan: Pendahuluan (apersepsi, kaitan pekan lalu, sampaikan Sub-CPMK/indikator) → Kegiatan Inti 2-4 segmen berlabel langkah konkret metode pekan tsb → Penutup (rangkuman, umpan balik/refleksi, pengantar penugasan); isi \"kegiatan\" konkret dosen-mahasiswa per tahap.\n"
+                . ($kontak > 0 ? "- Waktu kontak per pekan ~{$kontak} menit; alokasi menit per tahap dihitung sistem — JANGAN mengisi menit.\n" : '')
+                . "- \"penugasan_terstruktur\": rincian tugas luar kelas pekan tsb (turunan pengalaman_belajar bila ada; sebutkan luaran konkret).\n"
+                . "- \"belajar_mandiri\": bahan bacaan/persiapan spesifik untuk pekan berikutnya (rujuk [Pustaka: no] bila ada dalam daftar).\n"
+                . '- Pekan evaluasi/ujian: tahapan berisi rangkaian kegiatan ujian (persiapan, pelaksanaan, penutupan); penugasan_terstruktur/belajar_mandiri boleh kosong.';
+        } else {
+            $bagian[] = "\nPARAMETER RINCIAN PERTEMUAN (WAJIB DIPATUHI):\n"
+                . "- Susun TEPAT {$sesi} pertemuan untuk SETIAP pekan (pertemuan_ke berurutan 1..{$sesi}).\n"
+                . "- Pola pelaksanaan MK: {$pola}. Jumlah pekan: {$rows->count()}.\n"
+                . ($kontak > 0 ? "- Total waktu kontak per pekan ~{$kontak} menit; durasi per pertemuan dihitung sistem — JANGAN mengisi menit.\n" : '')
+                . '- Pekan evaluasi/ujian: rinci kegiatan ujiannya (boleh lebih sedikit pertemuan bila memang sesi ujian).';
+        }
         $bagian[] = "\n" . $this->skopDirective();
 
         // Rujukan tambahan dosen dari sesi generator yang menghasilkan RPS ini
@@ -1950,6 +1960,7 @@ class RpsGeneratorService
             'indikator'          => $m->indikator,
             'metode_pembelajaran' => $m->metode_pembelajaran,
             'bentuk_luring'      => $m->bentuk_luring,
+            'pengalaman_belajar' => $m->pengalaman_belajar,
             'materi_pustaka'     => $m->materi_pustaka,
         ], fn($v) => $v !== null && $v !== ''))->values()->all(), JSON_UNESCAPED_UNICODE);
         $bagian[] = "\nBalas HANYA JSON valid dengan struktur berikut (tanpa teks lain):";
@@ -1960,7 +1971,7 @@ class RpsGeneratorService
             'user_id'      => $opts['user_id'] ?? null,
             'entity_type'  => 'RpsVersion',
             'entity_id'    => $rps->id,
-            'mode'         => 'generate:pertemuan',
+            'mode'         => $modeSkenario ? 'generate:skenario' : 'generate:pertemuan',
             'max_tokens'   => 9000,
             'no_cache'     => true,
         ]);
@@ -1968,13 +1979,22 @@ class RpsGeneratorService
             throw new GeneratorException('Panggilan AI gagal pada rincian pertemuan: ' . ($outcome->result->error ?? 'tidak diketahui'));
         }
 
-        $data = $this->parseJson($outcome->text(), 'pertemuan');
+        $data = $this->parseJson($outcome->text(), $modeSkenario ? 'skenario' : 'pertemuan');
         $byWeek = [];
         foreach ((array) ($data['minggu'] ?? []) as $item) {
-            $ke   = (int) ($item['minggu_ke'] ?? 0);
-            $list = is_array($item['pertemuan'] ?? null) ? $item['pertemuan'] : [];
-            if ($ke >= 1 && $list !== []) {
-                $byWeek[$ke] = $list;
+            $ke = (int) ($item['minggu_ke'] ?? 0);
+            if ($ke < 1 || ! is_array($item)) {
+                continue;
+            }
+            if ($modeSkenario) {
+                if (is_array($item['tahapan'] ?? null) && $item['tahapan'] !== []) {
+                    $byWeek[$ke] = $item;
+                }
+            } else {
+                $list = is_array($item['pertemuan'] ?? null) ? $item['pertemuan'] : [];
+                if ($list !== []) {
+                    $byWeek[$ke] = $list;
+                }
             }
         }
         if ($byWeek === []) {
@@ -1983,35 +2003,52 @@ class RpsGeneratorService
 
         $tersimpan = [];
         foreach ($rows as $row) {
-            $list = $byWeek[$row->minggu_ke] ?? null;
-            if (! $list) {
+            $isi = $byWeek[$row->minggu_ke] ?? null;
+            if (! $isi) {
                 continue;
             }
 
-            // Durasi deterministik: waktu kontak pekan ini dibagi rata jumlah pertemuan.
+            // Durasi deterministik dari waktu kontak pekan ini (bukan dari AI).
             $ew = is_array($row->estimasi_waktu) ? $row->estimasi_waktu : $est;
             $kontakMg = (int) ($ew['tm_menit'] ?? 0) + (int) ($ew['praktik_menit'] ?? 0);
             if ($kontakMg <= 0) {
                 $kontakMg = (int) ($ew['total_menit'] ?? 0);
             }
-            $durasi = $kontakMg > 0 ? (int) round($kontakMg / count($list)) : null;
 
-            $bersih = [];
-            $urut = 1;
-            foreach ($list as $p) {
-                if (! is_array($p)) {
+            if ($modeSkenario) {
+                $tahapan = $this->alokasiTahapan((array) $isi['tahapan'], $kontakMg);
+                if ($tahapan === []) {
                     continue;
                 }
-                $bersih[] = [
-                    'pertemuan_ke' => $urut++,
-                    'topik'        => trim((string) ($p['topik'] ?? '')) ?: null,
-                    'aktivitas'    => trim((string) ($p['aktivitas'] ?? '')) ?: null,
-                    'metode'       => trim((string) ($p['metode'] ?? '')) ?: null,
-                    'durasi_menit' => $durasi,
-                ];
-            }
-            if ($bersih === []) {
-                continue;
+                $bersih = [[
+                    'pertemuan_ke'          => 1,
+                    'topik'                 => trim((string) ($isi['topik'] ?? '')) ?: null,
+                    'durasi_menit'          => $kontakMg > 0 ? $kontakMg : null,
+                    'tahapan'               => $tahapan,
+                    'penugasan_terstruktur' => trim((string) ($isi['penugasan_terstruktur'] ?? '')) ?: null,
+                    'belajar_mandiri'       => trim((string) ($isi['belajar_mandiri'] ?? '')) ?: null,
+                    'pt_menit'              => (int) ($ew['pt_menit'] ?? 0) ?: null,
+                    'bm_menit'              => (int) ($ew['bm_menit'] ?? 0) ?: null,
+                ]];
+            } else {
+                $durasi = $kontakMg > 0 ? (int) round($kontakMg / count($isi)) : null;
+                $bersih = [];
+                $urut = 1;
+                foreach ($isi as $p) {
+                    if (! is_array($p)) {
+                        continue;
+                    }
+                    $bersih[] = [
+                        'pertemuan_ke' => $urut++,
+                        'topik'        => trim((string) ($p['topik'] ?? '')) ?: null,
+                        'aktivitas'    => trim((string) ($p['aktivitas'] ?? '')) ?: null,
+                        'metode'       => trim((string) ($p['metode'] ?? '')) ?: null,
+                        'durasi_menit' => $durasi,
+                    ];
+                }
+                if ($bersih === []) {
+                    continue;
+                }
             }
 
             $row->update(['rincian_pertemuan' => $bersih]);
@@ -2023,6 +2060,51 @@ class RpsGeneratorService
         }
 
         return $tersimpan;
+    }
+
+    /** Alokasi menit deterministik per tahap skenario: pembuka ~12% (10-20'), penutup ~10% (5-15'), sisanya dibagi rata segmen inti. */
+    private function alokasiTahapan(array $tahapan, int $kontak): array
+    {
+        $bersih = [];
+        foreach ($tahapan as $t) {
+            if (! is_array($t)) {
+                continue;
+            }
+            $kegiatan = trim((string) ($t['kegiatan'] ?? ''));
+            if ($kegiatan === '') {
+                continue;
+            }
+            $bersih[] = [
+                'tahap'        => trim((string) ($t['tahap'] ?? '')) ?: 'Kegiatan',
+                'kegiatan'     => $kegiatan,
+                'durasi_menit' => null,
+            ];
+        }
+        $n = count($bersih);
+        if ($n === 0 || $kontak <= 0) {
+            return $bersih;
+        }
+        if ($n === 1) {
+            $bersih[0]['durasi_menit'] = $kontak;
+
+            return $bersih;
+        }
+        $clamp = fn(int $v, int $lo, int $hi) => max($lo, min($hi, $v));
+        $buka  = $clamp((int) round($kontak * 0.12), 10, 20);
+        $tutup = $n >= 3 ? $clamp((int) round($kontak * 0.10), 5, 15) : 0;
+        $intiN = $n - ($tutup > 0 ? 2 : 1);
+        $sisa  = max(0, $kontak - $buka - $tutup);
+        $per   = intdiv($sisa, $intiN);
+        $bersih[0]['durasi_menit'] = $buka;
+        for ($i = 1; $i <= $intiN; $i++) {
+            $bersih[$i]['durasi_menit'] = $per;
+        }
+        $bersih[$intiN]['durasi_menit'] += $sisa - $per * $intiN; // sisa pembagian ke inti terakhir
+        if ($tutup > 0) {
+            $bersih[$n - 1]['durasi_menit'] = $tutup;
+        }
+
+        return $bersih;
     }
 
     private function buildPrompt(GenerateSession $session, string $stage, array $stageCfg, MataKuliah $mk, array $koreksi = []): array

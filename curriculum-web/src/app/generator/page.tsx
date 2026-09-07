@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { apiGet, resolvePerPage, type Paginated, type GenerateSession, type MataKuliah } from "@/lib/api";
-import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
+import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState, SearchBox } from "@/components/ui";
 import { StartSessionButton } from "./start-button";
 import { DeleteSessionButton } from "./delete-button";
 
-type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string }>;
+type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string; q?: string }>;
 
 const STATUS_TONE: Record<string, "ok" | "neutral" | "warn" | "brand"> = {
   committed: "ok",
@@ -26,7 +26,7 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
   let error: string | null = null;
   try {
     const [sesi, mk, semuaSesi] = await Promise.all([
-      apiGet<Paginated<GenerateSession>>("/generate-sessions", { sort, dir, page, status: sp.status, per_page: perPage }),
+      apiGet<Paginated<GenerateSession>>("/generate-sessions", { sort, dir, page, status: sp.status, q: sp.q, per_page: perPage }),
       apiGet<Paginated<MataKuliah>>("/mata-kuliah", { per_page: 200, sort: "kode_mk", dir: "asc" }),
       apiGet<Paginated<GenerateSession>>("/generate-sessions", { per_page: 1000 }),
     ]);
@@ -39,7 +39,7 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
     error = "Tidak dapat memuat sesi generator. Pastikan backend berjalan di :8100.";
   }
 
-  const params = { sort, dir, status: sp.status, per_page: String(perPage) };
+  const params = { sort, dir, status: sp.status, q: sp.q, per_page: String(perPage) };
 
   return (
     <div>
@@ -49,13 +49,18 @@ export default async function GeneratorPage({ searchParams }: { searchParams: Se
         actions={<StartSessionButton mataKuliah={mataKuliah} excludeMkIds={sesiMkIds} />}
       />
 
+      <SearchBox basePath="/generator" q={sp.q} params={params} className="mb-3" />
+
       {error ? (
         <Card>
           <div className="p-5 text-sm text-red-600">{error}</div>
         </Card>
       ) : !list || list.data.length === 0 ? (
         <Card>
-          <EmptyState title="Belum ada sesi" hint="Mulai sesi baru untuk menyusun RPS sebuah mata kuliah." />
+          <EmptyState
+            title={sp.q ? `Tidak ada sesi cocok “${sp.q}”` : "Belum ada sesi"}
+            hint={sp.q ? "Coba kata kunci lain atau bersihkan pencarian." : "Mulai sesi baru untuk menyusun RPS sebuah mata kuliah."}
+          />
         </Card>
       ) : (
         <Card>

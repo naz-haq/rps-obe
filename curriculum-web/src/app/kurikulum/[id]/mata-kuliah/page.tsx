@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { apiGet, resolvePerPage, type Single, type Paginated, type Kurikulum, type MataKuliah, type InstitusiData, type KonfigurasiAturan } from "@/lib/api";
-import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
+import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState, SearchBox } from "@/components/ui";
 import { KurikulumTabs } from "../tabs";
 import { CreateMkButton, EditMkButton, DeleteMkButton } from "./forms";
 import { ImportExcelButton } from "@/components/import-excel";
@@ -117,9 +117,14 @@ export default async function MataKuliahPage({
       />
       <KurikulumTabs id={id} active="mata-kuliah" />
 
+      <SearchBox basePath={basePath} q={sp.q} params={params2} className="mb-3" />
+
       {!list || list.data.length === 0 ? (
         <Card>
-          <EmptyState title="Belum ada mata kuliah" hint="Tambahkan mata kuliah atau impor lewat Onboarding." />
+          <EmptyState
+            title={sp.q ? `Tidak ada mata kuliah cocok “${sp.q}”` : "Belum ada mata kuliah"}
+            hint={sp.q ? "Coba kata kunci lain atau bersihkan pencarian." : "Tambahkan mata kuliah atau impor lewat Onboarding."}
+          />
         </Card>
       ) : (
         <Card>

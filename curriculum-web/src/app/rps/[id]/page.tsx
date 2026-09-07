@@ -226,7 +226,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
             <h2 className="text-sm font-semibold text-ink">Rencana Pembelajaran Mingguan</h2>
             <p className="text-xs text-muted">Format Panduan KPT 2024 (8 kolom, bentuk pembelajaran dipisah Luring/Daring, materi merujuk Bahan Kajian & Pustaka).</p>
           </div>
-          {minggu.some((m) => (m.estimasi_waktu?.jumlah_pertemuan ?? 1) > 1) && (
+          {minggu.length > 0 && (
             <Link
               href={`/rps/${rps.id}/pertemuan`}
               className="shrink-0 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-gray-50"

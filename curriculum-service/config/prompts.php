@@ -127,6 +127,23 @@ return [
             'schema' => '{"minggu":[{"minggu_ke":1,"pertemuan":[{"pertemuan_ke":1,"topik":"...","aktivitas":"...","metode":"..."}]}]}',
         ],
 
+        'skenario' => [
+            'label' => 'Generator — Skenario Pertemuan (reguler)',
+            'group' => 'generator',
+            'system' =>
+            'Anda perancang pembelajaran OBE. Susun SKENARIO OPERASIONAL satu pertemuan per pekan (mirip RPP ringkas) '
+                . 'dari rencana MINGGUAN RPS yang sudah disetujui, untuk mata kuliah reguler (1 pertemuan/pekan). Aturan: '
+                . '(1) SATU skenario per pekan; tahapan wajib: Pendahuluan → Kegiatan Inti (2-4 segmen, tiap segmen berlabel langkah konkret sesuai metode_pembelajaran pekan tsb, mis. "Inti — Pemaparan kasus", "Inti — Diskusi kelompok") → Penutup; '
+                . '(2) isi "kegiatan" per tahap dengan aktivitas konkret dosen-mahasiswa yang berjangkar pada materi_pustaka dan Sub-CPMK pekan tsb — JANGAN menambah topik baru di luar rencana mingguan; '
+                . '(3) Pendahuluan memuat apersepsi/kaitan pekan sebelumnya dan penyampaian target Sub-CPMK; Penutup memuat rangkuman, umpan balik/refleksi, dan pengantar penugasan; '
+                . '(4) isi "penugasan_terstruktur" = rincian tugas luar kelas pekan tsb (turunan pengalaman_belajar bila ada; sebutkan luaran konkret) dan "belajar_mandiri" = bahan bacaan/persiapan spesifik pekan berikutnya; '
+                . '(5) JANGAN mengisi durasi/menit — alokasi waktu dihitung otomatis oleh sistem; '
+                . '(6) bila daftar PUSTAKA/REFERENSI MK diberikan, rujuk dalam bentuk [Pustaka: no] — jangan mengarang judul di luar daftar; '
+                . '(7) untuk pekan evaluasi/ujian, tahapan berisi rangkaian kegiatan ujian dan penugasan boleh dikosongkan (string kosong). '
+                . 'Balas HANYA JSON valid sesuai skema, tanpa teks lain.',
+            'schema' => '{"minggu":[{"minggu_ke":1,"topik":"...","tahapan":[{"tahap":"Pendahuluan","kegiatan":"..."},{"tahap":"Inti — ...","kegiatan":"..."},{"tahap":"Penutup","kegiatan":"..."}],"penugasan_terstruktur":"...","belajar_mandiri":"..."}]}',
+        ],
+
         'buku_naratif' => [
             'label' => 'Generator — Narasi Buku Kurikulum',
             'group' => 'generator',

@@ -433,8 +433,9 @@ class RpsDocxExporter
             }
             $ke = $p['pertemuan_ke'] ?? '?';
             $durasi = isset($p['durasi_menit']) && $p['durasi_menit'] ? ' · ' . ((int) $p['durasi_menit']) . ' menit' : '';
+            $tahapan = is_array($p['tahapan'] ?? null) ? $p['tahapan'] : [];
             $run = $cell->addTextRun(['spaceAfter' => 20]);
-            $run->addText("Pertemuan {$ke}{$durasi}: ", ['bold' => true, 'size' => 8]);
+            $run->addText(($tahapan !== [] ? 'Skenario Pertemuan' : "Pertemuan {$ke}") . "{$durasi}: ", ['bold' => true, 'size' => 8]);
             $run->addText(trim((string) ($p['topik'] ?? '—')), ['size' => 8]);
             $metode = trim((string) ($p['metode'] ?? ''));
             $aktivitas = trim((string) ($p['aktivitas'] ?? ''));
@@ -443,6 +444,26 @@ class RpsDocxExporter
             }
             if ($aktivitas !== '') {
                 $cell->addText('  Aktivitas/Penugasan: ' . $aktivitas, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
+            }
+            foreach ($tahapan as $t) {
+                if (! is_array($t)) {
+                    continue;
+                }
+                $tr = $cell->addTextRun(['spaceAfter' => 10]);
+                $label = trim((string) ($t['tahap'] ?? '')) ?: 'Tahap';
+                $menit = ! empty($t['durasi_menit']) ? ' (' . ((int) $t['durasi_menit']) . '’)' : '';
+                $tr->addText("  {$label}{$menit}: ", ['bold' => true, 'size' => 8]);
+                $tr->addText(trim((string) ($t['kegiatan'] ?? '—')), ['size' => 8]);
+            }
+            $pt = trim((string) ($p['penugasan_terstruktur'] ?? ''));
+            if ($pt !== '') {
+                $ptMenit = ! empty($p['pt_menit']) ? ' (~' . ((int) $p['pt_menit']) . ' menit)' : '';
+                $cell->addText("  Penugasan Terstruktur{$ptMenit}: " . $pt, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
+            }
+            $bm = trim((string) ($p['belajar_mandiri'] ?? ''));
+            if ($bm !== '') {
+                $bmMenit = ! empty($p['bm_menit']) ? ' (~' . ((int) $p['bm_menit']) . ' menit)' : '';
+                $cell->addText("  Belajar Mandiri{$bmMenit}: " . $bm, ['size' => 7, 'italic' => true, 'color' => self::MUTED]);
             }
         }
     }

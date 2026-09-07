@@ -519,12 +519,24 @@ export type Notifikasi = {
   created_at: string;
 };
 
+export type TahapSkenario = {
+  tahap: string | null;
+  kegiatan: string | null;
+  durasi_menit: number | null;
+};
+
 export type RincianPertemuan = {
   pertemuan_ke: number;
   topik: string | null;
-  aktivitas: string | null;
-  metode: string | null;
+  aktivitas?: string | null;
+  metode?: string | null;
   durasi_menit: number | null;
+  // Mode skenario (MK reguler): tahapan pendahuluan-inti-penutup + PT/BM.
+  tahapan?: TahapSkenario[] | null;
+  penugasan_terstruktur?: string | null;
+  belajar_mandiri?: string | null;
+  pt_menit?: number | null;
+  bm_menit?: number | null;
 };
 
 export type RpsMinggu = {

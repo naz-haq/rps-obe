@@ -36,6 +36,10 @@ class GenerateSessionController extends Controller
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
+        if ($request->filled('q')) {
+            $q = $request->string('q');
+            $query->whereHas('mataKuliah', fn($w) => $w->where('kode_mk', 'like', "%{$q}%")->orWhere('nama', 'like', "%{$q}%"));
+        }
 
         $this->applySort($query, $request, ['tahap', 'status', 'created_at', 'updated_at'], 'created_at', 'desc');
 

@@ -44,8 +44,9 @@ class RpsAiController extends Controller
     }
 
     /**
-     * Generate lanjutan: rincian per-PERTEMUAN dari rencana mingguan RPS committed
-     * (MK blok/profesi dengan >1 pertemuan/pekan). Hasil disimpan di
+     * Generate lanjutan detail operasional per pertemuan: MK blok/profesi = pecah
+     * pekan jadi sesi harian; MK reguler = skenario tahapan (pendahuluan-inti-penutup)
+     * + penugasan terstruktur & belajar mandiri. Hasil disimpan di
      * rps_minggu.rincian_pertemuan dan ikut terbawa di GET rps-versions/{id}.
      */
     public function generatePertemuan(RpsVersion $rpsVersion, RpsGeneratorService $generator)

@@ -435,11 +435,18 @@
                                 <td colspan="7" style="background:#f8fafc;">
                                     <span class="bold">Rincian Pertemuan:</span>
                                     @foreach($m->rincian_pertemuan as $p)
-                                        @php $ke = $p['pertemuan_ke'] ?? '?'; $durasi = !empty($p['durasi_menit']) ? ' · '.(int) $p['durasi_menit'].' menit' : ''; @endphp
+                                        @php $ke = $p['pertemuan_ke'] ?? '?'; $durasi = !empty($p['durasi_menit']) ? ' · '.(int) $p['durasi_menit'].' menit' : ''; $skenario = !empty($p['tahapan']) && is_array($p['tahapan']); @endphp
                                         <div style="margin-top:2px;">
-                                            <span class="bold">Pertemuan {{ $ke }}{{ $durasi }}:</span> {{ $p['topik'] ?? '—' }}
+                                            <span class="bold">{{ $skenario ? 'Skenario Pertemuan' : 'Pertemuan '.$ke }}{{ $durasi }}:</span> {{ $p['topik'] ?? '—' }}
                                             @if(!empty($p['metode']))<div class="muted">Metode: {{ $p['metode'] }}</div>@endif
                                             @if(!empty($p['aktivitas']))<div class="muted">Aktivitas/Penugasan: {{ $p['aktivitas'] }}</div>@endif
+                                            @if($skenario)
+                                                @foreach($p['tahapan'] as $t)
+                                                    <div style="margin-left:8px;"><span class="bold">{{ $t['tahap'] ?? 'Tahap' }}@if(!empty($t['durasi_menit'])) ({{ (int) $t['durasi_menit'] }}’)@endif:</span> {{ $t['kegiatan'] ?? '—' }}</div>
+                                                @endforeach
+                                                @if(!empty($p['penugasan_terstruktur']))<div class="muted" style="margin-left:8px;"><span class="bold">Penugasan Terstruktur{{ !empty($p['pt_menit']) ? ' (~'.(int) $p['pt_menit'].' menit)' : '' }}:</span> {{ $p['penugasan_terstruktur'] }}</div>@endif
+                                                @if(!empty($p['belajar_mandiri']))<div class="muted" style="margin-left:8px;"><span class="bold">Belajar Mandiri{{ !empty($p['bm_menit']) ? ' (~'.(int) $p['bm_menit'].' menit)' : '' }}:</span> {{ $p['belajar_mandiri'] }}</div>@endif
+                                            @endif
                                         </div>
                                     @endforeach
                                 </td>

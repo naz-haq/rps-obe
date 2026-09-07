@@ -29,6 +29,12 @@ class RpsVersionController extends Controller
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
+        if ($request->filled('q')) {
+            $q = $request->string('q');
+            $query->where(fn($w) => $w
+                ->where('kode_mk', 'like', "%{$q}%")
+                ->orWhereIn('kode_mk', MataKuliah::query()->where('nama', 'like', "%{$q}%")->select('kode_mk')));
+        }
 
         $this->applySort($query, $request, ['kode_mk', 'versi', 'status', 'created_at'], 'created_at', 'desc');
 

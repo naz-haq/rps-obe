@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { apiGet, resolvePerPage, type Paginated, type RpsVersion } from "@/lib/api";
 import { rpsStatusLabel, rpsStatusTone } from "@/lib/rps-status";
-import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState } from "@/components/ui";
+import { PageHeader, Card, Table, Th, Td, SortableTh, Pagination, Badge, EmptyState, SearchBox } from "@/components/ui";
 import { DeleteRpsButton } from "./delete-button";
 
-type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string }>;
+type SearchParams = Promise<{ sort?: string; dir?: string; page?: string; status?: string; per_page?: string; q?: string }>;
 
 export default async function RpsPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -16,12 +16,12 @@ export default async function RpsPage({ searchParams }: { searchParams: SearchPa
   let list: Paginated<RpsVersion> | null = null;
   let error: string | null = null;
   try {
-    list = await apiGet<Paginated<RpsVersion>>("/rps-versions", { sort, dir, page, status: sp.status, per_page: perPage });
+    list = await apiGet<Paginated<RpsVersion>>("/rps-versions", { sort, dir, page, status: sp.status, q: sp.q, per_page: perPage });
   } catch {
     error = "Tidak dapat memuat dokumen RPS. Pastikan backend berjalan di :8100.";
   }
 
-  const params = { sort, dir, status: sp.status, per_page: String(perPage) };
+  const params = { sort, dir, status: sp.status, q: sp.q, per_page: String(perPage) };
 
   return (
     <div>
@@ -30,13 +30,18 @@ export default async function RpsPage({ searchParams }: { searchParams: SearchPa
         subtitle="Versi RPS resmi hasil commit generator, lengkap dengan traceability OBE."
       />
 
+      <SearchBox basePath="/rps" q={sp.q} params={params} className="mb-3" />
+
       {error ? (
         <Card>
           <div className="p-5 text-sm text-red-600">{error}</div>
         </Card>
       ) : !list || list.data.length === 0 ? (
         <Card>
-          <EmptyState title="Belum ada dokumen RPS" hint="Commit sebuah sesi generator untuk membuat versi RPS." />
+          <EmptyState
+            title={sp.q ? `Tidak ada dokumen RPS cocok “${sp.q}”` : "Belum ada dokumen RPS"}
+            hint={sp.q ? "Coba kata kunci lain atau bersihkan pencarian." : "Commit sebuah sesi generator untuk membuat versi RPS."}
+          />
         </Card>
       ) : (
         <Card>

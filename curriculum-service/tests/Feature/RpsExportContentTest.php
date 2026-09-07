@@ -24,9 +24,15 @@ class RpsExportContentTest extends TestCase
         $prodi = Institusi::create(['kode' => 'PR-EX', 'nama' => 'Prodi Ekspor', 'jenis' => 'prodi']);
         $kur = Kurikulum::create(['institusi_id' => $prodi->id, 'kode' => 'KUR-EX', 'nama' => 'Kur Ekspor', 'tahun' => '2026']);
         MataKuliah::create([
-            'institusi_id' => $prodi->id, 'kurikulum_id' => $kur->id, 'kode_mk' => 'MK-EX',
-            'nama' => 'MK Ekspor', 'jenis_mk' => 'murni', 'pola' => 'blok',
-            'sks_teori' => 2, 'sks_praktik' => 0, 'semester' => 1,
+            'institusi_id' => $prodi->id,
+            'kurikulum_id' => $kur->id,
+            'kode_mk' => 'MK-EX',
+            'nama' => 'MK Ekspor',
+            'jenis_mk' => 'murni',
+            'pola' => 'blok',
+            'sks_teori' => 2,
+            'sks_praktik' => 0,
+            'semester' => 1,
         ]);
         Cpl::create(['institusi_id' => $prodi->id, 'kurikulum_id' => $kur->id, 'kode' => 'CPL-1', 'deskripsi' => 'CPL.']);
         $cpmk = Cpmk::create(['institusi_id' => $prodi->id, 'kode_mk' => 'MK-EX', 'kode' => 'CPMK-1', 'deskripsi' => 'CPMK.']);
@@ -34,7 +40,9 @@ class RpsExportContentTest extends TestCase
 
         $rps = RpsVersion::create(['institusi_id' => $prodi->id, 'kode_mk' => 'MK-EX', 'versi' => 1, 'status' => 'draft', 'bahasa' => 'id']);
         RpsMinggu::create([
-            'rps_version_id' => $rps->id, 'minggu_ke' => 1, 'sub_cpmk_id' => $sub->id,
+            'rps_version_id' => $rps->id,
+            'minggu_ke' => 1,
+            'sub_cpmk_id' => $sub->id,
             'indikator' => 'Indikator pekan 1.',
             'materi_pustaka' => 'Materi pekan 1.',
             'pengalaman_belajar' => 'Mahasiswa menyusun laporan analisis kasus obat.',
@@ -56,7 +64,9 @@ class RpsExportContentTest extends TestCase
         $konteks = app(RpsPrintContext::class)->build($rps);
 
         $html = view('rps.cetak', [
-            'rps' => $rps, 'mk' => $mk, 'institusi' => $institusi,
+            'rps' => $rps,
+            'mk' => $mk,
+            'institusi' => $institusi,
             'minggu' => $rps->minggu->sortBy('minggu_ke')->values(),
             'komponen' => $rps->komponenPenilaian->values(),
             'cplDiampu' => collect(),
@@ -72,6 +82,83 @@ class RpsExportContentTest extends TestCase
     public function test_docx_terbentuk_tanpa_galat_dengan_rincian_pertemuan(): void
     {
         $rps = $this->buatRpsDenganPenugasan();
+        $phpWord = app(RpsDocxExporter::class)->build($rps);
+        $this->assertInstanceOf(\PhpOffice\PhpWord\PhpWord::class, $phpWord);
+    }
+
+    /** MK reguler: rincian_pertemuan berisi skenario tahapan + PT/BM. */
+    private function buatRpsSkenarioReguler(): RpsVersion
+    {
+        $prodi = Institusi::create(['kode' => 'PR-SK', 'nama' => 'Prodi Skenario', 'jenis' => 'prodi']);
+        $kur = Kurikulum::create(['institusi_id' => $prodi->id, 'kode' => 'KUR-SK', 'nama' => 'Kur Skenario', 'tahun' => '2026']);
+        MataKuliah::create([
+            'institusi_id' => $prodi->id,
+            'kurikulum_id' => $kur->id,
+            'kode_mk' => 'MK-SK',
+            'nama' => 'MK Skenario',
+            'jenis_mk' => 'murni',
+            'pola' => 'reguler',
+            'sks_teori' => 2,
+            'sks_praktik' => 0,
+            'semester' => 1,
+        ]);
+        $cpmk = Cpmk::create(['institusi_id' => $prodi->id, 'kode_mk' => 'MK-SK', 'kode' => 'CPMK-1', 'deskripsi' => 'CPMK.']);
+        $sub = SubCpmk::create(['institusi_id' => $prodi->id, 'cpmk_id' => $cpmk->id, 'kode' => 'Sub-CPMK-1', 'deskripsi' => 'Sub.']);
+
+        $rps = RpsVersion::create(['institusi_id' => $prodi->id, 'kode_mk' => 'MK-SK', 'versi' => 1, 'status' => 'draft', 'bahasa' => 'id']);
+        RpsMinggu::create([
+            'rps_version_id' => $rps->id,
+            'minggu_ke' => 1,
+            'sub_cpmk_id' => $sub->id,
+            'indikator' => 'Indikator pekan 1.',
+            'materi_pustaka' => 'Materi pekan 1.',
+            'rincian_pertemuan' => [[
+                'pertemuan_ke' => 1,
+                'topik' => 'Konsep dasar farmakokinetika',
+                'durasi_menit' => 100,
+                'tahapan' => [
+                    ['tahap' => 'Pendahuluan', 'kegiatan' => 'Apersepsi kaitan materi pekan lalu.', 'durasi_menit' => 12],
+                    ['tahap' => 'Inti — Diskusi kelompok', 'kegiatan' => 'Analisis kasus dosis obat.', 'durasi_menit' => 78],
+                    ['tahap' => 'Penutup', 'kegiatan' => 'Rangkuman dan refleksi.', 'durasi_menit' => 10],
+                ],
+                'penugasan_terstruktur' => 'Menyusun ringkasan parameter farmakokinetika.',
+                'belajar_mandiri' => 'Membaca bab 2 [Pustaka: 1].',
+                'pt_menit' => 120,
+                'bm_menit' => 120,
+            ]],
+        ]);
+
+        return $rps->fresh();
+    }
+
+    public function test_pdf_memuat_skenario_tahapan_reguler(): void
+    {
+        $rps = $this->buatRpsSkenarioReguler();
+        $rps->load(['minggu.subCpmk.cpmk', 'komponenPenilaian.subCpmk.cpmk', 'komponenPenilaian.rubrik.kriteria']);
+        $mk = MataKuliah::where('kode_mk', $rps->kode_mk)->first();
+        $institusi = Institusi::find($rps->institusi_id);
+        $konteks = app(RpsPrintContext::class)->build($rps);
+
+        $html = view('rps.cetak', [
+            'rps' => $rps,
+            'mk' => $mk,
+            'institusi' => $institusi,
+            'minggu' => $rps->minggu->sortBy('minggu_ke')->values(),
+            'komponen' => $rps->komponenPenilaian->values(),
+            'cplDiampu' => collect(),
+            'konteks' => $konteks,
+        ])->render();
+
+        $this->assertStringContainsString('Skenario Pertemuan', $html);
+        $this->assertStringContainsString('Pendahuluan', $html);
+        $this->assertStringContainsString('Analisis kasus dosis obat.', $html);
+        $this->assertStringContainsString('Penugasan Terstruktur', $html);
+        $this->assertStringContainsString('Membaca bab 2 [Pustaka: 1].', $html);
+    }
+
+    public function test_docx_terbentuk_tanpa_galat_dengan_skenario_reguler(): void
+    {
+        $rps = $this->buatRpsSkenarioReguler();
         $phpWord = app(RpsDocxExporter::class)->build($rps);
         $this->assertInstanceOf(\PhpOffice\PhpWord\PhpWord::class, $phpWord);
     }

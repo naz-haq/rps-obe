@@ -242,6 +242,47 @@ export function SortableTh({
   );
 }
 
+// ---- Kotak pencarian (GET form; filter lain dipertahankan lewat hidden input) ----
+export function SearchBox({
+  basePath,
+  q,
+  params = {},
+  placeholder = "Cari kode/nama mata kuliah…",
+  className = "",
+}: {
+  basePath: string;
+  q?: string;
+  params?: Record<string, string | undefined>;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <form action={basePath} method="get" className={`flex items-center gap-2 ${className}`}>
+      {Object.entries(params).map(([k, v]) =>
+        v && k !== "q" && k !== "page" ? <input key={k} type="hidden" name={k} value={v} /> : null,
+      )}
+      <input
+        type="search"
+        name="q"
+        defaultValue={q ?? ""}
+        placeholder={placeholder}
+        className="w-64 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-muted focus:border-brand-500 focus:outline-none"
+      />
+      <button
+        type="submit"
+        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-gray-50"
+      >
+        Cari
+      </button>
+      {q ? (
+        <Link href={basePath} className="text-xs text-muted hover:text-ink hover:underline">
+          Bersihkan
+        </Link>
+      ) : null}
+    </form>
+  );
+}
+
 // ---- Pagination footer ----
 const PER_PAGE_OPTIONS = [15, 25, 50, 100];
 
