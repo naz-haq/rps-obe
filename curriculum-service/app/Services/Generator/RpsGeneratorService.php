@@ -2425,8 +2425,8 @@ class RpsGeneratorService
             . "- Gunakan TEPAT {$n} pekan (minggu_ke hanya boleh bernilai 1..{$n}); JANGAN membuat pekan di luar rentang itu.\n"
             . "- SEMUA Sub-CPMK WAJIB tercakup, masing-masing minimal SATU baris.\n"
             . ($pola === 'reguler'
-                ? "- Satu baris dengan SATU Sub-CPMK utama per pekan belajar, dipetakan BERURUTAN dari Sub-CPMK-1 pada pekan belajar pertama; setiap Sub-CPMK muncul tepat satu kali sebagai target utama, dan pekan setelah UTS langsung melanjutkan Sub-CPMK berikutnya. Pekan ujian memakai sub_cpmk_kode null, tidak memperkenalkan konsep baru. Jangan menumpuk beberapa kemampuan pada satu pekan.\n"
-                : "- Blok/profesi boleh BEBERAPA BARIS dengan minggu_ke SAMA — satu kemampuan utama per baris/pertemuan, berurutan sesuai skenario pembelajaran.\n")
+                ? "- Satu BARIS per pekan. Pekan 1 = pengantar/orientasi MK (kontrak kuliah & ruang lingkup, boleh sekaligus Sub-CPMK-1). Sub-CPMK utama dipetakan BERURUTAN mulai pekan 1; bila jumlah Sub-CPMK LEBIH BANYAK daripada pekan belajar, kelebihannya diisikan pada \"sub_cpmk_kode_tambahan\" (daftar kode) di pekan yang paling relevan \u2014 JANGAN menambah baris atau pekan. Pekan ujian memakai sub_cpmk_kode null (Sub-CPMK yang diuji boleh dicantumkan di sub_cpmk_kode_tambahan) dan tidak memperkenalkan konsep baru.\n"
+                : "- Blok/profesi boleh BEBERAPA BARIS dengan minggu_ke SAMA \u2014 satu kemampuan utama per baris/pertemuan, berurutan sesuai skenario pembelajaran.\n")
             . "- Pola pelaksanaan: {$pola}.\n"
             . $beban
             . "- {$evaluasi}";

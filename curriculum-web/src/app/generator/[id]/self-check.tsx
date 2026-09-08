@@ -6,6 +6,7 @@ import {
   getCpmk,
   getSubCpmk,
   getKomponen,
+  getMinggu,
   maxTaksonomiLevel,
 } from "./draft";
 
@@ -15,6 +16,19 @@ export function SelfCheck({ draf, cplList }: { draf: Draf; cplList: Cpl[] }) {
   const cpmk = getCpmk(draf);
   const sub = getSubCpmk(draf);
   const komponen = getKomponen(draf);
+  const minggu = getMinggu(draf);
+
+  // Sub-CPMK boleh melebihi jumlah pekan; syaratnya semua tetap terpetakan.
+  const kodeDiPekan = new Set(
+    minggu.flatMap((m) => [m.sub_cpmk_kode, ...(m.sub_cpmk_kode_tambahan ?? [])].filter(Boolean) as string[]),
+  );
+  const subTanpaPekan = minggu.length === 0 ? [] : sub.filter((s) => !kodeDiPekan.has(s.kode));
+  const pekanPadat = minggu
+    .map((m) => ({
+      minggu_ke: m.minggu_ke,
+      jumlah: (m.sub_cpmk_kode ? 1 : 0) + (m.sub_cpmk_kode_tambahan ?? []).length,
+    }))
+    .filter((m) => m.jumlah > 3);
 
   const cplTerbengkalai = cplList.filter(
     (c) => !cpmk.some((k) => (k.cpl_kode ?? []).includes(c.kode)),
@@ -72,6 +86,16 @@ export function SelfCheck({ draf, cplList }: { draf: Draf; cplList: Cpl[] }) {
             : `${cpmkTanpaSub.length} CPMK tanpa Sub-CPMK`,
     },
     {
+      label: "Sub-CPMK terpetakan ke pekan",
+      ok: minggu.length === 0 || sub.length === 0 ? null : subTanpaPekan.length === 0,
+      detail:
+        minggu.length === 0
+          ? "Rencana mingguan kosong"
+          : subTanpaPekan.length === 0
+            ? "Semua Sub-CPMK terpetakan"
+            : `${subTanpaPekan.length} Sub-CPMK belum masuk pekan manapun`,
+    },
+    {
       label: "Total bobot penilaian",
       ok: komponen.length === 0 ? null : totalBobot === 100,
       detail:
@@ -83,7 +107,8 @@ export function SelfCheck({ draf, cplList }: { draf: Draf; cplList: Cpl[] }) {
     },
   ];
 
-  const totalIsu = taksonomiWarnings.length + cplTerbengkalai.length + cpmkYatim.length;
+  const totalIsu =
+    taksonomiWarnings.length + cplTerbengkalai.length + cpmkYatim.length + subTanpaPekan.length + pekanPadat.length;
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -129,6 +154,16 @@ export function SelfCheck({ draf, cplList }: { draf: Draf; cplList: Cpl[] }) {
           {cpmkYatim.map((k) => (
             <div key={`y${k.kode}`} className="border-l-2 border-rose-400 pl-2">
               <span className="font-bold text-rose-700">{k.kode}</span> tidak mendukung CPL manapun.
+            </div>
+          ))}
+          {subTanpaPekan.map((s) => (
+            <div key={`sp${s.kode}`} className="border-l-2 border-rose-400 pl-2">
+              <span className="font-bold text-rose-700">{s.kode}</span> belum dipetakan ke pekan manapun — pilih sebagai Sub-CPMK utama atau tambahan pada rencana mingguan.
+            </div>
+          ))}
+          {pekanPadat.map((m) => (
+            <div key={`pp${m.minggu_ke}`} className="border-l-2 border-amber-400 pl-2">
+              Pekan <span className="font-bold">{m.minggu_ke}</span> memuat {m.jumlah} Sub-CPMK — pertimbangkan menyebar ke pekan lain atau menggabungkan rumusan yang terlalu rinci.
             </div>
           ))}
           {totalIsu === 0 && cpmk.length > 0 && (

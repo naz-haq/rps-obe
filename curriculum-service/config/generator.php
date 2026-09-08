@@ -20,6 +20,10 @@ return [
     // Urutan tahap (gate berurutan)
     'pipeline' => ['cpmk', 'sub_cpmk', 'mingguan', 'penilaian'],
 
+    // Batas PENGAMAN jumlah CPMK/Sub-CPMK per MK (bukan target). MK padat boleh
+    // melebihi jumlah pekan; kelebihannya berbagi pekan lewat Sub-CPMK tambahan.
+    'max_sub_cpmk' => (int) env('GENERATOR_MAX_SUB_CPMK', 40),
+
     // Status yang dianggap "terkunci" (memenuhi prasyarat tahap berikutnya)
     'locked_states' => ['accepted', 'edited', 'pinned'],
 
