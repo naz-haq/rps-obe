@@ -27,6 +27,7 @@ class RpsDocxExporter
     {
         $rps->loadMissing([
             'minggu.subCpmk.cpmk.cpl',
+            'minggu.subCpmkSemua.cpmk',
             'komponenPenilaian.subCpmk.cpmk',
             'komponenPenilaian.rubrik.kriteria',
         ]);
@@ -382,7 +383,7 @@ class RpsDocxExporter
 
             $table->addRow();
             $this->dataCell($table, (string) $m->minggu_ke, $widths[0], Jc::CENTER);
-            $this->dataCell($table, $this->subCpmkLabel($m->subCpmk), $widths[1]);
+            $this->dataCell($table, $this->subCpmkLabel($m->subCpmk, $this->subCpmkLain($m)), $widths[1]);
             $this->dataCell($table, $m->indikator ?? '—', $widths[2]);
 
             $cellKrit = $table->addCell($widths[3]);
@@ -503,10 +504,11 @@ class RpsDocxExporter
         $this->dataCell($table, $this->angka($total), $widths[5], Jc::CENTER, true);
     }
 
-    private function subCpmkLabel($subCpmk): string
+    /** @param array<int,string> $tambahan Sub-CPMK lain yang juga disasar pekan ini. */
+    private function subCpmkLabel($subCpmk, array $tambahan = []): string
     {
         if (! $subCpmk) {
-            return '—';
+            return $tambahan === [] ? '—' : implode('; ', $tambahan);
         }
 
         $text = (string) ($subCpmk->kode ?? '');
@@ -519,7 +521,21 @@ class RpsDocxExporter
             $text .= ' | ' . $subCpmk->cpmk->kode;
         }
 
+        foreach ($tambahan as $lain) {
+            $text .= "\n" . $lain;
+        }
+
         return trim($text) !== '' ? $text : '—';
+    }
+
+    /** @return array<int,string> */
+    private function subCpmkLain($minggu): array
+    {
+        return $minggu->subCpmkSemua
+            ->reject(fn($s) => (int) $s->id === (int) $minggu->sub_cpmk_id)
+            ->map(fn($s) => trim($s->kode . (trim((string) $s->deskripsi) !== '' ? ' - ' . $s->deskripsi : '')))
+            ->values()
+            ->all();
     }
 
     private function addRubrik(Section $section, $komponen): void

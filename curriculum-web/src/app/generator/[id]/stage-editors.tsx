@@ -563,6 +563,64 @@ function SubCpmkSelect({
   );
 }
 
+/** Chip Sub-CPMK tambahan: satu pekan boleh menyasar beberapa Sub-CPMK. */
+function SubCpmkTambahanPicker({
+  utama,
+  selected,
+  options,
+  onChange,
+}: {
+  utama: string;
+  selected: string[];
+  options: SubCpmkOption[];
+  onChange: (v: string[]) => void;
+}) {
+  const available = options.filter((o) => o.kode !== utama && !selected.includes(o.kode));
+
+  return (
+    <div>
+      <span className={labelCls}>Sub-CPMK lain yang juga disasar pekan ini (opsional)</span>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        {selected.length === 0 && (
+          <span className="text-[11px] text-gray-400">Hanya Sub-CPMK utama</span>
+        )}
+        {selected.map((k) => (
+          <span
+            key={k}
+            className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700"
+          >
+            {k}
+            <button
+              type="button"
+              onClick={() => onChange(selected.filter((x) => x !== k))}
+              className="hover:text-rose-600"
+              title="Hapus"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      {available.length > 0 && (
+        <SearchableSelect
+          className="mt-1.5"
+          size="sm"
+          value=""
+          placeholder="+ Tambah Sub-CPMK"
+          allowClear={false}
+          onChange={(v) => {
+            if (v) onChange([...selected, v]);
+          }}
+          options={available.map((o) => ({
+            value: o.kode,
+            label: `${o.kode}${o.deskripsi ? ` — ${o.deskripsi.slice(0, 60)}` : ""}`,
+          }))}
+        />
+      )}
+    </div>
+  );
+}
+
 export function MingguEditor({
   value,
   onChange,
@@ -579,14 +637,6 @@ export function MingguEditor({
   const set = (i: number, patch: Partial<MingguItem>) =>
     onChange(value.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
   const { aiBusy, aiFill } = useAiFill(value, set, onSuggest);
-  const duplicateAt = (i: number) => {
-    const row = value[i] ?? { minggu_ke: 1 };
-    onChange([
-      ...value.slice(0, i + 1),
-      { ...row, sub_cpmk_kode: undefined },
-      ...value.slice(i + 1),
-    ]);
-  };
 
   return (
     <div className="space-y-3">
@@ -596,7 +646,7 @@ export function MingguEditor({
         <p className="mt-0.5 text-brand-900/60">Kriteria &amp; Bentuk Penilaian: tulis dua baris — <code>Kriteria: …</code> lalu baris baru <code>Teknik: …</code>. Materi Pembelajaran: pilih dari Bahan Kajian MK &amp; kutip Pustaka. Estimasi waktu dihitung otomatis dari SKS.</p>
       </div>
       <p className="text-[11px] text-muted">
-        Untuk UTS/UAS yang menguji beberapa Sub-CPMK, duplikasi baris pada minggu yang sama lalu pilih Sub-CPMK berbeda di tiap baris.
+        UTS/UAS yang menguji beberapa Sub-CPMK cukup ditambahkan pada baris pekan tersebut lewat “Sub-CPMK lain yang juga disasar pekan ini”.
       </p>
       {value.map((m, i) => {
         const selectedSub = subCpmkList.find((x) => x.kode === (m.sub_cpmk_kode ?? ""));
@@ -645,15 +695,13 @@ export function MingguEditor({
                 />
               </label>
             </div>
-            <div className="mt-1 flex justify-end">
-              <button
-                type="button"
-                onClick={() => duplicateAt(i)}
-                className="text-[11px] font-medium text-brand-700 hover:underline"
-                title="Tambahkan Sub-CPMK lain di minggu yang sama"
-              >
-                + Sub-CPMK lain (minggu sama)
-              </button>
+            <div className="mt-2">
+              <SubCpmkTambahanPicker
+                utama={m.sub_cpmk_kode ?? ""}
+                selected={m.sub_cpmk_kode_tambahan ?? []}
+                options={subCpmkList}
+                onChange={(v) => set(i, { sub_cpmk_kode_tambahan: v })}
+              />
             </div>
 
             {/* Kolom (3) Indikator + (4) Kriteria & Bentuk Penilaian */}

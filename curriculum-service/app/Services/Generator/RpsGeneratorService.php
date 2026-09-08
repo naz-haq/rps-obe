@@ -68,7 +68,7 @@ class RpsGeneratorService
     private const ITEM_FIELDS = [
         'cpmk'      => ['kode', 'deskripsi', 'cpl_kode', 'taksonomi_kode'],
         'sub_cpmk'  => ['kode', 'cpmk_kode', 'deskripsi', 'taksonomi_kode', 'indikator'],
-        'mingguan'  => ['minggu_ke', 'sub_cpmk_kode', 'indikator', 'kriteria_penilaian', 'metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar', 'materi_pustaka', 'bobot_penilaian'],
+        'mingguan'  => ['minggu_ke', 'sub_cpmk_kode', 'sub_cpmk_kode_tambahan', 'indikator', 'kriteria_penilaian', 'metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar', 'materi_pustaka', 'bobot_penilaian'],
         'penilaian' => ['nama', 'jenis', 'instrumen', 'bobot_persen', 'sub_cpmk_kode', 'minggu_ke', 'rubrik'],
     ];
 
@@ -856,9 +856,11 @@ class RpsGeneratorService
                 'after.indikator.*' => ['string', 'max:2000'],
             ],
             'mingguan' => [
-                'after' => ['required', 'array:minggu_ke,sub_cpmk_kode,indikator,kriteria_penilaian,metode_pembelajaran,bentuk_luring,bentuk_daring,pengalaman_belajar,materi_pustaka,bobot_penilaian'],
+                'after' => ['required', 'array:minggu_ke,sub_cpmk_kode,sub_cpmk_kode_tambahan,indikator,kriteria_penilaian,metode_pembelajaran,bentuk_luring,bentuk_daring,pengalaman_belajar,materi_pustaka,bobot_penilaian'],
                 'after.minggu_ke' => ['required', 'integer', 'min:1', 'max:60'],
                 'after.sub_cpmk_kode' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'after.sub_cpmk_kode_tambahan' => ['sometimes', 'nullable', 'array', 'max:20'],
+                'after.sub_cpmk_kode_tambahan.*' => ['string', 'max:100', 'distinct'],
                 'after.indikator' => ['sometimes', 'nullable', 'string', 'max:5000'],
                 'after.kriteria_penilaian' => ['sometimes', 'nullable', 'string', 'max:5000'],
                 'after.metode_pembelajaran' => ['sometimes', 'nullable', 'string', 'max:5000'],
@@ -1520,7 +1522,7 @@ class RpsGeneratorService
 
         foreach ($items as $item) {
             $sub = $subMap[$item['sub_cpmk_kode'] ?? ''] ?? null;
-            RpsMinggu::create([
+            $minggu = RpsMinggu::create([
                 'rps_version_id'            => $rps->id,
                 'minggu_ke'               => $item['minggu_ke'] ?? 0,
                 'sub_cpmk_id'             => $sub?->id,
@@ -1534,6 +1536,19 @@ class RpsGeneratorService
                 'estimasi_waktu'          => $estimasi,
                 'bobot_penilaian'         => $this->numOrNull($item['bobot_penilaian'] ?? null),
             ]);
+
+            // Sub-CPMK utama + tambahan (satu pekan boleh menyasar beberapa).
+            $pivot = [];
+            $urutan = 0;
+            foreach (array_merge([$item['sub_cpmk_kode'] ?? null], (array) ($item['sub_cpmk_kode_tambahan'] ?? [])) as $kode) {
+                $s = $subMap[(string) $kode] ?? null;
+                if ($s && ! isset($pivot[$s->id])) {
+                    $pivot[$s->id] = ['urutan' => $urutan++];
+                }
+            }
+            if ($pivot !== []) {
+                $minggu->subCpmkSemua()->sync($pivot);
+            }
         }
     }
 
@@ -1757,7 +1772,9 @@ class RpsGeneratorService
         }
 
         foreach ($data['minggu'] ?? [] as $baris) {
-            unset($harus[$this->kodeKanonik((string) ($baris['sub_cpmk_kode'] ?? ''))]);
+            foreach (array_merge([$baris['sub_cpmk_kode'] ?? ''], (array) ($baris['sub_cpmk_kode_tambahan'] ?? [])) as $kode) {
+                unset($harus[$this->kodeKanonik((string) $kode)]);
+            }
         }
 
         return array_values($harus);

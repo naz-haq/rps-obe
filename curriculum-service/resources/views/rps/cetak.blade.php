@@ -410,6 +410,11 @@
                                     @if($m->subCpmk->cpmk)
                                         <div class="muted xs">{{ $m->subCpmk->cpmk->kode }}</div>
                                     @endif
+                                    @foreach($m->subCpmkSemua->reject(fn($s) => (int) $s->id === (int) $m->sub_cpmk_id) as $lain)
+                                        <div style="margin-top:3px;">
+                                            <span class="bold">{{ $lain->kode }}</span>@if($lain->deskripsi) <span>{{ $lain->deskripsi }}</span>@endif
+                                        </div>
+                                    @endforeach
                                 @else
                                     —
                                 @endif

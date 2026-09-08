@@ -43,6 +43,7 @@ class RpsSnapshot
             'minggu'      => array_map(fn($m) => [
                 'minggu_ke'           => $m['minggu_ke'] ?? null,
                 'sub_cpmk_kode'       => $m['sub_cpmk_kode'] ?? null,
+                'sub_cpmk_kode_tambahan' => $m['sub_cpmk_kode_tambahan'] ?? [],
                 'indikator'           => $m['indikator'] ?? null,
                 'kriteria_penilaian'  => $m['kriteria_penilaian'] ?? null,
                 'metode_pembelajaran' => $m['metode_pembelajaran'] ?? null,
@@ -87,7 +88,7 @@ class RpsSnapshot
             }
         }
 
-        $rps->loadMissing(['minggu.subCpmk:id,kode', 'komponenPenilaian.subCpmk:id,kode']);
+        $rps->loadMissing(['minggu.subCpmk:id,kode', 'minggu.subCpmkSemua:id,kode', 'komponenPenilaian.subCpmk:id,kode']);
 
         return [
             'mata_kuliah' => $this->mkInfo($mk),
@@ -102,6 +103,7 @@ class RpsSnapshot
             'minggu'      => $rps->minggu->map(fn($m) => [
                 'minggu_ke'           => $m->minggu_ke,
                 'sub_cpmk_kode'       => $m->subCpmk?->kode,
+                'sub_cpmk_kode_tambahan' => $m->subCpmkSemua->pluck('kode')->reject(fn($k) => $k === $m->subCpmk?->kode)->values()->all(),
                 'indikator'           => $m->indikator,
                 'kriteria_penilaian'  => $m->teknik_kriteria_penilaian,
                 'metode_pembelajaran' => $m->metode_pembelajaran,

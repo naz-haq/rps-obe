@@ -152,6 +152,7 @@ class RpsVersionController extends Controller
         $rpsVersion->load([
             'minggu.subCpmk.cpmk',
             'minggu.subCpmk.indikator',
+            'minggu.subCpmkSemua.cpmk',
             'komponenPenilaian.subCpmk.cpmk',
             'komponenPenilaian.rubrik.kriteria',
         ])->loadCount(['minggu', 'komponenPenilaian']);
@@ -164,6 +165,11 @@ class RpsVersionController extends Controller
                 'sub_cpmk'             => $m->subCpmk?->kode,
                 'sub_cpmk_deskripsi'   => $m->subCpmk?->deskripsi,
                 'sub_cpmk_bloom'       => $ctx->bloomTag($m->subCpmk?->taksonomi_kode),
+                'sub_cpmk_lain'        => $ctx->subCpmkTambahan($m)->map(fn($s) => [
+                    'kode'      => $s->kode,
+                    'deskripsi' => $s->deskripsi,
+                    'cpmk'      => $s->cpmk?->kode,
+                ])->all(),
                 'cpmk'                 => $m->subCpmk?->cpmk?->kode,
                 'cpmk_deskripsi'       => $m->subCpmk?->cpmk?->deskripsi,
                 'indikator'            => $m->indikator,
@@ -251,6 +257,7 @@ class RpsVersionController extends Controller
         $rpsVersion->load([
             'minggu.subCpmk.cpmk',
             'minggu.subCpmk.indikator',
+            'minggu.subCpmkSemua',
             'komponenPenilaian.subCpmk.cpmk',
             'komponenPenilaian.rubrik.kriteria',
         ]);

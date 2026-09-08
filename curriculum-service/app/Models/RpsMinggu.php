@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class RpsMinggu extends Model
 {
@@ -25,5 +26,13 @@ class RpsMinggu extends Model
     public function subCpmk(): BelongsTo
     {
         return $this->belongsTo(SubCpmk::class, 'sub_cpmk_id');
+    }
+
+    /** Seluruh Sub-CPMK yang disasar pekan ini (termasuk yang utama). */
+    public function subCpmkSemua(): BelongsToMany
+    {
+        return $this->belongsToMany(SubCpmk::class, 'rps_minggu_sub_cpmk', 'rps_minggu_id', 'sub_cpmk_id')
+            ->withPivot('urutan')
+            ->orderBy('rps_minggu_sub_cpmk.urutan');
     }
 }

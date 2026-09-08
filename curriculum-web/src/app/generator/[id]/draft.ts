@@ -25,6 +25,8 @@ export type SubCpmkItem = ItemMeta & {
 export type MingguItem = ItemMeta & {
   minggu_ke: number;
   sub_cpmk_kode?: string;
+  /** Sub-CPMK lain yang juga disasar pekan ini (mis. UTS/UAS terintegrasi). */
+  sub_cpmk_kode_tambahan?: string[];
   indikator?: string;
   kriteria_penilaian?: string;
   metode_pembelajaran?: string;

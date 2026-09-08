@@ -761,6 +761,12 @@ function LockedView({
                             {sub.cpmk_kode}
                           </p>
                         )}
+                        {(m.sub_cpmk_kode_tambahan ?? []).map((kode) => (
+                          <p key={kode} className="text-xs text-muted">
+                            + {kode}
+                            {subMap.get(kode)?.deskripsi ? ` — ${subMap.get(kode)!.deskripsi}` : ""}
+                          </p>
+                        ))}
                       </div>
                     ) : (
                       <span className="text-muted">—</span>

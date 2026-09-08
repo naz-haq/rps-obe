@@ -280,6 +280,12 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                             {m.cpmk}
                           </p>
                         )}
+                        {(m.sub_cpmk_lain ?? []).map((s) => (
+                          <p key={s.kode} className="text-xs text-muted">
+                            + <span className="font-medium text-ink">{s.kode}</span>
+                            {s.deskripsi ? ` — ${s.deskripsi}` : ""}
+                          </p>
+                        ))}
                       </div>
                     ) : (
                       "—"

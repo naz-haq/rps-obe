@@ -26,7 +26,7 @@ class RpsPrintContext
 {
     public function build(RpsVersion $rps): array
     {
-        $rps->loadMissing(['minggu.subCpmk', 'komponenPenilaian']);
+        $rps->loadMissing(['minggu.subCpmk', 'minggu.subCpmkSemua', 'komponenPenilaian']);
         $institusiId = $rps->institusi_id;
         $kodeMk = $rps->kode_mk;
 
@@ -127,19 +127,21 @@ class RpsPrintContext
             $pustakaUtama = $refs->pluck('sitasi')->values()->all();
         }
 
-        // Minggu per Sub-CPMK (dasar perhitungan kontribusi).
-        $mingguPerSub = $rps->minggu
-            ->filter(fn($m) => $m->sub_cpmk_id)
-            ->groupBy('sub_cpmk_id')
-            ->map(fn($g) => $g->count())
-            ->toArray();
+        // Minggu per Sub-CPMK (dasar perhitungan kontribusi). Satu pekan bisa
+        // menyasar beberapa Sub-CPMK, semuanya dihitung.
+        $mingguPerSub = [];
+        foreach ($rps->minggu as $m) {
+            foreach ($this->subIdsMinggu($m) as $sid) {
+                $mingguPerSub[$sid] = ($mingguPerSub[$sid] ?? 0) + 1;
+            }
+        }
         $totalMingguAktif = array_sum($mingguPerSub);
 
         // CPMK & Sub-CPMK — ISOLASI VERSI: hanya yang BENAR-BENAR dipakai versi
         // ini (dirujuk rps_minggu / komponen_penilaian). Sisa generate lama yang
         // sudah dihapus/tak tersemat TIDAK ikut, dan isi versi lain tidak bocor
         // ke versi ini karena cpmk/sub_cpmk berbagi tabel per kode_mk.
-        $subIdsDipakai = $rps->minggu->pluck('sub_cpmk_id')
+        $subIdsDipakai = collect(array_keys($mingguPerSub))
             ->merge($rps->komponenPenilaian->pluck('sub_cpmk_id'))
             ->filter()
             ->unique()
@@ -233,6 +235,30 @@ class RpsPrintContext
             'sub_cpmk_list'     => $subCpmkList,
             'matriks_korelasi'  => $matriks,
         ];
+    }
+
+    /**
+     * Semua Sub-CPMK yang disasar satu pekan: utama + tambahan (pivot).
+     *
+     * @return list<int>
+     */
+    public function subIdsMinggu($minggu): array
+    {
+        $ids = $minggu->relationLoaded('subCpmkSemua')
+            ? $minggu->subCpmkSemua->pluck('id')->all()
+            : $minggu->subCpmkSemua()->pluck('sub_cpmk.id')->all();
+
+        if ($minggu->sub_cpmk_id) {
+            array_unshift($ids, (int) $minggu->sub_cpmk_id);
+        }
+
+        return array_values(array_unique(array_map('intval', array_filter($ids))));
+    }
+
+    /** Sub-CPMK tambahan (selain utama) pekan ini, untuk ditampilkan pada dokumen. */
+    public function subCpmkTambahan($minggu): \Illuminate\Support\Collection
+    {
+        return $minggu->subCpmkSemua->reject(fn($s) => (int) $s->id === (int) $minggu->sub_cpmk_id)->values();
     }
 
     public function bloomTag($kode): ?string

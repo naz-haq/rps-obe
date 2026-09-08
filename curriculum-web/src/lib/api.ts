@@ -544,6 +544,8 @@ export type RpsMinggu = {
   sub_cpmk: string | null;
   sub_cpmk_deskripsi: string | null;
   sub_cpmk_bloom: string | null;
+  /** Sub-CPMK lain yang juga disasar pekan ini. */
+  sub_cpmk_lain?: { kode: string; deskripsi: string | null; cpmk: string | null }[];
   cpmk: string | null;
   cpmk_deskripsi: string | null;
   indikator: string | null;
