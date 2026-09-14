@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Dosen;
+use App\Models\Institusi;
 use App\Models\MkPengampu;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +43,61 @@ class MkPengampuController extends Controller
             'nama'  => $nama[$r->dosen_nidn] ?? $r->dosen_nidn,
             'peran' => $r->peran,
         ])]);
+    }
+
+    /**
+     * Kandidat dosen untuk dropdown pengampu: akun pengguna ber-NIDN pada
+     * institusi ini atau induknya, digabung master `dosen` (data lama/impor).
+     */
+    public function kandidat(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'institusi_id' => ['required', 'integer'],
+            'q'            => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $institusiIds = Institusi::idsHierarkiKeAtas((int) $data['institusi_id']);
+        $q = trim((string) ($data['q'] ?? ''));
+
+        $users = User::query()
+            ->whereIn('institusi_id', $institusiIds)
+            ->whereNotNull('nidn')
+            ->where('nidn', '!=', '')
+            ->where('is_active', true)
+            ->when($q !== '', fn($w) => $w->where(fn($s) => $s->where('name', 'like', "%{$q}%")->orWhere('nidn', 'like', "%{$q}%")))
+            ->orderBy('name')
+            ->get(['name', 'nidn', 'jabatan']);
+
+        $kandidat = [];
+        foreach ($users as $u) {
+            $kandidat[(string) $u->nidn] = [
+                'nidn'    => (string) $u->nidn,
+                'nama'    => (string) $u->name,
+                'jabatan' => $u->jabatan,
+                'sumber'  => 'akun',
+            ];
+        }
+
+        $dosen = Dosen::query()
+            ->whereIn('institusi_id', $institusiIds)
+            ->when($q !== '', fn($w) => $w->where(fn($s) => $s->where('nama', 'like', "%{$q}%")->orWhere('nidn', 'like', "%{$q}%")))
+            ->orderBy('nama')
+            ->get(['nidn', 'nama']);
+        foreach ($dosen as $d) {
+            if (! isset($kandidat[(string) $d->nidn])) {
+                $kandidat[(string) $d->nidn] = [
+                    'nidn'    => (string) $d->nidn,
+                    'nama'    => (string) $d->nama,
+                    'jabatan' => null,
+                    'sumber'  => 'master',
+                ];
+            }
+        }
+
+        $list = array_values($kandidat);
+        usort($list, fn($a, $b) => strcasecmp($a['nama'], $b['nama']));
+
+        return response()->json(['data' => $list]);
     }
 
     /**

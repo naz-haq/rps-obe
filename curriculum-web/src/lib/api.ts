@@ -179,6 +179,14 @@ export type Pengampu = {
   peran: "koordinator" | "anggota";
 };
 
+/** Pilihan dosen untuk pengampu: akun pengguna ber-NIDN atau master dosen. */
+export type KandidatDosen = {
+  nidn: string;
+  nama: string;
+  jabatan: string | null;
+  sumber: "akun" | "master";
+};
+
 export type BadanRujukan = {
   id: number;
   institusi_id: number | null;

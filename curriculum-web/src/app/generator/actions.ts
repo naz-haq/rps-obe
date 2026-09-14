@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiPost, apiPatch, apiDelete, apiGet, type ApiResult, type ItemCandidate, type Pengampu } from "@/lib/api";
+import { apiPost, apiPatch, apiDelete, apiGet, type ApiResult, type ItemCandidate, type KandidatDosen, type Pengampu } from "@/lib/api";
 
 
 export async function startSession(formData: FormData): Promise<ApiResult> {
@@ -82,6 +82,18 @@ export async function listPengampu(kodeMk: string, institusiId: number): Promise
   try {
     const res = await apiGet<{ data: Pengampu[] }>("/pengampu", {
       kode_mk: kodeMk,
+      institusi_id: String(institusiId),
+    });
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Kandidat dosen (akun pengguna ber-NIDN + master dosen) untuk dropdown pengampu. */
+export async function listKandidatDosen(institusiId: number): Promise<KandidatDosen[]> {
+  try {
+    const res = await apiGet<{ data: KandidatDosen[] }>("/pengampu/kandidat", {
       institusi_id: String(institusiId),
     });
     return res.data ?? [];

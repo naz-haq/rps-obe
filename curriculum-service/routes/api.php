@@ -152,6 +152,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
 
     // Dosen Pengampu per Mata Kuliah (header RPS cetak/DOCX)
     Route::get('pengampu', [MkPengampuController::class, 'index']);
+    Route::get('pengampu/kandidat', [MkPengampuController::class, 'kandidat']);
     Route::post('pengampu/sync', [MkPengampuController::class, 'sync']);
 
     // Modul 1 — Taksonomi master (Bloom/Krathwohl/Dave + kata kerja operasional)

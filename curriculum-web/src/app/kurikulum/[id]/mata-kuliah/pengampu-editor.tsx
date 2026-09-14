@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { buttonClass } from "@/components/ui";
-import type { MataKuliah } from "@/lib/api";
-import { listPengampu } from "@/app/generator/actions";
+import { SearchableSelect } from "@/components/modal";
+import type { KandidatDosen, MataKuliah } from "@/lib/api";
+import { listKandidatDosen, listPengampu } from "@/app/generator/actions";
 
 type Row = { nidn: string; nama: string; peran: "koordinator" | "anggota" };
 
@@ -15,6 +16,8 @@ type Row = { nidn: string; nama: string; peran: "koordinator" | "anggota" };
 export function PengampuEditor({ mk }: { mk?: MataKuliah }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState<boolean>(!!mk?.kode_mk);
+  const [kandidat, setKandidat] = useState<KandidatDosen[]>([]);
+  const [manual, setManual] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     let aktif = true;
@@ -30,6 +33,18 @@ export function PengampuEditor({ mk }: { mk?: MataKuliah }) {
     };
   }, [mk?.kode_mk, mk?.institusi_id]);
 
+  useEffect(() => {
+    let aktif = true;
+    if (mk?.institusi_id) {
+      listKandidatDosen(mk.institusi_id).then((data) => {
+        if (aktif) setKandidat(data);
+      });
+    }
+    return () => {
+      aktif = false;
+    };
+  }, [mk?.institusi_id]);
+
   const payload = JSON.stringify(rows.map(({ nidn, nama, peran }) => ({ nidn, nama, peran })));
 
   const setRow = (i: number, patch: Partial<Row>) =>
@@ -43,7 +58,9 @@ export function PengampuEditor({ mk }: { mk?: MataKuliah }) {
       <div className="mb-2 flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold text-ink">Dosen Pengampu</p>
-          <p className="text-[11px] text-muted">Nama, NIDN, dan peran — tampil di header RPS cetak/DOCX.</p>
+          <p className="text-[11px] text-muted">
+            Pilih dari dosen yang terdaftar sebagai pengguna aplikasi — tampil di header RPS cetak/DOCX.
+          </p>
         </div>
         <button type="button" onClick={addRow} className={buttonClass("secondary", "xs")}>
           + Tambah Dosen
@@ -56,38 +73,87 @@ export function PengampuEditor({ mk }: { mk?: MataKuliah }) {
         <p className="text-xs text-muted">Belum ada dosen pengampu. Klik “Tambah Dosen”.</p>
       ) : (
         <div className="space-y-2">
-          {rows.map((r, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2">
-              <input
-                value={r.nama}
-                onChange={(e) => setRow(i, { nama: e.target.value })}
-                placeholder="Nama dosen"
-                className="min-w-[10rem] flex-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-ring"
-              />
-              <input
-                value={r.nidn}
-                onChange={(e) => setRow(i, { nidn: e.target.value })}
-                placeholder="NIDN"
-                className="w-32 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-ring"
-              />
-              <select
-                value={r.peran}
-                onChange={(e) => setRow(i, { peran: e.target.value === "koordinator" ? "koordinator" : "anggota" })}
-                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-ring"
-              >
-                <option value="koordinator">Koordinator</option>
-                <option value="anggota">Anggota</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => removeRow(i)}
-                className="rounded-lg border border-border px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50"
-                title="Hapus dosen"
-              >
-                Hapus
-              </button>
-            </div>
-          ))}
+          {rows.map((r, i) => {
+            const dipakaiLain = rows.filter((_, idx) => idx !== i).map((x) => x.nidn);
+            const adaDiDaftar = kandidat.some((k) => k.nidn === r.nidn);
+            const isiManual = manual[i] || (r.nidn !== "" && !adaDiDaftar) || kandidat.length === 0;
+
+            return (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                {isiManual ? (
+                  <>
+                    <input
+                      value={r.nama}
+                      onChange={(e) => setRow(i, { nama: e.target.value })}
+                      placeholder="Nama dosen"
+                      className="min-w-[10rem] flex-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-ring"
+                    />
+                    <input
+                      value={r.nidn}
+                      onChange={(e) => setRow(i, { nidn: e.target.value })}
+                      placeholder="NIDN"
+                      className="w-32 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-ring"
+                    />
+                    {kandidat.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManual((m) => ({ ...m, [i]: false }));
+                          setRow(i, { nidn: "", nama: "" });
+                        }}
+                        className="text-[11px] font-medium text-brand-700 hover:underline"
+                      >
+                        Pilih dari daftar
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="min-w-[14rem] flex-1">
+                      <SearchableSelect
+                        size="sm"
+                        value={r.nidn}
+                        placeholder="— Pilih dosen —"
+                        onChange={(v) => {
+                          const k = kandidat.find((x) => x.nidn === v);
+                          setRow(i, { nidn: v, nama: k?.nama ?? "" });
+                        }}
+                        options={kandidat.map((k) => ({
+                          value: k.nidn,
+                          label: `${k.nama} — ${k.nidn}${k.jabatan ? ` (${k.jabatan})` : ""}`,
+                          disabled: dipakaiLain.includes(k.nidn),
+                        }))}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setManual((m) => ({ ...m, [i]: true }))}
+                      className="text-[11px] font-medium text-brand-700 hover:underline"
+                      title="Isi nama & NIDN secara manual bila dosen belum punya akun"
+                    >
+                      Isi manual
+                    </button>
+                  </>
+                )}
+                <select
+                  value={r.peran}
+                  onChange={(e) => setRow(i, { peran: e.target.value === "koordinator" ? "koordinator" : "anggota" })}
+                  className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-ring"
+                >
+                  <option value="koordinator">Koordinator</option>
+                  <option value="anggota">Anggota</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeRow(i)}
+                  className="rounded-lg border border-border px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50"
+                  title="Hapus dosen"
+                >
+                  Hapus
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
