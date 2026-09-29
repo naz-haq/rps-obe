@@ -787,6 +787,29 @@ export function MingguEditor({
               />
               <span className="mt-0.5 block text-[10px] text-muted">Pilih dari Bahan Kajian MK &amp; sitir Pustaka Utama/Pendukung.</span>
             </label>
+
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>Media/Sumber</span>
+                <textarea
+                  className={inputCls}
+                  rows={2}
+                  value={m.media_sumber ?? ""}
+                  placeholder="mis. slide, video, simulasi, alat lab, software [Pustaka: 1]"
+                  onChange={(e) => set(i, { media_sumber: e.target.value })}
+                />
+              </label>
+              <label>
+                <span className={labelCls}>Bukti/Produk Belajar</span>
+                <textarea
+                  className={inputCls}
+                  rows={2}
+                  value={m.bukti_produk ?? ""}
+                  placeholder="mis. peta konsep, laporan kasus, lembar kerja, logbook"
+                  onChange={(e) => set(i, { bukti_produk: e.target.value })}
+                />
+              </label>
+            </div>
           </RowShell>
         );
       })}

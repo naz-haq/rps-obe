@@ -122,7 +122,7 @@ class RpsPrintContext
             ->where('kode_mk', $kodeMk)
             ->get();
         $pustakaUtama = $refs->where('tipe', 'utama')->pluck('sitasi')->values()->all();
-        $pustakaPendukung = $refs->where('tipe', 'pendukung')->pluck('sitasi')->values()->all();
+        $pustakaPendukung = $refs->whereIn('tipe', ['pendukung', 'standar', 'jurnal'])->pluck('sitasi')->values()->all();
         if (empty($pustakaUtama) && empty($pustakaPendukung)) {
             $pustakaUtama = $refs->pluck('sitasi')->values()->all();
         }

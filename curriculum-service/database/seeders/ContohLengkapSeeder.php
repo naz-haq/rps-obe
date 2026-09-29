@@ -711,6 +711,13 @@ class ContohLengkapSeeder extends Seeder
             'approved_by' => 3,
             'tanggal_penyusunan' => Carbon::create(2024, 7, 15),
             'kode_dokumen' => 'RPS/FF/FAR201/2024',
+            'tahun_akademik' => '2024/2025',
+            'berlaku_mulai' => Carbon::create(2024, 8, 1),
+            'kelengkapan' => [
+                'lms' => 'Kalam (LMS Fakultas)',
+                'proporsi_luring' => 80,
+                'media_pembelajaran' => 'Slide presentasi, video animasi mekanisme obat, studi kasus tertulis, kuis daring.',
+            ],
             'submitted_at' => Carbon::create(2024, 7, 20, 9),
             'approved_at' => Carbon::create(2024, 7, 25, 10),
             'catatan_review' => 'RPS telah ditinjau dan disetujui oleh Ketua Program Studi.',
@@ -784,6 +791,12 @@ class ContohLengkapSeeder extends Seeder
                 'pengalaman_belajar' => $isUjian
                     ? 'Mahasiswa mengerjakan soal ujian secara mandiri.'
                     : 'Mahasiswa mengkaji materi ' . lcfirst($judul) . ' dan mengerjakan latihan/tugas terstruktur.',
+                'media_sumber' => $isUjian
+                    ? 'Naskah soal dan lembar jawaban'
+                    : 'Slide presentasi, video pembelajaran, Pustaka [1], [2]',
+                'bukti_produk' => $isUjian
+                    ? 'Lembar jawaban ujian'
+                    : 'Ringkasan materi dan lembar latihan terstruktur',
                 'estimasi_waktu' => $estimasi,
                 'bobot_penilaian' => $bobotMinggu[$minggu] ?? null,
             ]);

@@ -30,7 +30,7 @@ class ReferensiController extends Controller
         $items = Referensi::query()
             ->where('institusi_id', $data['institusi_id'])
             ->where('kode_mk', $data['kode_mk'])
-            ->orderByRaw("CASE WHEN tipe = 'utama' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE tipe WHEN 'utama' THEN 0 WHEN 'pendukung' THEN 1 WHEN 'standar' THEN 2 WHEN 'jurnal' THEN 3 ELSE 4 END")
             ->orderBy('id')
             ->get(['id', 'institusi_id', 'kode_mk', 'tipe', 'sitasi']);
 
@@ -47,7 +47,7 @@ class ReferensiController extends Controller
             'institusi_id'  => ['required', 'integer'],
             'kode_mk'       => ['required', 'string', 'max:50'],
             'items'         => ['present', 'array', 'max:100'],
-            'items.*.tipe'  => ['required', Rule::in(['utama', 'pendukung'])],
+            'items.*.tipe'  => ['required', Rule::in(Referensi::TIPE)],
             'items.*.sitasi' => ['required', 'string', 'max:1000'],
         ]);
 
@@ -88,8 +88,9 @@ class ReferensiController extends Controller
             . 'Sarankan daftar pustaka (buku/jurnal standar) yang RELEVAN dan LAZIM dipakai untuk mata '
             . 'kuliah yang diberikan. Utamakan sumber yang benar-benar ada dan umum dikenal; JANGAN '
             . 'mengarang judul, penulis, atau ISBN. Gunakan format sitasi ringkas: Penulis (Tahun). Judul. Penerbit. '
-            . 'Balas HANYA JSON array of objects dengan kunci "tipe" ("utama"|"pendukung") dan "sitasi" (string), '
-            . 'tanpa penjelasan atau pagar markdown. Maksimal 6 item (3 utama, 3 pendukung).';
+            . 'Balas HANYA JSON array of objects dengan kunci "tipe" ("utama"|"pendukung"|"standar"|"jurnal") dan "sitasi" (string), '
+            . '"standar" = standar/pedoman/guideline/farmakope resmi, "jurnal" = artikel jurnal mutakhir (≤5 tahun). '
+            . 'Tanpa penjelasan atau pagar markdown. Maksimal 8 item (3 utama, 3 pendukung, sisanya standar/jurnal bila relevan).';
 
         $fakta = array_filter([
             'nama_mk'   => $data['nama'],
@@ -199,7 +200,7 @@ class ReferensiController extends Controller
                     return null;
                 }
                 return [
-                    'tipe'   => in_array($tipe, ['utama', 'pendukung'], true) ? $tipe : 'utama',
+                    'tipe'   => in_array($tipe, Referensi::TIPE, true) ? $tipe : 'utama',
                     'sitasi' => $sitasi,
                 ];
             })

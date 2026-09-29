@@ -48,7 +48,7 @@ class EstimasiWaktuService
      *
      * @return array<string,mixed>
      */
-    private function nilaiAturan(?int $institusiId, string $jenis): array
+    public function nilaiAturan(?int $institusiId, string $jenis): array
     {
         $rantai = $institusiId !== null ? \App\Models\Institusi::idsHierarkiKeAtas($institusiId) : [];
 

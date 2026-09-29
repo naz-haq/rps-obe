@@ -47,7 +47,7 @@ def main():
         "",
         "Sheet CPMK       : Kode | Deskripsi | Kode CPL (pisah ;) | Taksonomi (pisah ;)",
         "Sheet Sub-CPMK   : Kode | Kode CPMK Induk | Deskripsi | Taksonomi (pisah ;) | Indikator (pisah ;)",
-        "Sheet Mingguan   : Minggu | Kode Sub-CPMK | Indikator | Kriteria | Metode | Bentuk Luring | Bentuk Daring | Pengalaman | Materi/Pustaka | Bobot(%)",
+        "Sheet Mingguan   : Minggu | Kode Sub-CPMK | Indikator | Kriteria | Metode | Bentuk Luring | Bentuk Daring | Pengalaman | Materi/Pustaka | Bobot(%) | Media/Sumber | Bukti/Produk",
         "Sheet Penilaian  : Nama | Jenis | Bobot(%) | Kode Sub-CPMK | Minggu | Instrumen",
         "",
         "Kode CPMK/Sub-CPMK harus konsisten antar sheet agar keterkaitan terbaca (mis. Sub-CPMK1.1 merujuk CPMK1).",
@@ -82,12 +82,13 @@ def main():
         [
             "Minggu", "Kode Sub-CPMK", "Indikator", "Kriteria Penilaian", "Metode Pembelajaran",
             "Bentuk Luring", "Bentuk Daring", "Pengalaman Belajar", "Materi / Pustaka", "Bobot (%)",
+            "Media / Sumber", "Bukti / Produk",
         ],
         [
-            [1, "Sub-CPMK1.1", "Ketepatan menjelaskan", "Rubrik deskriptif", "Ceramah, diskusi", "Kuliah tatap muka", "LMS", "Studi kasus", "Farmakologi Dasar — Bab 1 [Pustaka: 1]", 5],
-            [2, "Sub-CPMK1.2", "Ketepatan analisis", "Rubrik analitik", "PBL", "Diskusi kelompok", "-", "Analisis kasus", "Bab 2 [Pustaka: 1,2]", 5],
+            [1, "Sub-CPMK1.1", "Ketepatan menjelaskan", "Rubrik deskriptif", "Ceramah, diskusi", "Kuliah tatap muka", "LMS", "Studi kasus", "Farmakologi Dasar — Bab 1 [Pustaka: 1]", 5, "Slide, video", "Ringkasan konsep"],
+            [2, "Sub-CPMK1.2", "Ketepatan analisis", "Rubrik analitik", "PBL", "Diskusi kelompok", "-", "Analisis kasus", "Bab 2 [Pustaka: 1,2]", 5, "Kasus tertulis [Pustaka: 2]", "Laporan analisis kasus"],
         ],
-        [8, 16, 24, 22, 22, 20, 16, 22, 32, 9],
+        [8, 16, 24, 22, 22, 20, 16, 22, 32, 9, 24, 24],
     )
 
     sheet(

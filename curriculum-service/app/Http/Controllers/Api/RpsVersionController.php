@@ -10,8 +10,11 @@ use App\Models\MataKuliah;
 use App\Models\Rubrik;
 use App\Models\RpsVersion;
 use App\Services\Rps\RpsDocxExporter;
+use App\Services\Rps\RpsObeContext;
+use App\Services\Rps\RpsObeDocxExporter;
 use App\Services\Rps\RpsPrintContext;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use PhpOffice\PhpWord\IOFactory;
 
 class RpsVersionController extends Controller
@@ -146,6 +149,66 @@ class RpsVersionController extends Controller
         return response()->json(['data' => ['minggu_ke' => $mingguKe, 'rincian' => $bersih]]);
     }
 
+    /**
+     * Simpan kelengkapan dokumen format OBE (identitas dokumen, otorisasi,
+     * media/LMS/proporsi, peran CPL, lampiran). Field kosong = pakai turunan.
+     */
+    public function simpanKelengkapan(Request $request, RpsVersion $rpsVersion)
+    {
+        if ($rpsVersion->pernahDisetujui()) {
+            return response()->json([
+                'message' => 'RPS yang sudah disetujui prodi bersifat final; kelengkapan dokumen tidak dapat diubah.',
+            ], 422);
+        }
+
+        $orang = fn(string $p) => [
+            "kelengkapan.otorisasi.{$p}"      => ['nullable', 'array:nama,nidn'],
+            "kelengkapan.otorisasi.{$p}.nama" => ['nullable', 'string', 'max:200'],
+            "kelengkapan.otorisasi.{$p}.nidn" => ['nullable', 'string', 'max:50'],
+        ];
+        $data = $request->validate(array_merge([
+            'kode_dokumen'                         => ['nullable', 'string', 'max:100'],
+            'tanggal_penyusunan'                   => ['nullable', 'date'],
+            'tahun_akademik'                       => ['nullable', 'string', 'max:20', 'regex:/^\d{4}\/\d{4}$/'],
+            'berlaku_mulai'                        => ['nullable', 'date'],
+            'kelengkapan'                          => ['nullable', 'array'],
+            'kelengkapan.otorisasi'                => ['nullable', 'array:koordinator_mk,koordinator_bk,ketua_prodi'],
+            'kelengkapan.media_pembelajaran'       => ['nullable', 'string', 'max:2000'],
+            'kelengkapan.lms'                      => ['nullable', 'string', 'max:200'],
+            'kelengkapan.pengalaman_belajar_utama' => ['nullable', 'string', 'max:2000'],
+            'kelengkapan.proporsi_luring'          => ['nullable', 'integer', 'min:0', 'max:100'],
+            'kelengkapan.sumber_belajar_utama'     => ['nullable', 'string', 'max:2000'],
+            'kelengkapan.peran_cpl'                => ['nullable', 'array', 'max:50'],
+            'kelengkapan.peran_cpl.*'              => ['nullable', Rule::in(['utama', 'pendukung'])],
+            'kelengkapan.lampiran'                 => ['nullable', 'array'],
+            'kelengkapan.lampiran.*'               => ['boolean'],
+        ], $orang('koordinator_mk'), $orang('koordinator_bk'), $orang('ketua_prodi')), [
+            'tahun_akademik.regex' => 'Tahun akademik berformat YYYY/YYYY, mis. 2026/2027.',
+        ]);
+
+        $kel = $data['kelengkapan'] ?? [];
+        $kel['lampiran'] = array_intersect_key((array) ($kel['lampiran'] ?? []), RpsObeContext::LAMPIRAN);
+        $kel['peran_cpl'] = array_filter((array) ($kel['peran_cpl'] ?? []));
+        $kel['otorisasi'] = array_filter(array_map(
+            fn($p) => array_filter(array_map(fn($v) => trim((string) $v), (array) $p), fn($v) => $v !== ''),
+            (array) ($kel['otorisasi'] ?? []),
+        ));
+        $kel = array_filter(
+            array_map(fn($v) => is_string($v) ? trim($v) : $v, $kel),
+            fn($v) => ! ($v === null || $v === '' || $v === []),
+        );
+
+        $rpsVersion->update([
+            'kode_dokumen'       => $data['kode_dokumen'] ?? null,
+            'tanggal_penyusunan' => $data['tanggal_penyusunan'] ?? null,
+            'tahun_akademik'     => $data['tahun_akademik'] ?? null,
+            'berlaku_mulai'      => $data['berlaku_mulai'] ?? null,
+            'kelengkapan'        => $kel !== [] ? $kel : null,
+        ]);
+
+        return response()->json(['data' => new RpsVersionResource($rpsVersion->fresh())]);
+    }
+
     /** Struktur RPS committed (minggu + rantai Sub-CPMK/CPMK, komponen penilaian). */
     public function show(RpsVersion $rpsVersion)
     {
@@ -178,6 +241,8 @@ class RpsVersionController extends Controller
                 'bentuk_luring'        => $m->bentuk_luring,
                 'bentuk_daring'        => $m->bentuk_daring,
                 'pengalaman_belajar'   => $m->pengalaman_belajar,
+                'media_sumber'         => $m->media_sumber,
+                'bukti_produk'         => $m->bukti_produk,
                 'materi_pustaka'       => $m->materi_pustaka,
                 'estimasi_waktu'       => is_array($m->estimasi_waktu)
                     ? array_merge($m->estimasi_waktu, ['teks' => $ctx->formatEstimasi($m->estimasi_waktu)])
@@ -208,6 +273,7 @@ class RpsVersionController extends Controller
                 'minggu'   => $minggu,
                 'komponen' => $komponen,
                 'konteks'  => $konteks,
+                'obe'      => app(RpsObeContext::class)->build($rpsVersion),
             ],
         ]);
     }
@@ -251,9 +317,19 @@ class RpsVersionController extends Controller
         ]);
     }
 
-    /** Dokumen RPS siap-cetak (HTML print-ready; user simpan sebagai PDF via browser). */
-    public function cetak(RpsVersion $rpsVersion)
+    /**
+     * Dokumen RPS siap-cetak (HTML print-ready; user simpan sebagai PDF via browser).
+     * ?format=obe (bawaan, formulir mutu A–P) | kpt (Panduan KPT 2024).
+     */
+    public function cetak(Request $request, RpsVersion $rpsVersion)
     {
+        if ($this->formatCetak($request) === 'obe') {
+            return view('rps.cetak-obe', [
+                'rps' => $rpsVersion,
+                'obe' => app(RpsObeContext::class)->build($rpsVersion, true),
+            ]);
+        }
+
         $rpsVersion->load([
             'minggu.subCpmk.cpmk',
             'minggu.subCpmk.indikator',
@@ -290,19 +366,24 @@ class RpsVersionController extends Controller
             'komponen'   => $komponen,
             'cplDiampu'  => $cplDiampu,
             'konteks'    => $konteks,
+            'logoFile'   => app(RpsObeContext::class)->logoFile($rpsVersion->institusi_id),
         ]);
     }
 
-    /** Ekspor RPS sebagai dokumen Word (.docx) asli via PhpWord. */
-    public function unduhDocx(RpsVersion $rpsVersion, RpsDocxExporter $exporter)
+    /** Ekspor RPS sebagai dokumen Word (.docx) asli via PhpWord; ?format sama dengan cetak. */
+    public function unduhDocx(Request $request, RpsVersion $rpsVersion)
     {
-        $phpWord = $exporter->build($rpsVersion);
+        $obe = $this->formatCetak($request) === 'obe';
+        $phpWord = $obe
+            ? app(RpsObeDocxExporter::class)->build($rpsVersion)
+            : app(RpsDocxExporter::class)->build($rpsVersion);
         $writer = IOFactory::createWriter($phpWord, 'Word2007');
 
         $namaFile = sprintf(
-            'RPS_%s_v%s.docx',
+            'RPS_%s_v%s%s.docx',
             preg_replace('/[^A-Za-z0-9_-]+/', '', (string) $rpsVersion->kode_mk) ?: 'MK',
-            $rpsVersion->versi
+            $rpsVersion->versi,
+            $obe ? '' : '_KPT'
         );
 
         // Tulis ke file sementara agar biner utuh (hindari kontaminasi output buffer).
@@ -314,6 +395,11 @@ class RpsVersionController extends Controller
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             ])
             ->deleteFileAfterSend(true);
+    }
+
+    private function formatCetak(Request $request): string
+    {
+        return $request->query('format') === 'kpt' ? 'kpt' : 'obe';
     }
 
     /**

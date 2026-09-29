@@ -17,12 +17,16 @@ use Illuminate\Validation\Rule;
 class KonfigurasiAturanController extends Controller
 {
     /** Jenis aturan yang dikenal (whitelist). */
-    public const JENIS = ['jumlah_minggu', 'bobot_teori', 'bobot_praktikum', 'konversi_sks', 'konversi_minggu_profesi', 'mode_distribusi_waktu', 'durasi_sesi'];
+    public const JENIS = ['jumlah_minggu', 'bobot_teori', 'bobot_praktikum', 'konversi_sks', 'konversi_minggu_profesi', 'mode_distribusi_waktu', 'durasi_sesi', 'skala_nilai'];
 
     /** Daftar konfigurasi untuk satu institusi. */
     public function index(Request $request): JsonResponse
     {
-        $institusiId = $request->integer('institusi_id', 1);
+        // Tanpa parameter: institusi pengguna; akun lintas institusi (superadmin) → unit puncak pertama.
+        $institusiId = $request->filled('institusi_id')
+            ? $request->integer('institusi_id')
+            : (int) ($request->user()?->institusi_id
+                ?? \App\Models\Institusi::whereNull('parent_id')->orderBy('id')->value('id'));
 
         // Mode "efektif": kembalikan aturan yang BERLAKU untuk institusi ini
         // dengan pewarisan ke atas (prodi → fakultas → universitas → global NULL),
@@ -68,6 +72,16 @@ class KonfigurasiAturanController extends Controller
             'referensi_dokumen_id' => ['nullable', 'integer', 'exists:dokumen_rujukan,id'],
             'referensi_halaman'    => ['nullable', 'integer', 'min:1'],
         ]);
+
+        if ($data['jenis_aturan'] === 'skala_nilai') {
+            $request->validate([
+                'nilai.rentang'              => ['required', 'array', 'min:1', 'max:20'],
+                'nilai.rentang.*.min'        => ['required', 'numeric', 'min:0', 'max:100'],
+                'nilai.rentang.*.max'        => ['required', 'numeric', 'min:0', 'max:100', 'gte:nilai.rentang.*.min'],
+                'nilai.rentang.*.huruf'      => ['required', 'string', 'max:5'],
+                'nilai.rentang.*.keterangan' => ['nullable', 'string', 'max:100'],
+            ]);
+        }
 
         $record = KonfigurasiAturan::updateOrCreate(
             [

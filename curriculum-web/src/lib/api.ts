@@ -165,11 +165,12 @@ export type EstimasiWaktu = {
 };
 
 /** Pustaka/Referensi per Mata Kuliah (rujukan "Pustaka Utama & Pendukung" RPS). */
+export type ReferensiTipe = "utama" | "pendukung" | "standar" | "jurnal";
 export type Referensi = {
   id: number;
   institusi_id: number;
   kode_mk: string;
-  tipe: "utama" | "pendukung";
+  tipe: ReferensiTipe;
   sitasi: string;
 };
 
@@ -390,6 +391,10 @@ export type RpsVersion = {
   approved_at?: string | null;
   catatan_review?: string | null;
   tanggal_penyusunan?: string | null;
+  tahun_akademik?: string | null;
+  berlaku_mulai?: string | null;
+  kelengkapan?: RpsKelengkapan | null;
+  final?: boolean;
   minggu_count?: number;
   komponen_count?: number;
   created_at?: string;
@@ -562,6 +567,8 @@ export type RpsMinggu = {
   bentuk_luring: string | null;
   bentuk_daring: string | null;
   pengalaman_belajar: string | null;
+  media_sumber?: string | null;
+  bukti_produk?: string | null;
   materi_pustaka: string | null;
   estimasi_waktu: EstimasiWaktu | null;
   rincian_pertemuan?: RincianPertemuan[] | null;
@@ -629,6 +636,99 @@ export type RpsDetail = {
   minggu: RpsMinggu[];
   komponen: RpsKomponen[];
   konteks?: RpsKonteks;
+  obe?: RpsObe;
+};
+
+// ---- Dokumen RPS format OBE (formulir mutu A–P) ----
+export type RpsOrang = { nama?: string; nidn?: string };
+export type RpsKelengkapan = {
+  otorisasi?: { koordinator_mk?: RpsOrang; koordinator_bk?: RpsOrang; ketua_prodi?: RpsOrang };
+  media_pembelajaran?: string;
+  lms?: string;
+  pengalaman_belajar_utama?: string;
+  proporsi_luring?: number;
+  sumber_belajar_utama?: string;
+  peran_cpl?: Record<string, "utama" | "pendukung">;
+  lampiran?: Record<string, boolean>;
+};
+export type RpsObeMinggu = {
+  minggu_ke: number;
+  ujian: "UTS" | "UAS" | null;
+  sub_cpmk: string[];
+  indikator: string | null;
+  kriteria: string | null;
+  bahan_kajian: string | null;
+  bentuk_metode: string[];
+  pengalaman_belajar: string | null;
+  media_sumber: string | null;
+  asesmen: string[];
+  bukti_produk: string | null;
+  bobot: number | null;
+  waktu: string;
+  rincian_pertemuan: RincianPertemuan[] | null;
+};
+export type RpsObe = {
+  kop: {
+    universitas: string | null;
+    fakultas: string | null;
+    prodi: string | null;
+    kode_dokumen: string | null;
+    tanggal: string | null;
+    revisi: number;
+    berlaku_mulai: string | null;
+    tahun_akademik: string | null;
+    status: "Draft" | "Final";
+  };
+  identitas: {
+    nama_mk: string;
+    kode_mk: string;
+    prodi: string | null;
+    jenjang: string | null;
+    bidang_keahlian: string | null;
+    semester: number | null;
+    sks_teori: number;
+    sks_praktik: number;
+    bentuk_pembelajaran: string | null;
+    status_mk: string | null;
+    prasyarat: string | null;
+    tahun_kurikulum: string | null;
+    tahun_akademik: string | null;
+    tim_dosen: string[];
+    kode_dokumen: string | null;
+    tanggal_penyusunan: string | null;
+    revisi: number;
+  };
+  otorisasi: {
+    jabatan: string;
+    nama: string | null;
+    nidn: string | null;
+    tanggal: string | null;
+    ttd: { waktu: string; kode: string } | null;
+  }[];
+  deskripsi: string | null;
+  cpl: { kode: string; deskripsi: string; kontribusi: "Utama" | "Pendukung" }[];
+  cpmk: { kode: string; deskripsi: string; cpl: string[] }[];
+  matriks_cpl_cpmk: { cpl: string[]; baris: { cpmk: string; cek: Record<string, boolean> }[] };
+  bahan_kajian: { nama: string; cpmk: string[] }[];
+  sub_cpmk: { kode: string; deskripsi: string; cpmk: string | null }[];
+  cpmk_sub: { cpmk: string; sub: string[] }[];
+  mingguan: RpsObeMinggu[];
+  asesmen: { komponen: string; teknik: string; instrumen: string | null; cpmk: string[]; bobot: number }[];
+  total_bobot: number;
+  matriks_asesmen: { cpmk: string[]; baris: { komponen: string; cek: Record<string, boolean> }[] };
+  kriteria: { asesmen: string; aspek: string | null; skala: string; instrumen: string | null }[];
+  media: {
+    media_pembelajaran: string | null;
+    lms: string | null;
+    pengalaman_belajar_utama: string | null;
+    proporsi_luring: number | null;
+    proporsi_daring: number | null;
+    sumber_belajar_utama: string | null;
+  };
+  skala_nilai: { rentang: string; huruf: string; keterangan: string | null }[];
+  evaluasi: { komponen: string; bukti: string; cpmk: string[]; digunakan: string }[];
+  referensi: { jenis: string; sitasi: string }[];
+  lampiran: { key: string; label: string; ketentuan: string; ada: boolean; manual: boolean }[];
 };
 export type RpsRantai = {
   sub_cpmk: string;
@@ -717,7 +817,8 @@ export type KonfigurasiAturan = {
     | "konversi_sks"
     | "konversi_minggu_profesi"
     | "mode_distribusi_waktu"
-    | "durasi_sesi";
+    | "durasi_sesi"
+    | "skala_nilai";
   nilai: Record<string, unknown>;
   badan_rujukan_id: number | null;
   referensi_dokumen_id: number | null;
@@ -812,6 +913,7 @@ export type InstitusiData = {
   gelar: string | null;
   akreditasi: string | null;
   nilai_institusi: string | null;
+  logo_versi?: string | null;
   dosen_count: number;
   mata_kuliah_count: number;
 };

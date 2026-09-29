@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, type ApiResult, type Referensi, type DokumenRujukan } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, type ApiResult, type Referensi, type ReferensiTipe, type DokumenRujukan } from "@/lib/api";
+import { normalizeReferensiTipe } from "@/lib/referensi";
 
 
 function base(kurikulumId: string) {
@@ -15,7 +16,7 @@ function toInt(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-type ReferensiItem = { tipe: "utama" | "pendukung"; sitasi: string };
+type ReferensiItem = { tipe: ReferensiTipe; sitasi: string };
 
 /** Parse hidden field referensi_json (dari ReferensiEditor) menjadi array bersih. */
 function parseReferensi(fd: FormData): ReferensiItem[] {
@@ -26,7 +27,7 @@ function parseReferensi(fd: FormData): ReferensiItem[] {
     if (!Array.isArray(arr)) return [];
     return arr
       .map((r) => ({
-        tipe: r.tipe === "pendukung" ? "pendukung" : "utama",
+        tipe: normalizeReferensiTipe(r.tipe),
         sitasi: String(r.sitasi ?? "").trim(),
       }))
       .filter((r) => r.sitasi !== "") as ReferensiItem[];

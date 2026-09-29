@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Institusi;
+use App\Services\Media\GambarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * CRUD institusi (universitas/fakultas/prodi) untuk penetapan unit pengguna & data akademik.
@@ -68,6 +70,31 @@ class InstitusiController extends Controller
         $institusi->delete();
 
         return response()->json(['message' => 'Prodi/unit dihapus.']);
+    }
+
+    /** Logo kop dokumen; unit tanpa logo mewarisi logo induknya saat cetak. */
+    public function unggahLogo(Request $request, Institusi $institusi, GambarService $gambar): JsonResponse
+    {
+        $request->validate(['file' => GambarService::RULES], [
+            'file.mimes' => 'Logo harus berupa gambar JPG, PNG, atau WEBP.',
+            'file.max'   => 'Ukuran logo maksimal 5 MB.',
+        ]);
+        $institusi->update(['logo_path' => $gambar->simpan($request->file('file'), "institusi/{$institusi->id}", $institusi->logo_path)]);
+
+        return response()->json(['data' => $this->format($institusi->fresh()), 'message' => 'Logo tersimpan.']);
+    }
+
+    public function hapusLogo(Institusi $institusi, GambarService $gambar): JsonResponse
+    {
+        $gambar->hapus($institusi->logo_path);
+        $institusi->update(['logo_path' => null]);
+
+        return response()->json(['data' => $this->format($institusi->fresh()), 'message' => 'Logo dihapus.']);
+    }
+
+    public function lihatLogo(Institusi $institusi, GambarService $gambar): Response
+    {
+        return $gambar->respons($institusi->logo_path);
     }
 
     private function validasi(Request $request, ?int $ignoreId = null): array
@@ -134,6 +161,7 @@ class InstitusiController extends Controller
             'gelar' => $institusi->gelar,
             'akreditasi' => $institusi->akreditasi,
             'nilai_institusi' => $institusi->nilai_institusi,
+            'logo_versi' => app(GambarService::class)->versi($institusi->logo_path),
             'dosen_count' => 0,
             'mata_kuliah_count' => 0,
         ];

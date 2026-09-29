@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\Media\GambarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Autentikasi berbasis token (Laravel Sanctum).
@@ -116,6 +118,38 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => 'Kata sandi berhasil diperbarui.']);
+    }
+
+    /**
+     * Spesimen tanda tangan elektronik milik sendiri; dibubuhkan otomatis pada
+     * dokumen RPS setelah tahap persetujuan yang relevan terjadi.
+     */
+    public function unggahTtd(Request $request, GambarService $gambar): JsonResponse
+    {
+        $request->validate(['file' => GambarService::RULES], [
+            'file.mimes' => 'Tanda tangan harus berupa gambar JPG, PNG, atau WEBP.',
+            'file.max'   => 'Ukuran berkas maksimal 5 MB.',
+        ]);
+        $user = $request->user();
+        $user->forceFill(['ttd_path' => $gambar->simpan($request->file('file'), "ttd/{$user->id}", $user->ttd_path)])->save();
+        $user->load('institusi');
+
+        return response()->json(['data' => new UserResource($user), 'message' => 'Tanda tangan tersimpan.']);
+    }
+
+    public function hapusTtd(Request $request, GambarService $gambar): JsonResponse
+    {
+        $user = $request->user();
+        $gambar->hapus($user->ttd_path);
+        $user->forceFill(['ttd_path' => null])->save();
+        $user->load('institusi');
+
+        return response()->json(['data' => new UserResource($user), 'message' => 'Tanda tangan dihapus.']);
+    }
+
+    public function lihatTtd(Request $request, GambarService $gambar): Response
+    {
+        return $gambar->respons($request->user()->ttd_path);
     }
 
     public function logout(Request $request): JsonResponse

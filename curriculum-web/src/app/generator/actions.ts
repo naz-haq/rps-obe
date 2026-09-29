@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { apiPost, apiPatch, apiDelete, apiGet, type ApiResult, type ItemCandidate, type KandidatDosen, type Pengampu } from "@/lib/api";
+import { normalizeReferensiTipe } from "@/lib/referensi";
 
 
 export async function startSession(formData: FormData): Promise<ApiResult> {
@@ -45,7 +46,7 @@ export async function saveDetailMk(sessionId: number, formData: FormData): Promi
     try {
       const arr = JSON.parse(raw) as { tipe?: string; sitasi?: string }[];
       const items = (Array.isArray(arr) ? arr : [])
-        .map((r) => ({ tipe: r.tipe === "pendukung" ? "pendukung" : "utama", sitasi: String(r.sitasi ?? "").trim() }))
+        .map((r) => ({ tipe: normalizeReferensiTipe(r.tipe), sitasi: String(r.sitasi ?? "").trim() }))
         .filter((r) => r.sitasi !== "");
       const sync = await apiPost("/referensi/sync", { institusi_id: institusiId, kode_mk: kodeMk, items });
       if (!sync.ok) return sync;

@@ -783,7 +783,11 @@ function LockedView({
                     {m.bentuk_daring ? <div>{m.bentuk_daring}</div> : <span>—</span>}
                     {m.pengalaman_belajar && <div className="text-[11px]">Penugasan: {m.pengalaman_belajar}</div>}
                   </td>
-                  <td className="px-2 py-1.5 text-muted">{m.materi_pustaka ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-muted">
+                    {m.materi_pustaka ?? "—"}
+                    {m.media_sumber && <div className="text-[11px]">Media: {m.media_sumber}</div>}
+                    {m.bukti_produk && <div className="text-[11px]">Bukti: {m.bukti_produk}</div>}
+                  </td>
                   <td className="px-2 py-1.5 text-right tabular-nums">
                     {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
                   </td>

@@ -130,7 +130,13 @@
     <div class="sheet">
         <div class="kop">
             <div class="kop-row">
-                <div class="kop-logo">LOGO<br>INSTITUSI</div>
+                <div class="kop-logo">
+                    @if(! empty($logoFile) && is_file($logoFile))
+                        <img src="data:{{ mime_content_type($logoFile) }};base64,{{ base64_encode(file_get_contents($logoFile)) }}" alt="Logo" style="max-width:74px; max-height:74px;">
+                    @else
+                        LOGO<br>INSTITUSI
+                    @endif
+                </div>
                 <div class="kop-inst">
                     @if($universitas)<div class="u">{{ $universitas }}</div>@endif
                     @if($fakultas)<div class="f">{{ $fakultas }}</div>@endif

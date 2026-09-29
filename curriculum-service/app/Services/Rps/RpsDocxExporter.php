@@ -103,7 +103,12 @@ class RpsDocxExporter
         ]);
         $table->addRow(null, ['tblHeader' => true]);
         $c1 = $table->addCell(2200, ['valign' => 'center']);
-        $c1->addText('LOGO', ['bold' => true, 'size' => 10, 'color' => self::MUTED], ['alignment' => Jc::CENTER]);
+        $gambar = app(\App\Services\Media\GambarService::class);
+        if ($logo = $gambar->untukDocx(app(RpsObeContext::class)->logoFile($rps->institusi_id))) {
+            $c1->addImage($logo, ['height' => 48, 'alignment' => Jc::CENTER]);
+        } else {
+            $c1->addText('LOGO', ['bold' => true, 'size' => 10, 'color' => self::MUTED], ['alignment' => Jc::CENTER]);
+        }
 
         $c2 = $table->addCell(11000, ['valign' => 'center']);
         $c2->addText(strtoupper($univ), ['bold' => true, 'size' => 12], ['alignment' => Jc::CENTER, 'spaceAfter' => 0]);

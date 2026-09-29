@@ -28,6 +28,8 @@ const LABEL: Record<string, string> = {
   bentuk_luring: "Luring",
   bentuk_daring: "Daring",
   pengalaman_belajar: "Penugasan",
+  media_sumber: "Media/sumber",
+  bukti_produk: "Bukti/produk",
   materi_pustaka: "Materi/pustaka",
   bobot_penilaian: "Bobot",
   nama: "Nama",

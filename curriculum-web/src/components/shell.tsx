@@ -55,6 +55,7 @@ const sections: NavSection[] = [
       { href: "/pengaturan-ai", label: "Konfigurasi AI", icon: <IconCpu />, perm: "konfigurasi-ai.view" },
       { href: "/prompts", label: "Prompt AI", icon: <IconChat />, perm: "prompt-ai.view" },
       { href: "/template-rps", label: "Template RPS", icon: <IconDoc />, perm: "template-rps.view" },
+      { href: "/pengaturan-dokumen", label: "Logo & Kop Dokumen", icon: <IconBuilding />, perm: "prodi.view" },
     ],
   },
   {

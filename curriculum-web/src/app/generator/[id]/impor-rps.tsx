@@ -19,6 +19,8 @@ type MingguRow = {
   pengalaman_belajar: string;
   materi_pustaka: string;
   bobot_penilaian: number | null;
+  media_sumber: string;
+  bukti_produk: string;
 };
 type KomponenRow = {
   nama: string;
@@ -106,6 +108,8 @@ async function parseWorkbook(file: File): Promise<Parsed> {
       pengalaman_belajar: cell(r[7]),
       materi_pustaka: cell(r[8]),
       bobot_penilaian: num(r[9]),
+      media_sumber: cell(r[10]),
+      bukti_produk: cell(r[11]),
     }))
     .filter((x) => x.minggu_ke > 0);
 

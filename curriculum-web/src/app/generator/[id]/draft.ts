@@ -33,6 +33,8 @@ export type MingguItem = ItemMeta & {
   bentuk_luring?: string;
   bentuk_daring?: string;
   pengalaman_belajar?: string;
+  media_sumber?: string;
+  bukti_produk?: string;
   materi_pustaka?: string;
   bobot_penilaian?: number;
 };

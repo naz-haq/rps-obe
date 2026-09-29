@@ -24,6 +24,7 @@ const LABEL: Record<string, string> = {
   sub_cpmk_kode: "Sub-CPMK", taksonomi_kode: "Taksonomi", indikator: "Indikator",
   kriteria_penilaian: "Kriteria & bentuk", metode_pembelajaran: "Metode",
   bentuk_luring: "Luring", bentuk_daring: "Daring", pengalaman_belajar: "Penugasan",
+  media_sumber: "Media/sumber", bukti_produk: "Bukti/produk",
   materi_pustaka: "Materi/pustaka", bobot_penilaian: "Bobot", nama: "Nama",
   jenis: "Jenis", instrumen: "Instrumen", bobot_persen: "Bobot (%)", minggu_ke: "Minggu",
 };

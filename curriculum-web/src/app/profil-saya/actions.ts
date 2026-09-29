@@ -1,6 +1,17 @@
 "use server";
 
-import { apiPut, type ApiResult } from "@/lib/api";
+import { apiPut, apiDelete, apiPostForm, type ApiResult } from "@/lib/api";
+
+/** Spesimen tanda tangan elektronik milik sendiri. */
+export async function unggahTtd(formData: FormData): Promise<ApiResult> {
+  const fd = new FormData();
+  fd.append("file", formData.get("file") as File);
+  return apiPostForm("/auth/profile/ttd", fd);
+}
+
+export async function hapusTtd(): Promise<ApiResult> {
+  return apiDelete("/auth/profile/ttd");
+}
 
 /** Update nama & email milik sendiri. */
 export async function updateProfil(formData: FormData): Promise<ApiResult> {

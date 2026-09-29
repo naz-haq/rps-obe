@@ -194,7 +194,7 @@ class GenerationContract
                 foreach (['indikator', 'kriteria_penilaian', 'materi_pustaka'] as $field) {
                     if (! $this->text($row[$field] ?? null)) $errors[] = "{$path}.{$field} wajib string tidak kosong.";
                 }
-                foreach (['metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar'] as $field) {
+                foreach (['metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar', 'media_sumber', 'bukti_produk'] as $field) {
                     if (isset($row[$field]) && ! is_string($row[$field])) $errors[] = "{$path}.{$field} harus string/null.";
                 }
                 if (isset($row['bobot_penilaian']) && ! $this->weight($row['bobot_penilaian'])) $errors[] = "{$path}.bobot_penilaian harus angka 0..100.";

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { BACKEND_PROXY } from "@/lib/api";
 import { PageHeader, Card, CardBody } from "@/components/ui";
+import { GambarUnggah } from "@/components/gambar-unggah";
 import { ProfilForm, PasswordForm } from "./forms";
+import { unggahTtd, hapusTtd } from "./actions";
 
 export default async function ProfilSayaPage() {
   const user = await getCurrentUser();
@@ -44,6 +47,28 @@ export default async function ProfilSayaPage() {
               Setelah kata sandi diubah, sesi login lain akan keluar otomatis; sesi ini tetap aktif.
             </p>
             <PasswordForm />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardBody>
+            <h2 className="mb-1 text-sm font-semibold text-ink">Tanda Tangan Elektronik</h2>
+            <p className="mb-4 text-xs text-muted">
+              Unggah gambar tanda tangan berlatar putih/transparan. Tanda tangan dibubuhkan otomatis pada RPS bila Anda
+              penanda tangannya (koordinator pengampu MK, penyetuju RPS, atau NIDN yang tercantum di Kelengkapan
+              Dokumen) dan tahapnya selesai: koordinator MK saat RPS diajukan, koordinator bidang keahlian dan ketua
+              prodi saat RPS disetujui.
+            </p>
+            <GambarUnggah
+              src={user.ttd_versi ? `${BACKEND_PROXY}/auth/profile/ttd?v=${user.ttd_versi}` : null}
+              alt="Tanda tangan"
+              kosong="Belum ada tanda tangan"
+              unggah={unggahTtd}
+              hapus={hapusTtd}
+            />
+            {!user.nidn && (
+              <p className="mt-2 text-xs text-amber-700">Akun belum ber-NIDN, sehingga tanda tangan tidak dapat dicocokkan ke dokumen. Minta administrator mengisi NIDN.</p>
+            )}
           </CardBody>
         </Card>
       </div>

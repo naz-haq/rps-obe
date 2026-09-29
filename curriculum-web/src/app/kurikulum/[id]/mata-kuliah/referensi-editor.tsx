@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { buttonClass } from "@/components/ui";
-import type { MataKuliah } from "@/lib/api";
+import type { MataKuliah, ReferensiTipe } from "@/lib/api";
+import { REFERENSI_TIPE, normalizeReferensiTipe } from "@/lib/referensi";
 import { listReferensi, suggestReferensi } from "./actions";
 
-type Row = { tipe: "utama" | "pendukung"; sitasi: string; draft?: boolean };
+type Row = { tipe: ReferensiTipe; sitasi: string; draft?: boolean };
 
 /**
  * Editor Pustaka/Referensi per Mata Kuliah di dalam modal MK. Menulis state ke
@@ -44,7 +45,7 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
       setRows((rs) =>
         rs.some((r) => r.sitasi.trim().toLowerCase() === sitasi.toLowerCase())
           ? rs
-          : [...rs, { tipe: detail?.tipe === "pendukung" ? "pendukung" : "utama", sitasi }]
+          : [...rs, { tipe: normalizeReferensiTipe(detail?.tipe), sitasi }]
       );
     };
     window.addEventListener("rps:add-referensi", handler);
@@ -55,7 +56,7 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
 
   const setRow = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  const addRow = (tipe: "utama" | "pendukung") => setRows((rs) => [...rs, { tipe, sitasi: "" }]);
+  const addRow = (tipe: ReferensiTipe) => setRows((rs) => [...rs, { tipe, sitasi: "" }]);
   const removeRow = (i: number) => setRows((rs) => rs.filter((_, idx) => idx !== i));
 
   const saranAi = async () => {
@@ -128,11 +129,12 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
             <li key={i} className="flex items-start gap-2">
               <select
                 value={r.tipe}
-                onChange={(e) => setRow(i, { tipe: e.target.value as "utama" | "pendukung" })}
+                onChange={(e) => setRow(i, { tipe: normalizeReferensiTipe(e.target.value) })}
                 className="mt-0.5 rounded-md border border-border bg-surface px-1.5 py-1 text-xs text-ink outline-none focus-ring"
               >
-                <option value="utama">Utama</option>
-                <option value="pendukung">Pendukung</option>
+                {REFERENSI_TIPE.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
               </select>
               <div className="flex-1">
                 <input
@@ -158,13 +160,12 @@ export function ReferensiEditor({ mk }: { mk?: MataKuliah }) {
         </ul>
       )}
 
-      <div className="mt-2 flex gap-2">
-        <button type="button" onClick={() => addRow("utama")} className={buttonClass("secondary", "sm")}>
-          + Pustaka Utama
-        </button>
-        <button type="button" onClick={() => addRow("pendukung")} className={buttonClass("secondary", "sm")}>
-          + Pustaka Pendukung
-        </button>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {REFERENSI_TIPE.map((t) => (
+          <button key={t.value} type="button" onClick={() => addRow(t.value)} className={buttonClass("secondary", "sm")}>
+            + {t.label}
+          </button>
+        ))}
       </div>
     </div>
   );

@@ -19,6 +19,7 @@ export type AuthUser = {
   is_active: boolean;
   institusi_id: number | null;
   institusi: AuthInstitusi | null;
+  ttd_versi?: string | null;
   roles: string[];
   permissions: string[];
 };

@@ -4,6 +4,7 @@ import { apiGet, BACKEND_PROXY, type Single, type RpsDetail, type RpsTraceabilit
 import { rpsStatusLabel, rpsStatusTone, deteksiUjian } from "@/lib/rps-status";
 import { PageHeader, Card, CardBody, Stat, Badge, Table, Th, Td, EmptyState, BulletCell } from "@/components/ui";
 import { ApprovalActions } from "./approval";
+import { KelengkapanButton } from "./kelengkapan";
 import { ReopenButton } from "../../generator/reopen-button";
 
 const AKSI_LABEL: Record<string, string> = {
@@ -33,7 +34,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
     .then((r) => r.data)
     .catch(() => [] as RpsApprovalLog[]);
 
-  const { rps, minggu, komponen, konteks } = detail;
+  const { rps, minggu, komponen, konteks, obe } = detail;
   const totalBobot =
     Math.round(komponen.reduce((a, k) => a + Number(k.bobot_persen ?? 0), 0) * 100) / 100;
 
@@ -61,6 +62,12 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
             >
               Unduh DOCX
             </a>
+            <span className="text-xs text-muted">
+              Format KPT 2024:{" "}
+              <a href={`${BACKEND_PROXY}/rps-versions/${id}/cetak?format=kpt`} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline">PDF</a>
+              {" · "}
+              <a href={`${BACKEND_PROXY}/rps-versions/${id}/docx?format=kpt`} className="text-brand-700 hover:underline">DOCX</a>
+            </span>
             <Link href="/rps" className="text-sm text-brand-700 hover:underline">
               ← Semua RPS
             </Link>
@@ -83,14 +90,110 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
         <Stat label="Status" value={<Badge tone={rpsStatusTone(rps.status)}>{rpsStatusLabel(rps.status)}</Badge>} />
       </div>
 
+      {obe && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+            <h2 className="text-sm font-semibold text-ink">Kelengkapan Dokumen</h2>
+            {rps.final ? (
+              <span className="text-xs text-muted">Terkunci (RPS final)</span>
+            ) : (
+              <KelengkapanButton rps={rps} obe={obe} />
+            )}
+          </div>
+          <CardBody className="grid gap-6 lg:grid-cols-3">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+              {([
+                ["Kode/No. Dokumen", obe.kop.kode_dokumen],
+                ["Tanggal Penyusunan", obe.kop.tanggal],
+                ["Revisi", String(obe.kop.revisi)],
+                ["Berlaku Mulai", obe.kop.berlaku_mulai],
+                ["Tahun Akademik", obe.kop.tahun_akademik],
+                ["Status Dokumen", obe.kop.status],
+                ["Jenjang", obe.identitas.jenjang],
+                ["Bidang Keahlian", obe.identitas.bidang_keahlian],
+                ["Bentuk Pembelajaran", obe.identitas.bentuk_pembelajaran],
+              ] as [string, string | null][]).map(([l, v]) => (
+                <div key={l} className="contents">
+                  <dt className="text-muted">{l}</dt>
+                  <dd className={v ? "text-ink" : "text-amber-700"}>{v || "Belum diisi"}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <div className="space-y-4 text-sm">
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Otorisasi</h3>
+                <ul className="space-y-1">
+                  {obe.otorisasi.map((o) => (
+                    <li key={o.jabatan}>
+                      <span className="text-muted">{o.jabatan}:</span>{" "}
+                      {o.nama ? (
+                        <span className="font-medium text-ink">{o.nama}{o.nidn ? ` · ${o.nidn}` : ""}</span>
+                      ) : (
+                        <span className="text-amber-700">Belum diisi</span>
+                      )}
+                      {o.ttd && (
+                        <span className="ml-1.5 text-xs text-emerald-700" title={`Kode verifikasi ${o.ttd.kode}`}>
+                          ✓ TTD elektronik {o.ttd.waktu}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Kontribusi terhadap CPL</h3>
+                {obe.cpl.length === 0 ? (
+                  <p className="text-muted">—</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {obe.cpl.map((c) => (
+                      <Badge key={c.kode} tone={c.kontribusi === "Utama" ? "brand" : "neutral"}>
+                        {c.kode} · {c.kontribusi}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+                {([
+                  ["LMS", obe.media.lms],
+                  [
+                    "Proporsi",
+                    obe.media.proporsi_luring != null ? `${obe.media.proporsi_luring}% luring · ${obe.media.proporsi_daring}% daring` : null,
+                  ],
+                  ["Media", obe.media.media_pembelajaran],
+                  ["Pengalaman Utama", obe.media.pengalaman_belajar_utama],
+                ] as [string, string | null][]).map(([l, v]) => (
+                  <div key={l} className="contents">
+                    <dt className="text-muted">{l}</dt>
+                    <dd className={v ? "text-ink" : "text-amber-700"}>{v || "Belum diisi"}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Lampiran Instrumen</h3>
+                <ul className="space-y-0.5">
+                  {obe.lampiran.map((l) => (
+                    <li key={l.key} className={l.ada ? "text-ink" : "text-muted"}>
+                      {l.ada ? "☑" : "☐"} {l.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       {/* Konteks MK: Bahan Kajian, Pustaka, Pengampu, Prasyarat, Matriks korelasi */}
       {konteks && (
         <Card className="mt-6">
           <div className="border-b border-border px-5 py-3.5">
             <h2 className="text-sm font-semibold text-ink">Konteks Mata Kuliah</h2>
-            <p className="text-xs text-muted">
-              Data pendukung sesuai template Panduan Penyusunan KPT 2024 (bahan kajian, pustaka, pengampu, prasyarat, matriks korelasi).
-            </p>
           </div>
           <CardBody className="grid gap-6 md:grid-cols-2">
             <div>
@@ -116,23 +219,17 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
 
             <div className="space-y-4">
               <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Pustaka Utama</h3>
-                {konteks.pustaka_utama.length === 0 ? (
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Referensi</h3>
+                {(obe?.referensi.length ?? 0) === 0 ? (
                   <p className="text-sm text-muted">—</p>
                 ) : (
-                  <ol className="list-decimal space-y-1 pl-5 text-sm">
-                    {konteks.pustaka_utama.map((p, i) => <li key={i}>{p}</li>)}
-                  </ol>
-                )}
-              </div>
-              <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Pustaka Pendukung</h3>
-                {konteks.pustaka_pendukung.length === 0 ? (
-                  <p className="text-sm text-muted">—</p>
-                ) : (
-                  <ol className="list-decimal space-y-1 pl-5 text-sm">
-                    {konteks.pustaka_pendukung.map((p, i) => <li key={i}>{p}</li>)}
-                  </ol>
+                  <ul className="space-y-1 text-sm">
+                    {obe!.referensi.map((r, i) => (
+                      <li key={i}>
+                        <span className="text-xs font-medium text-muted">{r.jenis}:</span> {r.sitasi}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </div>
@@ -163,8 +260,6 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
               ) : (
                 <p className="text-sm text-muted">Tidak ada prasyarat.</p>
               )}
-              <h3 className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Kode Dokumen</h3>
-              <p className="text-sm">{rps.kode_dokumen || <span className="text-muted">—</span>}</p>
             </div>
           </CardBody>
 
@@ -222,10 +317,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
       {/* Rencana mingguan */}
       <Card className="mt-6">
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3.5">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Rencana Pembelajaran Mingguan</h2>
-            <p className="text-xs text-muted">Format Panduan KPT 2024 (8 kolom, bentuk pembelajaran dipisah Luring/Daring, materi merujuk Bahan Kajian & Pustaka).</p>
-          </div>
+          <h2 className="text-sm font-semibold text-ink">Rencana Pembelajaran Mingguan</h2>
           {minggu.length > 0 && (
             <Link
               href={`/rps/${rps.id}/pertemuan`}
@@ -248,6 +340,8 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                 <Th>Bentuk Pembelajaran — Luring</Th>
                 <Th>Bentuk Pembelajaran — Daring</Th>
                 <Th>Materi Pembelajaran [Pustaka]</Th>
+                <Th>Media/Sumber</Th>
+                <Th>Bukti/Produk</Th>
                 <Th className="text-right">Bobot (%)</Th>
               </tr>
             </thead>
@@ -259,7 +353,7 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                   return (
                     <tr key={m.minggu_ke} className="bg-amber-50">
                       <Td className="text-right font-medium tabular-nums">{m.minggu_ke}</Td>
-                      <Td colSpan={7} className="text-center font-semibold text-amber-900">
+                      <Td colSpan={9} className="text-center font-semibold text-amber-900">
                         {isUts ? "Evaluasi Tengah Semester (UTS)" : "Evaluasi Akhir Semester (UAS)"}
                         {m.indikator ? ` — ${m.indikator}` : ""}
                       </Td>
@@ -305,6 +399,8 @@ export default async function RpsDetailPage({ params }: { params: Promise<{ id: 
                     {m.pengalaman_belajar && <div className="text-[11px] text-muted">Penugasan: {m.pengalaman_belajar}</div>}
                   </Td>
                   <Td className="max-w-[16rem] text-muted">{m.materi_pustaka ?? "—"}</Td>
+                  <Td className="max-w-[12rem] text-muted">{m.media_sumber || "—"}</Td>
+                  <Td className="max-w-[12rem] text-muted">{m.bukti_produk || "—"}</Td>
                   <Td className="text-right tabular-nums">
                     {m.bobot_penilaian != null ? `${m.bobot_penilaian}%` : "—"}
                   </Td>

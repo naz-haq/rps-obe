@@ -68,7 +68,7 @@ class RpsGeneratorService
     private const ITEM_FIELDS = [
         'cpmk'      => ['kode', 'deskripsi', 'cpl_kode', 'taksonomi_kode'],
         'sub_cpmk'  => ['kode', 'cpmk_kode', 'deskripsi', 'taksonomi_kode', 'indikator'],
-        'mingguan'  => ['minggu_ke', 'sub_cpmk_kode', 'sub_cpmk_kode_tambahan', 'indikator', 'kriteria_penilaian', 'metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar', 'materi_pustaka', 'bobot_penilaian'],
+        'mingguan'  => ['minggu_ke', 'sub_cpmk_kode', 'sub_cpmk_kode_tambahan', 'indikator', 'kriteria_penilaian', 'metode_pembelajaran', 'bentuk_luring', 'bentuk_daring', 'pengalaman_belajar', 'media_sumber', 'bukti_produk', 'materi_pustaka', 'bobot_penilaian'],
         'penilaian' => ['nama', 'jenis', 'instrumen', 'bobot_persen', 'sub_cpmk_kode', 'minggu_ke', 'rubrik'],
     ];
 
@@ -856,7 +856,7 @@ class RpsGeneratorService
                 'after.indikator.*' => ['string', 'max:2000'],
             ],
             'mingguan' => [
-                'after' => ['required', 'array:minggu_ke,sub_cpmk_kode,sub_cpmk_kode_tambahan,indikator,kriteria_penilaian,metode_pembelajaran,bentuk_luring,bentuk_daring,pengalaman_belajar,materi_pustaka,bobot_penilaian'],
+                'after' => ['required', 'array:minggu_ke,sub_cpmk_kode,sub_cpmk_kode_tambahan,indikator,kriteria_penilaian,metode_pembelajaran,bentuk_luring,bentuk_daring,pengalaman_belajar,media_sumber,bukti_produk,materi_pustaka,bobot_penilaian'],
                 'after.minggu_ke' => ['required', 'integer', 'min:1', 'max:60'],
                 'after.sub_cpmk_kode' => ['sometimes', 'nullable', 'string', 'max:100'],
                 'after.sub_cpmk_kode_tambahan' => ['sometimes', 'nullable', 'array', 'max:20'],
@@ -867,6 +867,8 @@ class RpsGeneratorService
                 'after.bentuk_luring' => ['sometimes', 'nullable', 'string', 'max:5000'],
                 'after.bentuk_daring' => ['sometimes', 'nullable', 'string', 'max:5000'],
                 'after.pengalaman_belajar' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.media_sumber' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'after.bukti_produk' => ['sometimes', 'nullable', 'string', 'max:5000'],
                 'after.materi_pustaka' => ['sometimes', 'nullable', 'string', 'max:5000'],
                 'after.bobot_penilaian' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             ],
@@ -1130,6 +1132,8 @@ class RpsGeneratorService
             'bentuk_daring'       => null,
             'metode_pembelajaran' => null,
             'pengalaman_belajar'  => null,
+            'media_sumber'        => null,
+            'bukti_produk'        => $uts ? 'Lembar jawaban UTS' : 'Lembar jawaban UAS',
             'materi_pustaka'      => $uts ? 'Evaluasi Tengah Semester (UTS)' : 'Evaluasi Akhir Semester (UAS)',
             'bobot_penilaian'     => $bobot,
         ];
@@ -1385,6 +1389,10 @@ class RpsGeneratorService
                     'status'       => 'draft',
                     'bahasa'       => $rps?->bahasa ?? 'id',
                     'created_by'   => $session->user_id,
+                    // Kelengkapan dokumen versi sebelumnya dibawa; tanggal & status pengesahan tidak.
+                    'kode_dokumen'   => $rps?->kode_dokumen,
+                    'tahun_akademik' => $rps?->tahun_akademik,
+                    'kelengkapan'    => $rps?->kelengkapan,
                 ]);
             }
 
@@ -1532,6 +1540,8 @@ class RpsGeneratorService
                 'bentuk_luring'           => $item['bentuk_luring'] ?? null,
                 'bentuk_daring'           => $item['bentuk_daring'] ?? null,
                 'pengalaman_belajar'      => $item['pengalaman_belajar'] ?? null,
+                'media_sumber'            => $item['media_sumber'] ?? null,
+                'bukti_produk'            => $item['bukti_produk'] ?? null,
                 'materi_pustaka'          => $item['materi_pustaka'] ?? ($item['bahan_kajian'] ?? null),
                 'estimasi_waktu'          => $estimasi,
                 'bobot_penilaian'         => $this->numOrNull($item['bobot_penilaian'] ?? null),

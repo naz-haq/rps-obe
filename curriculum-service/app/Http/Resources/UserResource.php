@@ -20,6 +20,7 @@ class UserResource extends JsonResource
             'jabatan'       => $this->jabatan,
             'is_active'     => (bool) $this->is_active,
             'institusi_id'  => $this->institusi_id,
+            'ttd_versi'     => app(\App\Services\Media\GambarService::class)->versi($this->ttd_path),
             'institusi'     => $this->whenLoaded('institusi', fn() => $this->institusi ? [
                 'id'    => $this->institusi->id,
                 'nama'  => $this->institusi->nama,

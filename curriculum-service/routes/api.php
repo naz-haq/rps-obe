@@ -59,6 +59,9 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
     Route::put('auth/password', [AuthController::class, 'updatePassword']);
+    Route::get('auth/profile/ttd', [AuthController::class, 'lihatTtd']);
+    Route::post('auth/profile/ttd', [AuthController::class, 'unggahTtd']);
+    Route::delete('auth/profile/ttd', [AuthController::class, 'hapusTtd']);
 
     // Katalog izin untuk matriks ceklist (butuh minimal lihat peran).
     Route::get('rbac/katalog', [RoleController::class, 'katalog'])->middleware('permission:role.view');
@@ -87,10 +90,13 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
     // kurikulum/mata kuliah/pengguna), jadi cukup terautentikasi. Perubahan data
     // tetap dijaga izin prodi.manage.
     Route::get('institusi', [InstitusiController::class, 'index']);
+    Route::get('institusi/{institusi}/logo', [InstitusiController::class, 'lihatLogo']);
     Route::middleware('permission:prodi.manage')->group(function () {
         Route::post('institusi', [InstitusiController::class, 'store']);
         Route::put('institusi/{institusi}', [InstitusiController::class, 'update']);
         Route::delete('institusi/{institusi}', [InstitusiController::class, 'destroy']);
+        Route::post('institusi/{institusi}/logo', [InstitusiController::class, 'unggahLogo']);
+        Route::delete('institusi/{institusi}/logo', [InstitusiController::class, 'hapusLogo']);
     });
 
     // VMTS prodi (berversi) — lookup terbuka utk auth; perubahan izin prodi.manage.
@@ -205,6 +211,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'throttle:authenticated-api'])->gro
     Route::get('rps-versions/{rpsVersion}/cetak', [RpsVersionController::class, 'cetak']);
     Route::get('rps-versions/{rpsVersion}/docx', [RpsVersionController::class, 'unduhDocx']);
     Route::put('rps-versions/{rpsVersion}/minggu/{mingguKe}/rincian', [RpsVersionController::class, 'simpanRincian']);
+    Route::put('rps-versions/{rpsVersion}/kelengkapan', [RpsVersionController::class, 'simpanKelengkapan']);
 
     // Modul 2 — Layanan AI di atas RPS: audit keselarasan (#6) & chat konsultan (#7)
     Route::post('generate-sessions/{generateSession}/audit', [RpsAiController::class, 'auditSession'])->middleware('throttle:ai');

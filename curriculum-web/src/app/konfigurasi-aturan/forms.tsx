@@ -1,10 +1,42 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { createContext, useContext, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardBody, Badge, buttonClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import type { KonfigurasiAturan, BobotKomponen } from "@/lib/api";
 import { saveAturan } from "./actions";
+
+/** Unit tujuan penyimpanan untuk akun lintas institusi; undefined = institusi akun sendiri. */
+const InstitusiTujuan = createContext<number | undefined>(undefined);
+
+const JENIS_UNIT: Record<string, string> = { universitas: "Universitas", fakultas: "Fakultas", prodi: "Prodi" };
+
+export function InstitusiPicker({
+  units,
+  value,
+}: {
+  units: { id: number; nama: string; jenis: string }[];
+  value: number;
+}) {
+  const router = useRouter();
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="text-muted">Unit</span>
+      <select
+        value={value}
+        onChange={(e) => router.push(`/konfigurasi-aturan?institusi=${e.target.value}`)}
+        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-ink outline-none focus-ring"
+      >
+        {units.map((u) => (
+          <option key={u.id} value={u.id}>
+            {JENIS_UNIT[u.jenis] ?? u.jenis} — {u.nama}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 type NilaiMap = Record<string, number>;
 
@@ -81,11 +113,12 @@ function SaveBar({
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const toast = useToast();
+  const institusiId = useContext(InstitusiTujuan);
 
   const save = () => {
     setMsg(null);
     startTransition(async () => {
-      const res = await saveAturan({ jenis_aturan: jenis, nilai });
+      const res = await saveAturan({ jenis_aturan: jenis, nilai, institusi_id: institusiId });
       if (res.ok) {
         toast({ type: "success", message: "Aturan tersimpan." });
         setMsg({ ok: true, text: "Tersimpan." });
@@ -229,13 +262,93 @@ const DEFAULT_BOBOT_PRAKTIKUM: BobotKomponen[] = [
   { nama: "Ujian Akhir Praktikum", bobot: 40 },
 ];
 
+type RentangNilai = { min: number; max: number; huruf: string; keterangan: string };
+
+const DEFAULT_SKALA: RentangNilai[] = [
+  { min: 85, max: 100, huruf: "A", keterangan: "Sangat Baik" },
+  { min: 75, max: 84.99, huruf: "B+", keterangan: "Baik Sekali" },
+  { min: 70, max: 74.99, huruf: "B", keterangan: "Baik" },
+  { min: 65, max: 69.99, huruf: "C+", keterangan: "Cukup Baik" },
+  { min: 60, max: 64.99, huruf: "C", keterangan: "Cukup" },
+  { min: 50, max: 59.99, huruf: "D", keterangan: "Kurang" },
+  { min: 0, max: 49.99, huruf: "E", keterangan: "Sangat Kurang" },
+];
+
+/** Konversi nilai angka → huruf (bagian M dokumen RPS OBE). */
+function SkalaNilaiCard({ initial }: { initial: Record<string, unknown> }) {
+  const [rows, setRows] = useState<RentangNilai[]>(() => {
+    const raw = initial.rentang;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((r) => ({
+        min: Number((r as RentangNilai).min ?? 0),
+        max: Number((r as RentangNilai).max ?? 0),
+        huruf: String((r as RentangNilai).huruf ?? ""),
+        keterangan: String((r as RentangNilai).keterangan ?? ""),
+      }));
+    }
+    return DEFAULT_SKALA;
+  });
+
+  const setRow = (i: number, patch: Partial<RentangNilai>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const masalah = rows.some((r) => r.huruf.trim() === "" || r.max < r.min || r.min < 0 || r.max > 100);
+  const cellCls = "w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-ink outline-none focus-ring";
+
+  return (
+    <Card className="animate-fade-up">
+      <div className="border-b border-border px-5 py-3.5">
+        <h2 className="text-sm font-semibold text-ink">Konversi Nilai Huruf</h2>
+        <p className="mt-0.5 text-xs text-muted">Isi sesuai ketentuan akademik institusi. Batas atas ditulis dengan desimal (mis. 84,99) agar rentang tidak tumpang tindih.</p>
+      </div>
+      <CardBody className="space-y-2">
+        <div className="grid grid-cols-[1fr_1fr_0.8fr_2fr_auto] gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+          <span>Min</span><span>Maks</span><span>Huruf</span><span>Keterangan</span><span className="w-6" />
+        </div>
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-[1fr_1fr_0.8fr_2fr_auto] items-center gap-2">
+            <input type="number" step="0.01" min={0} max={100} value={r.min} onChange={(e) => setRow(i, { min: Number(e.target.value) })} className={cellCls} aria-label="Nilai minimum" />
+            <input type="number" step="0.01" min={0} max={100} value={r.max} onChange={(e) => setRow(i, { max: Number(e.target.value) })} className={cellCls} aria-label="Nilai maksimum" />
+            <input value={r.huruf} maxLength={5} onChange={(e) => setRow(i, { huruf: e.target.value })} className={cellCls} aria-label="Nilai huruf" />
+            <input value={r.keterangan} maxLength={100} onChange={(e) => setRow(i, { keterangan: e.target.value })} className={cellCls} aria-label="Keterangan" />
+            <button
+              type="button"
+              onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
+              aria-label="Hapus rentang"
+              className="grid h-7 w-6 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setRows((prev) => [...prev, { min: 0, max: 0, huruf: "", keterangan: "" }])} className="text-xs font-medium text-brand-700 hover:underline">
+          + Tambah rentang
+        </button>
+        {masalah && <p className="text-xs text-amber-700">Setiap baris wajib berhuruf, dengan 0 ≤ min ≤ maks ≤ 100.</p>}
+        <SaveBar
+          jenis="skala_nilai"
+          nilai={{ rentang: rows.map((r) => ({ ...r, huruf: r.huruf.trim(), keterangan: r.keterangan.trim() || null })) }}
+          disabled={masalah || rows.length === 0}
+        />
+      </CardBody>
+    </Card>
+  );
+}
+
 const MODE_OPTS = [
   { value: "sebar", label: "Sebar (rata sepanjang semester)" },
   { value: "padat", label: "Padat (dipadatkan ke jumlah pekan)" },
   { value: "lapangan", label: "Lapangan (jam kerja wahana)" },
 ];
 
-export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
+export function KonfigurasiForms({ list, institusiId }: { list: KonfigurasiAturan[]; institusiId?: number }) {
+  return (
+    <InstitusiTujuan.Provider value={institusiId}>
+      <KonfigurasiFormsIsi list={list} />
+    </InstitusiTujuan.Provider>
+  );
+}
+
+function KonfigurasiFormsIsi({ list }: { list: KonfigurasiAturan[] }) {
   // Jumlah minggu
   const jm = pick(list, "jumlah_minggu") as NilaiMap;
   const [mingguEfektif, setMingguEfektif] = useState<number | "">(jm.minggu_efektif ?? 16);
@@ -422,6 +535,15 @@ export function KonfigurasiForms({ list }: { list: KonfigurasiAturan[] }) {
             initial={pick(list, "bobot_praktikum")}
             fallback={DEFAULT_BOBOT_PRAKTIKUM}
           />
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          Kriteria Kelulusan
+        </p>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <SkalaNilaiCard initial={pick(list, "skala_nilai")} />
         </div>
       </div>
     </div>

@@ -15,6 +15,8 @@ class RpsVersion extends Model
     protected $casts = [
         'versi' => 'integer',
         'tanggal_penyusunan' => 'date',
+        'berlaku_mulai' => 'date',
+        'kelengkapan' => 'array',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
